@@ -252,16 +252,34 @@
  * and the panel's corner brackets — which the line used to fuse into, half a
  * screen below the node it belonged to — are not drawn.
  */
-.pth.pth--hifi .level-node--current {
+/* Since 2026-10-06 every OPENED level — walked, or the current one — can hold
+   the branch (DD-346) and carries its light, lit only while the branch is on
+   it. The level it rests on always keeps its words right of where the line
+   runs; a walked level does so where a pointer can bring the line to it —
+   under a finger the line never moves, and the room is not taken. */
+.pth.pth--hifi .level-node--open {
   isolation: isolate;
+}
+
+.pth.pth--hifi .level-node--rest {
   padding-left: 30px;
 }
 
-.pth.pth--hifi .level-node + .level-node.level-node--current {
+.pth.pth--hifi .level-node + .level-node.level-node--rest {
   padding-left: 52px;
 }
 
-.pth.pth--hifi .level-node--current::after {
+@media (hover: hover) {
+  .pth.pth--hifi .level-node--open {
+    padding-left: 30px;
+  }
+
+  .pth.pth--hifi .level-node + .level-node.level-node--open {
+    padding-left: 52px;
+  }
+}
+
+.pth.pth--hifi .level-node--open::after {
   position: absolute;
   z-index: -1;
   top: 30px;
@@ -271,9 +289,15 @@
   border-radius: 14px;
   background: linear-gradient(180deg, rgba(199, 247, 109, 0.075), rgba(199, 247, 109, 0) 82%);
   content: "";
+  opacity: 0;
+  transition: opacity var(--motion-standard) var(--ease-ata);
 }
 
-.pth.pth--hifi .level-node + .level-node--current::after {
+.pth.pth--hifi .level-node--open.level-node--pointed::after {
+  opacity: 1;
+}
+
+.pth.pth--hifi .level-node + .level-node--open::after {
   left: 12px;
 }
 
@@ -291,8 +315,11 @@
    a 19px name in a 158px column broke «таймфре|йм» (measured at 390) — and
    the names step down a size. */
 @media (max-width: 899px) {
-  /* Out-ranks the panning widths below (168px) and in the frozen layer (158px). */
-  .pth.pth--hifi .level-node.level-node--current {
+  /* Out-ranks the panning widths below (168px) and in the frozen layer (158px).
+     The level the branch rests on gets the room its name needs beside the
+     line — and, where a pointer can move the line, every walked level too
+     (2026-10-06, see the rule after this block). */
+  .pth.pth--hifi .level-node.level-node--rest {
     flex-basis: 248px;
   }
 
@@ -306,6 +333,35 @@
 
   .pth.pth--hifi .level-node--far .level-node__name {
     font-size: 14px;
+  }
+}
+
+@media (hover: hover) and (max-width: 899px) {
+  .pth.pth--hifi .level-node.level-node--open {
+    flex-basis: 248px;
+  }
+}
+
+/* Where the desktop strip is narrowest its five columns get ~105px, and the
+   longest words of the program («остановиться», «конкретном») broke mid-word
+   at 900 (measured 2026-10-06). Between 900 and 1199 a name is sized by its
+   own column — the full size wherever it fits (from about 1000px), at most
+   three pixels less at 900. */
+@media (min-width: 900px) and (max-width: 1199px) {
+  .pth.pth--hifi .level-node {
+    container-type: inline-size;
+  }
+
+  .pth.pth--hifi .level-node__name {
+    font-size: clamp(15px, 14.2cqi, 17px);
+  }
+
+  .pth.pth--hifi .level-node--current .level-node__name {
+    font-size: clamp(16px, 15.4cqi, 19px);
+  }
+
+  .pth.pth--hifi .level-node--far .level-node__name {
+    font-size: clamp(14px, 13cqi, 15px);
   }
 }
 
@@ -340,6 +396,124 @@
   border-radius: 50%;
   background: var(--signal);
   box-shadow: 0 0 0 4px var(--hf-surface-raised), 0 0 12px rgba(199, 247, 109, 0.45);
+}
+
+/* ------------------------------------------ the pointed level, 2026-10-06 -- */
+/*
+ * THE OWNER'S REQUEST (2026-10-06): «было видно … 1 прошедший», «завершен и
+ * начать появляется в момент наведения, так же по наведению двигается палочка
+ * наша с подсветкой, но на уровни которые еще не открыты ее завести нельзя и
+ * они затемненные».
+ *
+ * (1) THE BRANCH GLIDES. The rail controller moves it to the opened level under
+ * the pointer and marks the move with `data-glide`; a scroll or a resize takes
+ * the mark away, so there the line follows its level at once.
+ */
+.pth.pth--hifi .focus__leader[data-glide] {
+  transition: left var(--motion-structural) var(--ease-ata);
+}
+
+/* A walked level holding the branch lights up as the current one does, in
+   the walked green. */
+.pth.pth--hifi .level-node--done.level-node--pointed .level-node__mark {
+  box-shadow: 0 0 0 4px rgba(168, 216, 79, 0.16), 0 0 14px rgba(168, 216, 79, 0.4);
+}
+
+.pth.pth--hifi .level-node--done .level-node__name {
+  transition: color var(--motion-standard) var(--ease-ata);
+}
+
+.pth.pth--hifi .level-node--done.level-node--pointed .level-node__name {
+  color: var(--text-primary);
+}
+
+/*
+ * (2) WHAT THE LEVEL IS TO THE LEARNER, UNDER THE POINTER. A walked level says
+ * «Завершён»; the current one offers «Начать», the way into its lesson. Their
+ * room is kept while they are hidden, so nothing moves when they appear. With
+ * no hover (touch) they are simply shown.
+ */
+.pth.pth--hifi .level-node--current .level-node__go {
+  gap: 7px;
+  border-color: var(--signal);
+  background: var(--signal);
+  color: #10140d;
+  text-decoration: none;
+}
+
+.pth.pth--hifi .level-node--current .level-node__go::after {
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  content: "";
+  -webkit-mask: var(--hf-arrow) center / contain no-repeat;
+  mask: var(--hf-arrow) center / contain no-repeat;
+}
+
+.pth.pth--hifi .level-node--current .level-node__go:hover {
+  background: #d6ff8a;
+}
+
+.pth.pth--hifi .level-node--current .level-node__go:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .pth.pth--hifi .level-node--open .level-node__state {
+    opacity: 0;
+    transform: translateY(3px);
+    transition:
+      opacity var(--motion-fast) var(--ease-ata),
+      transform var(--motion-fast) var(--ease-ata),
+      background-color var(--motion-fast) var(--ease-ata);
+  }
+
+  .pth.pth--hifi .level-node--open:hover .level-node__state,
+  .pth.pth--hifi .level-node--open:focus-within .level-node__state {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * (3) A LEVEL THAT IS NOT OPEN YET IS DIM, and takes neither the branch nor a
+ * word under the pointer.
+ */
+.pth.pth--hifi .level-node--closed .level-node__code,
+.pth.pth--hifi .level-node--closed .level-node__type {
+  color: rgba(243, 244, 239, 0.36);
+}
+
+.pth.pth--hifi .level-node--closed .level-node__name {
+  color: rgba(243, 244, 239, 0.5);
+}
+
+.pth.pth--hifi .level-node--closed .level-node__state {
+  border-color: rgba(243, 244, 239, 0.1);
+  color: rgba(243, 244, 239, 0.45);
+}
+
+/*
+ * (4) THE STRIP CROSSES MODULE EDGES (five levels around the current one), so
+ * an edge is drawn where it falls — a short upright on the axis, the module
+ * ribbon's own mark — and a level of another module than the page's names it.
+ */
+.pth.pth--hifi .level-node--edge {
+  background: linear-gradient(var(--line-3), var(--line-3)) 0 4px / 1px 18px no-repeat;
+}
+
+.pth.pth--hifi .level-node__module {
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pth.pth--hifi .focus__leader[data-glide],
+  .pth.pth--hifi .level-node--open::after,
+  .pth.pth--hifi .level-node--done .level-node__name,
+  .pth.pth--hifi .level-node--open .level-node__state {
+    transition: none;
+  }
 }
 
 /* --------------------------------------------------------------- the focus -- */
@@ -533,5 +707,20 @@
      (it was 12). */
   .pth.pth--hifi .workspace__edge--exit {
     font-size: 13.5px;
+  }
+}
+
+/* A phone has no hover, so a walked level shows its «Завершён» as the current
+   one shows «Начать» (2026-10-06); the frozen layer kept the done word for a
+   screen reader only. */
+@media (max-width: 599px) {
+  .pth.pth--hifi .level-node--done .level-node__state--done {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 10px 0 0;
+    overflow: visible;
+    clip: auto;
+    white-space: nowrap;
   }
 }

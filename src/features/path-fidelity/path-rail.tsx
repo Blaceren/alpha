@@ -17,6 +17,8 @@ import { useEffect } from "react";
  *   * `layoutFocusJoin` — the leader line that visually joins the current node's
  *     mark to the focus panel, including the merged case when the node sits at
  *     the panel's left edge and the hidden case when it is past the right edge.
+ *     Since 2026-10-06 it joins the POINTED node: the current one at rest, an
+ *     opened level under the pointer or keyboard focus (`point`, DD-346).
  *   * `updateRailFades` — the more-left / more-right edge fades, the per-node
  *     `--peek` class for nodes clipped by the window, and the return-to-current
  *     utility whose visibility threshold is the current node's CENTRE leaving
@@ -49,12 +51,67 @@ export function PathRail() {
         : null;
     const prefersReduced = () => reducedQuery?.matches ?? false;
     const currentNode = () => root.querySelector<HTMLElement>('[aria-current="step"]');
+    const strip = root.querySelector<HTMLElement>(".level-strip");
+
+    /*
+     * THE POINTED LEVEL (2026-10-06, owner: «по наведению двигается палочка
+     * наша с подсветкой, но на уровни которые еще не открыты ее завести нельзя»).
+     * The branch rests on the level in focus. Under a mouse or a pen it moves to
+     * the opened level the pointer is on — a walked one, or the current one —
+     * and back when the pointer leaves the strip; keyboard focus inside a level
+     * does the same. A level that is not open is not a place for it: over one,
+     * the branch stays at rest. Touch has no hover, so on touch it never moves.
+     */
+    const restNode = () =>
+      root.querySelector<HTMLElement>("[data-rest]") ?? currentNode();
+    let pointed: HTMLElement | null = restNode();
+
+    function point(target: HTMLElement | null) {
+      const next = target ?? restNode();
+      if (!next || next === pointed) return;
+      pointed?.classList.remove("level-node--pointed");
+      next.classList.add("level-node--pointed");
+      pointed = next;
+      /* The branch glides between levels; on a scroll or a resize it follows
+         the level at once, and with reduced motion it never glides. */
+      if (leader) {
+        if (prefersReduced()) delete leader.dataset.glide;
+        else leader.dataset.glide = "";
+      }
+      layoutFocusJoin();
+    }
+
+    const openNodeAt = (target: EventTarget | null) => {
+      const node = target instanceof Element ? target.closest<HTMLElement>(".level-node") : null;
+      return node && node.hasAttribute("data-open") ? node : null;
+    };
+    const onPointerOver = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      point(openNodeAt(event.target));
+    };
+    const onPointerLeave = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      point(null);
+    };
+    const onFocusIn = (event: FocusEvent) => point(openNodeAt(event.target));
+    const onFocusOut = (event: FocusEvent) => {
+      if (!strip?.contains(event.relatedTarget as Node | null)) point(null);
+    };
 
     function positionCurrent(smooth = false) {
       const cur = currentNode();
       if (!cur || !scroller) return;
       if (scroller.scrollWidth <= scroller.clientWidth) return;
-      const left = cur.offsetLeft + cur.offsetWidth / 2 - scroller.clientWidth * 0.42;
+      /* The level behind the current one is part of the view (DD-346): where
+         the two fit side by side the strip opens on both; where they do not —
+         a phone — the frozen landing, the current level at 42%. */
+      const behind = cur.previousElementSibling as HTMLElement | null;
+      const pairFits =
+        behind !== null &&
+        cur.offsetLeft + cur.offsetWidth - behind.offsetLeft <= scroller.clientWidth - 36;
+      const left = pairFits
+        ? behind.offsetLeft
+        : cur.offsetLeft + cur.offsetWidth / 2 - scroller.clientWidth * 0.42;
       scroller.scrollTo({
         left,
         behavior: smooth && !prefersReduced() ? "smooth" : "instant",
@@ -67,10 +124,12 @@ export function PathRail() {
      * the left edge, fuse into the panel's corner — so it hung half a screen
      * below the node it belonged to. It is now one line from the current mark's
      * lower edge straight down to the panel, at the mark's own centre, and it
-     * hides when the mark is panned out of the panel's width.
+     * hides when the mark is panned out of the panel's width. (The mark is the
+     * pointed level's since 2026-10-06 — the current one unless a pointer or
+     * keyboard focus rests on another opened level.)
      */
     function layoutFocusJoin() {
-      const cur = currentNode();
+      const cur = pointed ?? currentNode();
       const focus = root?.querySelector<HTMLElement>("[data-focus]");
       if (!cur || !focus || !leader) return;
       const mark = cur.querySelector<HTMLElement>(".level-node__mark");
@@ -134,12 +193,17 @@ export function PathRail() {
       );
     };
 
+    const stopGliding = () => {
+      if (leader) delete leader.dataset.glide;
+    };
     const onResize = () => {
+      stopGliding();
       positionCurrent();
       layoutFocusJoin();
       updateRailFades();
     };
     const onScroll = () => {
+      stopGliding();
       layoutFocusJoin();
       updateRailFades();
     };
@@ -151,11 +215,19 @@ export function PathRail() {
     returnBtn?.addEventListener("click", onReturn);
     window.addEventListener("resize", onResize);
     scroller.addEventListener("scroll", onScroll, { passive: true });
+    strip?.addEventListener("pointerover", onPointerOver);
+    strip?.addEventListener("pointerleave", onPointerLeave);
+    strip?.addEventListener("focusin", onFocusIn);
+    strip?.addEventListener("focusout", onFocusOut);
 
     return () => {
       returnBtn?.removeEventListener("click", onReturn);
       window.removeEventListener("resize", onResize);
       scroller.removeEventListener("scroll", onScroll);
+      strip?.removeEventListener("pointerover", onPointerOver);
+      strip?.removeEventListener("pointerleave", onPointerLeave);
+      strip?.removeEventListener("focusin", onFocusIn);
+      strip?.removeEventListener("focusout", onFocusOut);
     };
   }, []);
 

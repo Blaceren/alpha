@@ -184,9 +184,43 @@ export function chapterKicker(module: AcademyModuleSummary): string | null {
   return module.chapter ? `Глава ${module.chapter.number} · ${module.chapter.title}` : null;
 }
 
+/**
+ * THE STRIP'S WINDOW (2026-10-06, owner: «…было видно не нынешний уровень и
+ * следующие 4, а 1 прошедший»).
+ *
+ * Five levels: the one behind the level in focus, that level, and three ahead.
+ * The window crosses module edges because the path does — the strip used to
+ * start at the current level whenever it was its module's first, and the
+ * learner saw nothing of the way behind. At the ends of the program it shifts
+ * inward so it still holds five.
+ *
+ * Each entry carries its module, so the strip can mark an edge and name a
+ * module that is not the one the page is about.
+ */
+export const STRIP_SIZE = 5;
+
+export type StripEntry = { level: AcademyLevelSummary; module: AcademyModuleSummary };
+
+export function stripWindow(
+  modules: readonly AcademyModuleSummary[],
+  anchorLevelCode: string,
+  size = STRIP_SIZE,
+): StripEntry[] {
+  const all = modules.flatMap((module) => module.levels.map((level) => ({ level, module })));
+  const at = all.findIndex((entry) => entry.level.levelCode === anchorLevelCode);
+  if (at < 0) return [];
+  const end = Math.min(all.length, Math.max(0, at - 1) + size);
+  return all.slice(Math.max(0, end - size), end);
+}
+
 /** `L07` — the frozen code format. */
 export function levelCodeLabel(order: number): string {
   return `L${String(order).padStart(2, "0")}`;
+}
+
+/** `модуль 03` — how the strip names a module other than the page's own. */
+export function stripModuleLabel(order: number): string {
+  return `модуль ${String(order).padStart(2, "0")}`;
 }
 
 /** `Модуль 03 / 20` — the frozen kicker format. */

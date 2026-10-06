@@ -22,6 +22,8 @@ import {
   NODE_STATE_WORD,
   levelCodeLabel,
   moduleKicker,
+  stripModuleLabel,
+  stripWindow,
 } from "@/features/path-fidelity/path-state";
 import "@/features/path-fidelity/path-fidelity.css";
 import "@/features/path-fidelity/path-hifi.css";
@@ -130,6 +132,9 @@ export function PathFidelityView({
 
   const firstOrder = focusModule.levels[0]?.order;
   const lastOrder = focusModule.levels[focusModule.levels.length - 1]?.order;
+
+  /* The strip: one level behind, the level in focus, three ahead (DD-346). */
+  const strip = focusLevel ? stripWindow(modules, focusLevel.levelCode) : [];
 
   /* "Why the path does not continue yet" — taken from the level that actually
      follows, ACROSS the module boundary, because the frozen line does the same
@@ -255,9 +260,25 @@ export function PathFidelityView({
 
           <div className="rail">
             <div className="rail__scroller" data-scroller>
+              {/* THE STRIP (DD-346, owner 2026-10-06). Five levels — one behind,
+                  the one in focus, three ahead — across module edges. The levels
+                  the learner has opened (walked, and the one in focus) can take
+                  the branch: the rail controller moves it to the level under the
+                  pointer, and that level shows what it is to the learner —
+                  «Завершён», or «Начать» with the way in. A level that is not
+                  open yet is drawn dim and takes nothing. */}
               <ol className="level-strip">
-                {focusModule.levels.map((level) => {
+                {strip.map(({ level, module }, index) => {
                   const st = nodeState(level, currentOrder);
+                  const open = st === "done" || st === "current";
+                  const rest = level.levelCode === focusLevel?.levelCode;
+                  const previous = index > 0 ? strip[index - 1]!.module : null;
+                  /* An edge between modules is drawn on the axis; a level of
+                     another module than the page's says which, once per run. */
+                  const edge = previous !== null && previous.moduleCode !== module.moduleCode;
+                  const foreign =
+                    module.moduleCode !== focusModule.moduleCode &&
+                    (previous === null || previous.moduleCode !== module.moduleCode);
                   /* The frozen strip drops the type line and dims the node once
                      a level is three or more steps beyond the current one — the
                      rail stops describing what the learner cannot yet act on. */
@@ -265,6 +286,9 @@ export function PathFidelityView({
                   const cls = [
                     "level-node",
                     `level-node--${st}`,
+                    open ? "level-node--open" : "level-node--closed",
+                    rest ? "level-node--rest level-node--pointed" : "",
+                    edge ? "level-node--edge" : "",
                     level.typeInfo.isCheckpoint ? "level-node--cp" : "",
                     st === "current" ? `level-node--wf-${kind}` : "",
                     st === "locked" && beyond ? "level-node--far" : "",
@@ -276,10 +300,17 @@ export function PathFidelityView({
                       key={level.levelCode}
                       className={cls}
                       data-level={level.levelCode}
+                      {...(open ? { "data-open": "" } : {})}
+                      {...(rest ? { "data-rest": "" } : {})}
                       {...(st === "current" ? { "aria-current": "step" as const } : {})}
                     >
                       <span className="level-node__mark" aria-hidden="true" />
-                      <span className="level-node__code">{levelCodeLabel(level.order)}</span>
+                      <span className="level-node__code">
+                        {levelCodeLabel(level.order)}
+                        {foreign ? (
+                          <span className="level-node__module"> · {stripModuleLabel(module.order)}</span>
+                        ) : null}
+                      </span>
                       <span className="level-node__name">{level.title}</span>
                       {beyond ? null : (
                         <span className="level-node__type">
@@ -290,7 +321,24 @@ export function PathFidelityView({
                             : ""}
                         </span>
                       )}
-                      {st === "locked" ? (
+                      {st === "done" ? (
+                        <span className="level-node__state level-node__state--done">Завершён</span>
+                      ) : st === "current" ? (
+                        <>
+                          {/* What the level is to the learner stays for a screen
+                              reader; the eye gets the way in, under the pointer.
+                              «Начать» on every current level, the one still
+                              being prepared included — the owner's decision of
+                              2026-10-06; that level's page says it is prepared
+                              and has the two ways out. */}
+                          <span className="level-node__status visually-hidden">
+                            {nodeStateText(st, kind, level.stateLabel, level.inProduction)}
+                          </span>
+                          <Link className="level-node__state level-node__go" href={level.href}>
+                            Начать<span className="visually-hidden"> уровень {level.order}</span>
+                          </Link>
+                        </>
+                      ) : st === "locked" ? (
                         <span className="visually-hidden">{NODE_STATE_WORD.locked}</span>
                       ) : (
                         <span className="level-node__state">

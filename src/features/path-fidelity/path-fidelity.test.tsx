@@ -401,8 +401,13 @@ describe("Path — each workflow state reads as itself", () => {
     expect(container.querySelector('[aria-current="step"]')?.className).toContain(
       "level-node--wf-waiting",
     );
-    expect(container.querySelector(".level-node--current .level-node__state")?.textContent).toBe(
+    /* What the level is to the learner is the node's status for a screen
+       reader; the eye gets the way in under the pointer (DD-346). */
+    expect(container.querySelector(".level-node--current .level-node__status")?.textContent).toBe(
       "текущий · на проверке",
+    );
+    expect(container.querySelector(".level-node--current .level-node__go")?.textContent).toBe(
+      "Начать уровень 5",
     );
   });
 
@@ -788,8 +793,11 @@ describe("Path — the 30-level program", () => {
 
   it("calls a level what its author calls it", () => {
     const { container } = render(<PathFidelityView view={funnelView("v2.l003", 2)} userName="Тест" />);
-    const types = [...container.querySelectorAll(".level-node__type")].map((node) => node.textContent);
-    expect(types).toEqual(["Отчёт", "Точка сборки"]);
+    const type = (code: string) =>
+      container.querySelector(`[data-level="${code}"] .level-node__type`)?.textContent;
+    expect(type("v2.l002")).toBe("Задание");
+    expect(type("v2.l003")).toBe("Отчёт");
+    expect(type("v2.l004")).toBe("Точка сборки");
     expect(container.querySelector(".focus__meta")?.textContent).toContain("Отчёт");
   });
 
@@ -823,7 +831,11 @@ describe("Path — the 30-level program", () => {
       const { container } = rendered();
       const node = container.querySelector('[aria-current="step"]')!;
       expect(node.classList.contains("level-node--wf-waiting")).toBe(true);
-      expect(node.querySelector(".level-node__state")?.textContent).toBe("готовится");
+      expect(node.querySelector(".level-node__status")?.textContent).toBe("готовится");
+      /* «Начать» on every current level, this one included — the owner's
+         decision of 2026-10-06; the level's page says it is being prepared. */
+      const go = node.querySelector("a.level-node__go");
+      expect(go?.getAttribute("href")).toBe("/lessons/v2.l005");
       expect(container.querySelector(".focus__state")?.classList.contains("focus__state--waiting")).toBe(true);
       expect(container.querySelector(".focus__state")?.textContent).toBe("Готовится");
     });
@@ -837,5 +849,180 @@ describe("Path — the 30-level program", () => {
       expect(container.querySelector(".focus__actions a")).toBeNull();
       expect(container.querySelector(".focus__next")).toBeNull();
     });
+  });
+});
+
+/* ====================================================================== *
+ * THE STRIP AROUND THE CURRENT LEVEL (DD-346, owner 2026-10-06): one level
+ * behind, the current one, three ahead; «Завершён» and «Начать» under the
+ * pointer; the branch follows the pointer over opened levels only.
+ * ====================================================================== */
+
+/** Ten levels in three modules (1–3, 4–8, 9–10), every level before `current` walked. */
+function walkedTo(current: number): Enrolled {
+  const lv = (order: number) =>
+    level({
+      order,
+      ...(order < current
+        ? { state: "completed" as const, stateLabel: "Пройден", routeAccessible: true }
+        : order === current
+          ? { state: "in_progress" as const, stateLabel: "В процессе", routeAccessible: true }
+          : { state: "locked" as const, stateLabel: "Закрыт", lockReason: "sequence" as const }),
+    });
+  const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => lv(a + i));
+  const view = viewOf(
+    [moduleOf(1, range(1, 3), "Первый модуль"), moduleOf(2, range(4, 8), "Второй модуль"), moduleOf(3, range(9, 10), "Третий модуль")],
+    `v2.l${String(current).padStart(3, "0")}`,
+  );
+  return view;
+}
+
+const codes = (container: HTMLElement) =>
+  [...container.querySelectorAll(".level-node")].map((node) => node.getAttribute("data-level"));
+
+describe("Path — the strip around the current level (DD-346)", () => {
+  it("holds the level behind the current one, the current one and three ahead", () => {
+    const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+    expect(codes(container)).toEqual(["v2.l004", "v2.l005", "v2.l006", "v2.l007", "v2.l008"]);
+  });
+
+  it("reaches back over a module edge when the current level is its module's first, and names that module", () => {
+    const { container } = render(<PathFidelityView view={walkedTo(4)} userName="Тест" />);
+    expect(codes(container)).toEqual(["v2.l003", "v2.l004", "v2.l005", "v2.l006", "v2.l007"]);
+    const behind = container.querySelector('[data-level="v2.l003"]')!;
+    expect(behind.querySelector(".level-node__code")?.textContent).toBe("L03 · модуль 01");
+    expect(behind.classList.contains("level-node--done")).toBe(true);
+    // The edge is drawn on the first level of the page's own module.
+    expect(container.querySelector('[data-level="v2.l004"]')!.classList.contains("level-node--edge")).toBe(true);
+    expect(container.querySelectorAll(".level-node--edge")).toHaveLength(1);
+  });
+
+  it("runs on into the next module, naming it once", () => {
+    const { container } = render(<PathFidelityView view={walkedTo(7)} userName="Тест" />);
+    expect(codes(container)).toEqual(["v2.l006", "v2.l007", "v2.l008", "v2.l009", "v2.l010"]);
+    const edge = container.querySelector('[data-level="v2.l009"]')!;
+    expect(edge.classList.contains("level-node--edge")).toBe(true);
+    expect(edge.querySelector(".level-node__module")?.textContent).toBe(" · модуль 03");
+    expect(container.querySelector('[data-level="v2.l010"] .level-node__module')).toBeNull();
+    // The page is still about the module the current level is in.
+    expect(container.querySelector(".workspace__kicker")?.textContent).toBe("Модуль 02 / 3");
+  });
+
+  it("shifts inward at both ends of the program, so it always holds five", () => {
+    const first = render(<PathFidelityView view={walkedTo(1)} userName="Тест" />);
+    expect(codes(first.container)).toEqual(["v2.l001", "v2.l002", "v2.l003", "v2.l004", "v2.l005"]);
+    first.unmount();
+    const last = render(<PathFidelityView view={walkedTo(10)} userName="Тест" />);
+    expect(codes(last.container)).toEqual(["v2.l006", "v2.l007", "v2.l008", "v2.l009", "v2.l010"]);
+  });
+
+  it("a walked level says «Завершён»; the current one offers «Начать» into its lesson", () => {
+    const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+    expect(container.querySelector('[data-level="v2.l004"] .level-node__state--done')?.textContent).toBe("Завершён");
+    const go = container.querySelector('[data-level="v2.l005"] a.level-node__go') as HTMLAnchorElement;
+    expect(go.getAttribute("href")).toBe("/lessons/v2.l005");
+    expect(go.textContent).toBe("Начать уровень 5");
+    // The words «пройден» / «текущий» are no longer drawn as pills.
+    expect(container.querySelector(".level-node--done .level-node__state")?.textContent).not.toBe("пройден");
+  });
+
+  it("only opened levels can take the branch; the rest are drawn closed", () => {
+    const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+    const open = [...container.querySelectorAll("[data-open]")].map((n) => n.getAttribute("data-level"));
+    expect(open).toEqual(["v2.l004", "v2.l005"]);
+    const closed = [...container.querySelectorAll(".level-node--closed")].map((n) => n.getAttribute("data-level"));
+    expect(closed).toEqual(["v2.l006", "v2.l007", "v2.l008"]);
+    // At rest the branch is on the current level.
+    const rest = container.querySelector("[data-rest]")!;
+    expect(rest.getAttribute("aria-current")).toBe("step");
+    expect(container.querySelectorAll(".level-node--pointed")).toHaveLength(1);
+    expect(rest.classList.contains("level-node--pointed")).toBe(true);
+  });
+
+  it("with every level walked, the branch rests on the level in focus", () => {
+    const view = walkedTo(10);
+    const last = view.modules[2]!.levels[1]!;
+    Object.assign(last, { state: "completed", stateLabel: "Пройден" });
+    const { container } = render(<PathFidelityView view={view} userName="Тест" />);
+    expect(container.querySelector('[aria-current="step"]')).toBeNull();
+    expect(container.querySelector("[data-rest]")?.getAttribute("data-level")).toBe("v2.l010");
+  });
+
+  describe("the rail controller moves the branch", () => {
+    const pointer = (type: string, pointerType = "mouse") => {
+      const event = new MouseEvent(type, { bubbles: type !== "pointerleave" });
+      Object.defineProperty(event, "pointerType", { value: pointerType });
+      return event;
+    };
+    const pointedCode = (container: HTMLElement) =>
+      [...container.querySelectorAll(".level-node--pointed")].map((n) => n.getAttribute("data-level"));
+
+    it("to an opened level under the pointer, and back when the pointer leaves", () => {
+      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+      const walked = container.querySelector('[data-level="v2.l004"] .level-node__name')!;
+      walked.dispatchEvent(pointer("pointerover"));
+      expect(pointedCode(container)).toEqual(["v2.l004"]);
+      expect(container.querySelector("[data-leader]")!.hasAttribute("data-glide")).toBe(true);
+      container.querySelector(".level-strip")!.dispatchEvent(pointer("pointerleave"));
+      expect(pointedCode(container)).toEqual(["v2.l005"]);
+    });
+
+    it("never onto a level that is not open — over one it stays at rest", () => {
+      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+      container.querySelector('[data-level="v2.l004"]')!.dispatchEvent(pointer("pointerover"));
+      container.querySelector('[data-level="v2.l007"] .level-node__name')!.dispatchEvent(pointer("pointerover"));
+      expect(pointedCode(container)).toEqual(["v2.l005"]);
+    });
+
+    it("without the glide when the learner asked for reduced motion", () => {
+      const original = window.matchMedia;
+      window.matchMedia = ((query: string) => ({
+        matches: query.includes("reduce"),
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+      try {
+        const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+        container.querySelector('[data-level="v2.l004"]')!.dispatchEvent(pointer("pointerover"));
+        expect(pointedCode(container)).toEqual(["v2.l004"]);
+        expect(container.querySelector("[data-leader]")!.hasAttribute("data-glide")).toBe(false);
+      } finally {
+        window.matchMedia = original;
+      }
+    });
+
+    it("not under a finger: touch has no hover", () => {
+      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+      container.querySelector('[data-level="v2.l004"]')!.dispatchEvent(pointer("pointerover", "touch"));
+      expect(pointedCode(container)).toEqual(["v2.l005"]);
+    });
+
+    it("follows keyboard focus inside the strip, and returns when focus leaves it", () => {
+      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+      container.querySelector('[data-level="v2.l004"]')!.dispatchEvent(pointer("pointerover"));
+      const go = container.querySelector("a.level-node__go") as HTMLAnchorElement;
+      go.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      expect(pointedCode(container)).toEqual(["v2.l005"]);
+      go.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: document.body }));
+      expect(pointedCode(container)).toEqual(["v2.l005"]);
+    });
+  });
+});
+
+describe("Path — the strip's window is a pure function of the program", () => {
+  it("is empty for a level the program does not have", async () => {
+    const { stripWindow } = await import("@/features/path-fidelity/path-state");
+    expect(stripWindow(walkedTo(5).modules, "v2.l999")).toEqual([]);
+  });
+
+  it("is the whole program when the program is shorter than five", async () => {
+    const { stripWindow } = await import("@/features/path-fidelity/path-state");
+    const short = [moduleOf(1, [level({ order: 1 }), level({ order: 2 }), level({ order: 3 })])];
+    expect(stripWindow(short, "v2.l002").map((e) => e.level.order)).toEqual([1, 2, 3]);
   });
 });
