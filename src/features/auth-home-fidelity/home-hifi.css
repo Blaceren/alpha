@@ -760,7 +760,7 @@
   grid-template-columns: 16px 40px minmax(0, 1fr) auto;
   grid-template-areas:
     "mark code title state"
-    ".    .    kind  .";
+    ".    .    kind  state";
   align-items: baseline;
   column-gap: 14px;
   min-height: 52px;
@@ -849,6 +849,117 @@
 
 .hm .hm-level--current .hm-level__state {
   color: var(--signal-active);
+}
+
+/* ------------------------------------------------ the five rows, 2026-10-06 --
+ * DD-348 (owner: «3 уровня которые пройдены ранее, 1 актуальный и 1 следующий,
+ * вместо готовиться кнопки открытия урока и подсветка по мере завершения»).
+ * A walked row opens its lesson, the learner's row starts it, a closed row is
+ * dim and says why. The spine above stays lit as far as the learner walked.
+ */
+.hm .hm-level__state,
+.hm .hm-level__go {
+  align-self: center;
+}
+
+.hm .hm-level__go {
+  grid-area: state;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 15px;
+  border: 1px solid var(--hf-line-strong);
+  border-radius: var(--hf-radius-pill);
+  color: var(--text-primary);
+  font: 600 13px / 1 var(--font-ui);
+  white-space: nowrap;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.hm a.hm-level__row:hover .hm-level__go--open {
+  border-color: rgba(237, 240, 234, 0.34);
+  background: rgba(237, 240, 234, 0.05);
+}
+
+.hm .hm-level__go--start {
+  border-color: var(--signal-active);
+  background: var(--signal-active);
+  color: #10140d;
+}
+
+.hm .hm-level__go--start::after {
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  content: "";
+  -webkit-mask: var(--hf-arrow) center / contain no-repeat;
+  mask: var(--hf-arrow) center / contain no-repeat;
+}
+
+.hm a.hm-level__row:hover .hm-level__go--start {
+  border-color: #d6ff8a;
+  background: #d6ff8a;
+}
+
+/* The learner's row, also while its level is being prepared: the row's light,
+   and a ring with a lit point — Path's «waiting» mark. */
+.hm .hm-level--here .hm-level__row {
+  background: color-mix(in srgb, var(--signal-active) 7%, transparent);
+}
+
+.hm .hm-level--here.hm-level--preparing .hm-level__mark {
+  width: 11px;
+  height: 11px;
+  margin-top: 5px;
+  border: 1.5px solid var(--signal-active);
+  background: var(--background-base);
+  box-shadow: 0 0 0 5px var(--glow-current), 0 0 16px var(--hm-signal-glow);
+}
+
+.hm .hm-level--here.hm-level--preparing .hm-level__mark::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--signal-active);
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
+/* A level not open yet is dim and offers nothing to press. */
+.hm .hm-level--next .hm-level__title,
+.hm .hm-level--ahead .hm-level__title {
+  color: rgba(237, 240, 234, 0.5);
+  font-weight: 500;
+}
+
+.hm .hm-level--next .hm-level__code,
+.hm .hm-level--next .hm-level__kind,
+.hm .hm-level--ahead .hm-level__code,
+.hm .hm-level--ahead .hm-level__kind {
+  color: rgba(237, 240, 234, 0.36);
+}
+
+.hm .hm-level--next .hm-level__state,
+.hm .hm-level--ahead .hm-level__state {
+  color: rgba(237, 240, 234, 0.42);
+}
+
+/* The list crosses module edges: a hairline where one module ends, and the
+   module named on the first row of a module that is not the block's own. */
+.hm .hm-level--edge::after {
+  position: absolute;
+  top: 0;
+  right: 12px;
+  left: calc(var(--hm-mark-x) + 18px);
+  height: 1px;
+  background: var(--divider);
+  content: "";
 }
 
 .hm .hm-module__next {
@@ -1123,6 +1234,7 @@
   .hm .hm-route__all,
   .hm .hm-more,
   .hm .hm-level__row,
+  .hm .hm-level__go,
   .hm .hm-tool__name::after {
     transition: none;
   }
@@ -1133,5 +1245,23 @@
   /* «Дальше: модуль 2 …» is the next step's name: 14.5px on a phone. */
   .hm .hm-module__next {
     font-size: 14.5px;
+  }
+}
+
+/* A phone (2026-10-06): the row's button goes under its words, at the start,
+   so the title keeps the width. */
+@media (max-width: 599px) {
+  .hm .hm-level__row {
+    grid-template-areas:
+      "mark code title"
+      ".    .    kind"
+      ".    .    state";
+    grid-template-columns: 16px 30px minmax(0, 1fr);
+  }
+
+  .hm .hm-level__state,
+  .hm .hm-level__go {
+    justify-self: start;
+    margin-top: 10px;
   }
 }

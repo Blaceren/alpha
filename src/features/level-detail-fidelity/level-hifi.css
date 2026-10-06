@@ -20,7 +20,9 @@
 .ax.ld.ld--hifi {
   /* The stage may be as wide as the page; the first screen decides how wide
      it is allowed to be, so the title, the picture and its bar fit together. */
-  --ld-stage-fit: calc((100svh - 430px) * 16 / 9);
+  /* 430px was the title and the line under it; the plate and the rail
+     (DD-348) take about 60px more, measured at 1440×900. */
+  --ld-stage-fit: calc((100svh - 490px) * 16 / 9);
 }
 
 /* -------------------------------------------------------------- the title -- */
@@ -66,6 +68,68 @@
   height: 3px;
   background: var(--text-muted);
   border-radius: 50%;
+}
+
+/* ------------------------------------- the title plate and the facts rail --
+ * DD-348 (owner, 2026-10-06): «сделать выделение для название урока и отдельное
+ * выделение области [фактов] что бы она тоже немного отделялась от области с
+ * названием и сделать подсвечивание +xp».
+ *
+ * The header is two objects now, as wide as the stage under them: the lesson's
+ * name on a raised plate with Public Home's corner light, and — ten pixels
+ * apart — a rail on the ground surface carrying the state and the facts. The
+ * XP the level gives is the one lit thing in the rail (the owner's request
+ * overrides DD-336's «never lit»): a Signal chip with a soft glow.
+ */
+.ld.ld--hifi > article > header.ax-lvlhead {
+  /* As wide as the stage, and never narrower than the title's own measure —
+     on a short screen the stage narrows, and the title must not wrap more. */
+  width: max(min(100%, 880px), clamp(min(100%, 640px), var(--ld-stage-fit), 100%));
+  max-width: 100%;
+  margin-bottom: clamp(18px, 3.1svh, 28px);
+}
+
+.ld.ld--hifi .ld-plate {
+  /* Height-aware: the full room from 900px of height, a little less below,
+     where the stage is already at its narrowest. */
+  padding: clamp(16px, 2.7svh, 24px) 36px clamp(18px, 2.9svh, 26px);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-surface);
+  background: var(--hf-light), var(--hf-surface-raised);
+}
+
+.ld.ld--hifi .ld-plate .ax-coord {
+  margin: 0;
+}
+
+.ld.ld--hifi .ld-plate .ax-lvlhead__title {
+  max-width: 880px;
+  margin: 10px auto 0;
+}
+
+.ld.ld--hifi .ax-lvlhead > .ld-facts {
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px auto 0;
+  padding: 7px 16px;
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-pill);
+  background: var(--hf-surface);
+}
+
+.ld.ld--hifi .ld-fact--xp {
+  padding: 3px 11px;
+  border: 1px solid rgba(199, 247, 109, 0.5);
+  border-radius: var(--hf-radius-pill);
+  background: rgba(199, 247, 109, 0.09);
+  box-shadow: 0 0 16px rgba(199, 247, 109, 0.22);
+  color: var(--signal);
+  font-weight: 600;
+}
+
+/* The chip is its own separator. */
+.ld.ld--hifi .ld-fact--xp::before {
+  display: none;
 }
 
 .ld.ld--hifi > article > .ax-statestrip {
@@ -538,6 +602,24 @@
   .ld.ld--hifi .ld-facts {
     justify-content: flex-start;
     gap: 6px 14px;
+  }
+
+  /* The plate and the rail on a phone (DD-348): tighter, read from the left;
+     the rail wraps, so it is rounded, not a pill. */
+  .ld.ld--hifi .ld-plate {
+    padding: 20px 18px 22px;
+    border-radius: var(--hf-radius-window);
+  }
+
+  .ld.ld--hifi .ld-plate .ax-lvlhead__title {
+    margin: 10px 0 0;
+  }
+
+  .ld.ld--hifi .ax-lvlhead > .ld-facts {
+    width: auto;
+    margin: 8px 0 0;
+    padding: 10px 14px;
+    border-radius: var(--hf-radius-window);
   }
 
   /* Facts wrap on a phone; a separator would start the second line. */

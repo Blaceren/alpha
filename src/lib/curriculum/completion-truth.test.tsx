@@ -247,9 +247,10 @@ describe("one dictionary, three surfaces", () => {
 });
 
 describe("XP is a secondary metric", () => {
-  /* Lesson hi-fi (DD-336): the table of parameters is gone. XP is one quiet
-     fact in the line under the title — after the video's length and the
-     method, never leading, never lit. */
+  /* Lesson hi-fi (DD-336): the table of parameters is gone. XP is one fact in
+     the line under the title — after the video's length and the method, never
+     leading. Since 2026-10-06 (DD-348, owner: «сделать подсвечивание +xp») it
+     is the one lit chip of that line; the line's other facts stay quiet. */
   const detail = src(DETAIL);
   const factsAt = detail.indexOf("export function levelFacts");
   const facts = detail.slice(factsAt, detail.indexOf("\n}\n", factsAt));
@@ -272,12 +273,23 @@ describe("XP is a secondary metric", () => {
     expect(detail).not.toMatch(/xpReward\s*=\s*\d/);
   });
 
-  it("carries no Signal, frame, icon or animation", () => {
+  it("leaves the line's other facts without Signal, frame, icon or animation", () => {
     const css = src("src/features/level-detail-fidelity/level-hifi.css");
     const at = css.indexOf(".ld.ld--hifi .ld-fact {");
     expect(at).toBeGreaterThan(-1);
     const rule = css.slice(at, css.indexOf("}", at));
     expect(rule).not.toMatch(/signal|border|anim|icon/i);
+  });
+
+  it("is lit — the owner's request of 2026-10-06 (DD-348): a Signal chip, no animation", () => {
+    const css = src("src/features/level-detail-fidelity/level-hifi.css");
+    const at = css.indexOf(".ld.ld--hifi .ld-fact--xp {");
+    expect(at).toBeGreaterThan(-1);
+    const rule = css.slice(at, css.indexOf("}", at));
+    expect(rule).toMatch(/var\(--signal\)/);
+    expect(rule).not.toMatch(/anim/i);
+    // The markup marks exactly the XP fact.
+    expect(detail).toContain('fact.endsWith(" XP") ? "ld-fact ld-fact--xp" : "ld-fact"');
   });
 });
 

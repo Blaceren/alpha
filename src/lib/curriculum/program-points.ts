@@ -30,6 +30,12 @@ export type ProgramPoint = {
   readonly xpReward: number;
   /** The level page, where the learner may open it; null where it is closed. */
   readonly href: string | null;
+  /**
+   * The level page's address whatever its state. Home's «Начать» leads there
+   * from the level the learner stands on even while it is being prepared —
+   * the owner's rule since 2026-10-06 (as on Path); that page says so.
+   */
+  readonly pageHref: string;
 };
 
 export type ProgramModule = {
@@ -74,6 +80,7 @@ function pointOf(level: AcademyLevelSummary, currentCode: string | null): Progra
     state,
     xpReward: level.xpReward,
     href: level.routeAccessible ? level.href : null,
+    pageHref: level.href,
   };
 }
 
