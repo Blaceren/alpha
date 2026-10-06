@@ -86,7 +86,7 @@ export const NODE_STATE_WORD: Record<PathNodeState, string> = {
   locked: "закрыт",
 };
 
-/** Module ribbon segment state, derived only from that module's own levels. */
+/** Module scale segment state, derived only from that module's own levels. */
 export type ModuleSegState = "done" | "current" | "future";
 
 export function moduleSegState(
@@ -185,45 +185,24 @@ export function chapterKicker(module: AcademyModuleSummary): string | null {
 }
 
 /**
- * THE STRIP'S WINDOW (2026-10-06, owner: «…было видно не нынешний уровень и
- * следующие 4, а 1 прошедший»).
+ * THE MODULE'S SHARE OF ITS SEGMENT (DD-352, owner 2026-10-06: «делаем видимый
+ * прогресс по модулям … общее кол-во модулей видно тоже небольшое»).
  *
- * Five levels: the one behind the level in focus, that level, and three ahead.
- * The window crosses module edges because the path does — the strip used to
- * start at the current level whenever it was its module's first, and the
- * learner saw nothing of the way behind. At the ends of the program it shifts
- * inward so it still holds five.
- *
- * Each entry carries its module, so the strip can mark an edge and name a
- * module that is not the one the page is about.
+ * The strip holds the module in focus and nothing else; the small scale of
+ * modules beside its name fills that module's segment by the levels walked in
+ * it — 0 to 100, from the module's own counters, never from the strip's DOM.
  */
-export const STRIP_SIZE = 5;
+export function moduleFill(module: AcademyModuleSummary): number {
+  const { completed, total } = module.progress;
+  return total > 0 ? Math.round((Math.min(completed, total) / total) * 100) : 0;
+}
 
-export type StripEntry = { level: AcademyLevelSummary; module: AcademyModuleSummary };
-
-export function stripWindow(
-  modules: readonly AcademyModuleSummary[],
-  anchorLevelCode: string,
-  size = STRIP_SIZE,
-): StripEntry[] {
-  const all = modules.flatMap((module) => module.levels.map((level) => ({ level, module })));
-  const at = all.findIndex((entry) => entry.level.levelCode === anchorLevelCode);
-  if (at < 0) return [];
-  const end = Math.min(all.length, Math.max(0, at - 1) + size);
-  return all.slice(Math.max(0, end - size), end);
+/** «уровня» / «уровней» — the word after «из N». */
+export function levelsWord(n: number): string {
+  return n % 10 === 1 && n % 100 !== 11 ? "уровня" : "уровней";
 }
 
 /** `L07` — the frozen code format. */
 export function levelCodeLabel(order: number): string {
   return `L${String(order).padStart(2, "0")}`;
-}
-
-/** `модуль 03` — how the strip names a module other than the page's own. */
-export function stripModuleLabel(order: number): string {
-  return `модуль ${String(order).padStart(2, "0")}`;
-}
-
-/** `Модуль 03 / 20` — the frozen kicker format. */
-export function moduleKicker(order: number, total: number): string {
-  return `Модуль ${String(order).padStart(2, "0")} / ${total}`;
 }

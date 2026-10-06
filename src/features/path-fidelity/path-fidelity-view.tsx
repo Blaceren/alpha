@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import Link from "next/link";
 import { UnreadPresence } from "@/components/shell/unread-presence";
@@ -18,12 +19,11 @@ import {
   nodeState,
   nodeStateText,
   moduleSegState,
+  moduleFill,
+  levelsWord,
   MODULE_SEG_WORD,
   NODE_STATE_WORD,
   levelCodeLabel,
-  moduleKicker,
-  stripModuleLabel,
-  stripWindow,
 } from "@/features/path-fidelity/path-state";
 import "@/features/path-fidelity/path-fidelity.css";
 import "@/features/path-fidelity/path-hifi.css";
@@ -32,7 +32,8 @@ import "@/features/path-fidelity/path-hifi.css";
  * PATH — the frozen PuthATA composition, rendered from real progression.
  *
  * VISUAL AUTHORITY: PuthATA @ 3c740ccf8eb9182e858706a7423f07d29019858e. The
- * module ribbon, the horizontal level rail and the focus panel that joins the
+ * module ribbon (the module's own small scale since DD-352), the horizontal
+ * level rail and the focus panel that joins the
  * current node to its detail as one object (the Decision Frame). Element order,
  * class names, the `data-*` hooks the geometry needs and the text shapes all
  * follow `index.html` and the `render*` functions of `script.js`.
@@ -133,9 +134,6 @@ export function PathFidelityView({
   const firstOrder = focusModule.levels[0]?.order;
   const lastOrder = focusModule.levels[focusModule.levels.length - 1]?.order;
 
-  /* The strip: one level behind, the level in focus, three ahead (DD-346). */
-  const strip = focusLevel ? stripWindow(modules, focusLevel.levelCode) : [];
-
   /* "Why the path does not continue yet" — taken from the level that actually
      follows, ACROSS the module boundary, because the frozen line does the same
      ("Уровень 5 (модуль 02) станет доступен после подтверждения условия"). It is
@@ -202,51 +200,56 @@ export function PathFidelityView({
           ) : null}
         </section>
 
-        <nav className="mod-nav" aria-label="Модули программы">
-          <ol className="mod-nav__ribbon">
-            {modules.map((m, index) => {
-              const seg = moduleSegState(m, focusModule.order);
-              return (
-                <li
-                  key={m.moduleCode}
-                  className={[
-                    "mod-seg",
-                    `mod-seg--${seg}`,
-                    endsChapter(modules, index) ? "mod-seg--chapter" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
-                  <span className="visually-hidden">
-                    Модуль {m.order} — {MODULE_SEG_WORD[seg]}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-          <p className="mod-nav__scale">
-            <span>
-              Модуль {focusModule.order} из {modules.length} — текущий
-            </span>
-            <span>
-              Завершено модулей: {focusModule.order - 1} · Впереди:{" "}
-              {modules.length - focusModule.order}
-            </span>
-          </p>
-        </nav>
-
         <section className="workspace" aria-label="Текущий модуль">
           <header className="workspace__head">
             <span className="workspace__kicker">
               {chapterLine ? <>{chapterLine} · </> : null}
-              {moduleKicker(focusModule.order, modules.length)}
+              {firstOrder !== undefined && lastOrder !== undefined ? (
+                <span className="workspace__range">
+                  уровни {firstOrder}–{lastOrder}
+                </span>
+              ) : null}
             </span>
+            {/* THE SCALE OF MODULES (DD-352, owner 2026-10-06: «общее кол-во
+                модулей видно тоже небольшое»). It used to run the page's full
+                width above the module; it is the module's own small scale now,
+                beside its name: walked modules full, the module in focus
+                filled by its walked levels, the rest ahead. */}
+            <nav className="mod-nav" aria-label="Модули программы">
+              <p className="mod-nav__scale">
+                Модуль {focusModule.order} из {modules.length}
+              </p>
+              <ol className="mod-nav__ribbon">
+                {modules.map((m, index) => {
+                  const seg = moduleSegState(m, focusModule.order);
+                  return (
+                    <li
+                      key={m.moduleCode}
+                      className={[
+                        "mod-seg",
+                        `mod-seg--${seg}`,
+                        endsChapter(modules, index) ? "mod-seg--chapter" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      style={
+                        seg === "current"
+                          ? ({ "--seg-fill": `${moduleFill(m)}%` } as CSSProperties)
+                          : undefined
+                      }
+                    >
+                      <span className="visually-hidden">
+                        Модуль {m.order} — {MODULE_SEG_WORD[seg]}
+                        {seg === "current"
+                          ? `, пройдено ${m.progress.completed} из ${m.progress.total} ${levelsWord(m.progress.total)}`
+                          : ""}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </nav>
             <span className="workspace__name">{focusModule.title}</span>
-            {firstOrder !== undefined && lastOrder !== undefined ? (
-              <span className="workspace__range">
-                уровни {firstOrder}–{lastOrder}
-              </span>
-            ) : null}
           </header>
 
           {previousModule &&
@@ -260,25 +263,23 @@ export function PathFidelityView({
 
           <div className="rail">
             <div className="rail__scroller" data-scroller>
-              {/* THE STRIP (DD-346, owner 2026-10-06). Five levels — one behind,
-                  the one in focus, three ahead — across module edges. The levels
-                  the learner has opened (walked, and the one in focus) can take
-                  the branch: the rail controller moves it to the level under the
-                  pointer, and that level shows what it is to the learner —
-                  «Завершён», or «Начать» with the way in. A level that is not
-                  open yet is drawn dim and takes nothing. */}
+              {/* THE STRIP IS THE MODULE (DD-352, owner 2026-10-06: «каждое
+                  заполнение один модуль расписанный в этих блоках»). Every level
+                  of the module in focus and nothing beyond it; its line fills
+                  through the walked levels to the current one, so a module is
+                  one filling, and the next module starts a new strip. (DD-346's
+                  window across module edges, its edge mark and its «· модуль NN»
+                  are gone with it.) The levels the learner has opened — walked,
+                  and the one in focus — can take the branch: the rail controller
+                  moves it to the level under the pointer, and that level shows
+                  what it is to the learner — «Завершён», or «Начать» with the way
+                  in. A level that is not open yet is drawn dim and takes
+                  nothing. */}
               <ol className="level-strip">
-                {strip.map(({ level, module }, index) => {
+                {focusModule.levels.map((level) => {
                   const st = nodeState(level, currentOrder);
                   const open = st === "done" || st === "current";
                   const rest = level.levelCode === focusLevel?.levelCode;
-                  const previous = index > 0 ? strip[index - 1]!.module : null;
-                  /* An edge between modules is drawn on the axis; a level of
-                     another module than the page's says which, once per run. */
-                  const edge = previous !== null && previous.moduleCode !== module.moduleCode;
-                  const foreign =
-                    module.moduleCode !== focusModule.moduleCode &&
-                    (previous === null || previous.moduleCode !== module.moduleCode);
                   /* The frozen strip drops the type line and dims the node once
                      a level is three or more steps beyond the current one — the
                      rail stops describing what the learner cannot yet act on. */
@@ -288,7 +289,6 @@ export function PathFidelityView({
                     `level-node--${st}`,
                     open ? "level-node--open" : "level-node--closed",
                     rest ? "level-node--rest level-node--pointed" : "",
-                    edge ? "level-node--edge" : "",
                     level.typeInfo.isCheckpoint ? "level-node--cp" : "",
                     st === "current" ? `level-node--wf-${kind}` : "",
                     st === "locked" && beyond ? "level-node--far" : "",
@@ -305,12 +305,7 @@ export function PathFidelityView({
                       {...(st === "current" ? { "aria-current": "step" as const } : {})}
                     >
                       <span className="level-node__mark" aria-hidden="true" />
-                      <span className="level-node__code">
-                        {levelCodeLabel(level.order)}
-                        {foreign ? (
-                          <span className="level-node__module"> · {stripModuleLabel(module.order)}</span>
-                        ) : null}
-                      </span>
+                      <span className="level-node__code">{levelCodeLabel(level.order)}</span>
                       <span className="level-node__name">{level.title}</span>
                       {beyond ? null : (
                         <span className="level-node__type">
@@ -365,6 +360,12 @@ export function PathFidelityView({
           {focusLevel ? (
             <section className="focus" aria-labelledby="detail-title" data-focus>
               <span className="focus__leader" data-leader aria-hidden="true" />
+              {/* Where the branch flows into the panel (DD-352): while a pointer
+                  rests on an opened level or on the panel, its light runs from
+                  the branch along the panel's edge both ways, and fades slowly
+                  when the pointer leaves. Drawn by the stylesheet; the rail
+                  controller only says where the branch lands and when. */}
+              <span className="focus__flow" data-flow aria-hidden="true" />
               <span className="frame-corner frame-corner--tl" aria-hidden="true" />
               <span className="frame-corner frame-corner--br" aria-hidden="true" />
               <h2 id="detail-title" data-detail-title tabIndex={-1}>
