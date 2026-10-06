@@ -170,7 +170,7 @@ const MESSAGES: Record<DraftField, string> = {
   payoutPercent: PAYOUT_MESSAGE,
   expiry: "Выберите экспирацию.",
   entryTime: "Время входа в формате ЧЧ:ММ.",
-  reason: `Запишите причину входа — от ${TRADE_CARD_LIMITS.reasonMin} символов.`,
+  reason: `Запишите основание входа — от ${TRADE_CARD_LIMITS.reasonMin} символов.`,
 };
 
 export function fieldMessage(field: DraftField): string {
@@ -197,7 +197,7 @@ export function validateDraft(
   const reason = draft.reason.trim();
   if (reason.length < TRADE_CARD_LIMITS.reasonMin) errors.reason = MESSAGES.reason;
   else if (reason.length > TRADE_CARD_LIMITS.reasonMax) {
-    errors.reason = `Причина — не длиннее ${TRADE_CARD_LIMITS.reasonMax} символов.`;
+    errors.reason = `Основание — не длиннее ${TRADE_CARD_LIMITS.reasonMax} символов.`;
   }
 
   if (Object.keys(errors).length > 0 || amountMinor === null || payout === null) return { ok: false, errors };

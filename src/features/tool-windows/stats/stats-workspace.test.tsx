@@ -31,7 +31,7 @@ function stats(overrides: Partial<JournalStats> = {}): JournalStats {
     violations: {
       total: 7,
       items: [
-        { code: "no_reason", label: "Вход без записанной причины", count: 3 },
+        { code: "no_reason", label: "Вход без записанного основания", count: 3 },
         { code: "news_nearby", label: "Рядом важная новость", count: 2 },
         { code: "after_daily_limit", label: "Сделка после дневного лимита", count: 2 },
       ],
@@ -89,7 +89,7 @@ describe("Personal Stats — the presentation's figures", () => {
     const labels = within(rules)
       .getAllByRole("listitem")
       .map((item) => item.textContent);
-    expect(labels).toEqual(["Вход без записанной причины3", "Рядом важная новость2", "Сделка после дневного лимита2"]);
+    expect(labels).toEqual(["Вход без записанного основания3", "Рядом важная новость2", "Сделка после дневного лимита2"]);
   });
 
   it("gives no verdict for a side with fewer than five trades", () => {

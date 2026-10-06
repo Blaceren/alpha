@@ -221,7 +221,7 @@ export function TradeCardPlanForm({
 
         <div className="tc-field" data-span="full">
           <label className="tc-label" htmlFor={id("reason")}>
-            Причина входа до сделки
+            Основание входа в сделку
           </label>
           <textarea
             id={id("reason")}

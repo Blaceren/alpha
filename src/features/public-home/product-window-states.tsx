@@ -95,7 +95,7 @@ function TradeCardState() {
     <div className="pw-tool pw-trade">
       <div className="pw-tool__head">
         <p className="pw-tool__name">Trade Card</p>
-        <p className="pw-tool__sub">План сделки до входа: актив, направление, экспирация и причина.</p>
+        <p className="pw-tool__sub">План сделки до входа: актив, направление, экспирация и основание.</p>
       </div>
       <ol className="pw-trade__tabs" aria-hidden="true">
         <li className="is-active">Подготовка</li>
@@ -125,7 +125,7 @@ function TradeCardState() {
           <strong>90 %</strong>
         </div>
         <div className="pw-field pw-field--wide pw-trade__reason">
-          <span>Причина входа до сделки</span>
+          <span>Основание входа в сделку</span>
           <strong>
             <i className="pw-typing">Цена вернулась к уровню поддержки, отмеченному до сессии. Свеча закрылась выше уровня.</i>
           </strong>
@@ -151,7 +151,7 @@ function JournalState() {
     <div className="pw-tool pw-journal">
       <div className="pw-tool__head">
         <p className="pw-tool__name">Trading Journal</p>
-        <p className="pw-tool__sub">Ручной разбор отдельных сделок: план, исполнение и вывод.</p>
+        <p className="pw-tool__sub">Ручной разбор отдельных сделок: основание, исполнение и вывод.</p>
       </div>
       <div className="pw-journal__counters">
         <div><span>Записей</span><strong>24</strong></div>
@@ -285,7 +285,7 @@ function StatsState() {
         </div>
         <div>
           <p className="pw-stats__h">Нарушения <b>7</b></p>
-          <div className="pw-bar pw-bar--neg pw-moment-3" style={{ "--v": "43%" } as React.CSSProperties}><span>Вход без записанной причины</span><em>3</em><i /></div>
+          <div className="pw-bar pw-bar--neg pw-moment-3" style={{ "--v": "43%" } as React.CSSProperties}><span>Вход без записанного основания</span><em>3</em><i /></div>
           <div className="pw-bar pw-bar--neg pw-moment-3" style={{ "--v": "29%" } as React.CSSProperties}><span>Рядом важная новость</span><em>2</em><i /></div>
           <div className="pw-bar pw-bar--neg pw-moment-3" style={{ "--v": "29%" } as React.CSSProperties}><span>Сделка после дневного лимита</span><em>2</em><i /></div>
         </div>

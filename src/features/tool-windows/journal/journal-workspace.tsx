@@ -9,7 +9,7 @@
  * is copied from Pocket; ATA never sees the account.
  *
  *   the list      → counts · filter · the trades, day by day, newest first
- *   an entry      → ПЛАН · ИСПОЛНЕНИЕ · ВЫВОД, the rules broken, and
+ *   an entry      → ОСНОВАНИЕ · ИСПОЛНЕНИЕ · ВЫВОД, the rules broken, and
  *                   «Разобрать сделку» / «Изменить разбор» · «Изменить запись»
  *                   · «Удалить»
  *   the review    → plan followed or broken, which rules, how it went, the
@@ -863,7 +863,7 @@ export function JournalWorkspace({
                           {reviewing ? (
                             <div className="jr-detail__review">
                               <dl className="jr-notes">
-                                <JournalNote term="План" text={entry.plan} empty="Причина входа не записана" />
+                                <JournalNote term="Основание" text={entry.plan} empty="Основание не записано" />
                               </dl>
                               <ReviewFields
                                 idPrefix={reviewFields(entry.id)}

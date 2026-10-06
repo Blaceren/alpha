@@ -21,7 +21,7 @@ describe("«Инструменты» — the six tools", () => {
       "News Calendar",
     ]);
     expect(screen.getByText("Открыто 1 из 6")).toBeInTheDocument();
-    expect(screen.getByText("План сделки до входа: актив, направление, сумма, payout, экспирация и причина.")).toBeInTheDocument();
+    expect(screen.getByText("План сделки до входа: актив, направление, сумма, payout, экспирация и основание.")).toBeInTheDocument();
   });
 
   it("opens an unlocked tool in the SAME tab, as one full-row link", () => {

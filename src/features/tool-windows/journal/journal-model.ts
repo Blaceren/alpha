@@ -292,7 +292,7 @@ const MESSAGES: Record<ManualField, string> = {
   payoutPercent: PAYOUT_MESSAGE,
   expiry: "Выберите экспирацию.",
   result: "Отметьте результат: прибыль или убыток.",
-  plan: `План — не длиннее ${JOURNAL_LIMITS.maxPlanLength} символов.`,
+  plan: `Основание — не длиннее ${JOURNAL_LIMITS.maxPlanLength} символов.`,
   planMark: "Отметьте, соблюдён ли план.",
   violations: "Нарушения отмечаются только при нарушенном плане.",
   execution: `Исполнение — не длиннее ${JOURNAL_LIMITS.maxExecutionLength} символов.`,

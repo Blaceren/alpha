@@ -28,7 +28,7 @@ const REFERENCE: JournalReference = {
     { code: "M3", label: "3 мин", seconds: 180 },
   ],
   violations: [
-    { code: "no_reason", label: "Вход без записанной причины" },
+    { code: "no_reason", label: "Вход без записанного основания" },
     { code: "revenge", label: "Хотел отыграться после убытка" },
     { code: "amount_above_plan", label: "Сумма больше плана" },
   ],
@@ -146,7 +146,7 @@ describe("Trading Journal — the list", () => {
     expect(container.textContent).not.toMatch(/итого|баланс|P\/L|прибыль за|win rate/i);
   });
 
-  it("opens an entry in place: ПЛАН · ИСПОЛНЕНИЕ · ВЫВОД, the broken rules and the facts", async () => {
+  it("opens an entry in place: ОСНОВАНИЕ · ИСПОЛНЕНИЕ · ВЫВОД, the broken rules and the facts", async () => {
     const user = userEvent.setup();
     render(<JournalWorkspace initialPage={page()} />);
     const line = row(/BTC\/USD OTC/);
@@ -155,7 +155,7 @@ describe("Trading Journal — the list", () => {
     expect(line).toHaveAttribute("aria-expanded", "true");
     const detail = document.getElementById(line.getAttribute("aria-controls")!)!;
     expect(detail).toBeVisible();
-    expect(within(detail).getByText("Причина входа не записана")).toBeInTheDocument();
+    expect(within(detail).getByText("Основание не записано")).toBeInTheDocument();
     expect(within(detail).getByText("Вход через минуту после убытка, сумма удвоена.")).toBeInTheDocument();
     expect(within(detail).getByText("Хотел отыграться после убытка")).toBeInTheDocument();
     expect(within(detail).getByText("Сумма больше плана")).toBeInTheDocument();
@@ -339,7 +339,7 @@ describe("Trading Journal — the review", () => {
     await user.click(row(/EUR\/USD OTC/));
     await user.click(screen.getByRole("button", { name: "Разобрать сделку" }));
     await user.click(screen.getByRole("radio", { name: "Нарушен" }));
-    await user.click(screen.getByRole("checkbox", { name: "Вход без записанной причины" }));
+    await user.click(screen.getByRole("checkbox", { name: "Вход без записанного основания" }));
     await user.click(screen.getByRole("radio", { name: "По плану" }));
     await user.click(screen.getByRole("button", { name: "Сохранить разбор" }));
     expect(changeJournalEntry).toHaveBeenCalledWith(FROM_CARD.id, expect.objectContaining({ planFollowed: true, violations: [] }));
@@ -443,7 +443,7 @@ describe("Trading Journal — a trade recorded by hand", () => {
     await fillTrade(user);
     expect(screen.getByText("Итог сделки").parentElement).toHaveTextContent("−$5.00");
     await user.click(screen.getByRole("radio", { name: "Нарушен" }));
-    await user.click(screen.getByRole("checkbox", { name: "Вход без записанной причины" }));
+    await user.click(screen.getByRole("checkbox", { name: "Вход без записанного основания" }));
     await user.click(screen.getByRole("button", { name: "Сохранить запись" }));
 
     expect(createJournalEntry).toHaveBeenCalledWith({
@@ -527,7 +527,7 @@ describe("Trading Journal — an entry from a card, changed whole", () => {
     expect(screen.getByLabelText("Payout")).toHaveValue("90");
     expect(screen.getByLabelText("Экспирация")).toHaveValue("M3");
     expect(screen.getByRole("radio", { name: "Прибыль" })).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByLabelText("План до входа")).toHaveValue("Отскок от уровня, отмеченного до сессии");
+    expect(screen.getByLabelText("Основание входа в сделку")).toHaveValue("Отскок от уровня, отмеченного до сессии");
   });
 
   it("saves the correction as the whole entry, and the line and its mark follow the Backend's answer", async () => {

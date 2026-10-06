@@ -300,7 +300,7 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
     const decided = container.querySelector("#decide .decision") as HTMLElement;
     expect(decided).not.toBeNull();
     expect(text(decided)).toContain("Trade Card");
-    expect(text(decided)).toContain("Причина входа до сделки");
+    expect(text(decided)).toContain("Основание входа в сделку");
     expect(text(decided)).toContain("До сделки зафиксировал условие");
     expect(text(decided)).toContain("Зафиксировано");
   });
@@ -348,7 +348,7 @@ describe("Public Home — signature evidence", () => {
   it("names one rubric criterion, one return reason and one corrective action", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const track = text(container.querySelector(".evidence-track") as HTMLElement);
-    expect(track).toContain("Критерий · Причина до сделки");
+    expect(track).toContain("Критерий · Основание до сделки");
     expect(track).toContain("Требуется доработка");
     expect(track).toContain("Опишите условие, которое вы определили заранее");
   });
@@ -358,7 +358,7 @@ describe("Public Home — signature evidence", () => {
     const track = container.querySelector(".evidence-track") as HTMLElement;
     const v1 = track.querySelector('[data-frame-stage="v1"]') as HTMLElement;
     const v2 = track.querySelector('[data-frame-stage="v2"]') as HTMLElement;
-    const field = "Причина входа до сделки";
+    const field = "Основание входа в сделку";
     expect(text(v1)).toContain(field);
     expect(text(v2)).toContain(field);
     expect(text(v1)).not.toEqual(text(v2));

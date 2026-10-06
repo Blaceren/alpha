@@ -73,7 +73,7 @@ async function fillPlan(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Сумма"), "8");
   await user.type(screen.getByLabelText("Payout"), "90");
   await user.selectOptions(screen.getByLabelText("Экспирация"), "M3");
-  await user.type(screen.getByLabelText("Причина входа до сделки"), "Отскок от уровня, отмеченного до сессии");
+  await user.type(screen.getByLabelText("Основание входа в сделку"), "Отскок от уровня, отмеченного до сессии");
 }
 
 describe("Trade Card — a new plan", () => {
@@ -146,7 +146,7 @@ describe("Trade Card — the fixed plan", () => {
     fetchTradeCardState.mockResolvedValue({ ok: true, data: { card: card(), reference: REFERENCE } });
     render(<TradeCardWorkspace />);
     expect(await screen.findByText("Результат после экспирации")).toBeInTheDocument();
-    expect(screen.getByLabelText("Причина входа до сделки")).toHaveValue("Отскок от уровня, отмеченного до сессии");
+    expect(screen.getByLabelText("Основание входа в сделку")).toHaveValue("Отскок от уровня, отмеченного до сессии");
   });
 
   it("saves only once a result is picked, with a trimmed observation", async () => {
