@@ -293,3 +293,22 @@ describe("XP is a secondary metric", () => {
   });
 });
 
+
+describe("the lesson header shares one corner (DD-350, owner 2026-10-06: «одинаковые углы закругления»)", () => {
+  const css = src("src/features/level-detail-fidelity/level-hifi.css");
+  const rule = (selector: string) => {
+    const at = css.indexOf(`${selector} {`);
+    expect(at, selector).toBeGreaterThan(-1);
+    return css.slice(at, css.indexOf("}", at));
+  };
+
+  it("the plate and the rail: the same radius", () => {
+    expect(rule(".ld.ld--hifi .ld-plate")).toContain("border-radius: var(--hf-radius-window)");
+    expect(rule(".ld.ld--hifi .ax-lvlhead > .ld-facts")).toContain("border-radius: var(--hf-radius-window)");
+  });
+
+  it("the state mark and the XP chip inside it: one smaller radius", () => {
+    expect(rule(".ld.ld--hifi .ld-fact--xp")).toContain("border-radius: 8px");
+    expect(rule(".ld.ld--hifi .ax-lvlhead > .ld-facts .ax-mark")).toContain("border-radius: 8px");
+  });
+});

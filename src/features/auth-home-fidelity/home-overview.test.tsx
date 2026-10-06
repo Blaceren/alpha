@@ -347,3 +347,29 @@ describe("the Home list: three walked, the learner's level, the next", () => {
     expect(rule(".hm .hm-level__go")).not.toContain("signal");
   });
 });
+
+describe("Home's head is two areas, as the lesson header (DD-350)", () => {
+  const css = SRC("home-hifi.css");
+  const rule = (selector: string) => {
+    const at = css.indexOf(`${selector} {`);
+    expect(at, selector).toBeGreaterThan(-1);
+    return css.slice(at, css.indexOf("}", at));
+  };
+
+  it("the greeting on the raised plate, the facts on the ground surface — one corner", () => {
+    expect(rule(".hm .hm-head__who")).toContain("background: var(--hf-light), var(--hf-surface-raised)");
+    expect(rule(".hm .hm-facts")).toContain("background: var(--hf-surface)");
+    expect(rule(".hm .hm-head__who")).toContain("border-radius: var(--hf-radius-window)");
+    expect(rule(".hm .hm-facts")).toContain("border-radius: var(--hf-radius-window)");
+  });
+
+  it("the XP is the one lit fact", () => {
+    expect(rule('.hm .hm-fact[data-fact="xp"] dd')).toContain("var(--signal-active)");
+    expect(rule('.hm .hm-fact[data-fact="xp"]')).toContain("border-radius: 8px");
+    const { container } = render(
+      <HomeOverview name="Вера" position={programPosition(levelFourProgram({ xp: 300 }))} tools={null} news={null} priority={<p>p</p>} />,
+    );
+    expect(container.querySelector('.hm-fact[data-fact="xp"] dd')!.textContent).toBe("300 XP");
+    expect(container.querySelectorAll('.hm-fact[data-fact="xp"]')).toHaveLength(1);
+  });
+});

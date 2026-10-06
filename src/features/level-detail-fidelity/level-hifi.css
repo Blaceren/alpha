@@ -94,7 +94,9 @@
      where the stage is already at its narrowest. */
   padding: clamp(16px, 2.7svh, 24px) 36px clamp(18px, 2.9svh, 26px);
   border: 1px solid var(--hf-line);
-  border-radius: var(--hf-radius-surface);
+  /* One radius for the plate and the rail (owner, 2026-10-06: «одинаковые
+     углы закругления», DD-350). */
+  border-radius: var(--hf-radius-window);
   background: var(--hf-light), var(--hf-surface-raised);
 }
 
@@ -113,14 +115,14 @@
   margin: 10px auto 0;
   padding: 7px 16px;
   border: 1px solid var(--hf-line);
-  border-radius: var(--hf-radius-pill);
+  border-radius: var(--hf-radius-window);
   background: var(--hf-surface);
 }
 
 .ld.ld--hifi .ld-fact--xp {
   padding: 3px 11px;
   border: 1px solid rgba(199, 247, 109, 0.5);
-  border-radius: var(--hf-radius-pill);
+  border-radius: 8px;
   background: rgba(199, 247, 109, 0.09);
   box-shadow: 0 0 16px rgba(199, 247, 109, 0.22);
   color: var(--signal);
@@ -130,6 +132,13 @@
 /* The chip is its own separator. */
 .ld.ld--hifi .ld-fact--xp::before {
   display: none;
+}
+
+/* The two chips of the rail share one corner, nested inside the rail's own
+   (16px rail, 7px padding: 8px chips) — the state mark was a 3px box beside a
+   pill (DD-350). */
+.ld.ld--hifi .ax-lvlhead > .ld-facts .ax-mark {
+  border-radius: 8px;
 }
 
 .ld.ld--hifi > article > .ax-statestrip {
