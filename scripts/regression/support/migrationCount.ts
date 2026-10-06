@@ -19,6 +19,13 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  *
+ * NOTIFICATIONS CLEARED: 61 -> 62. One additive migration,
+ * `20261006120000_notification_cleared_at`: one nullable column on
+ * Notification (clearedAt, the learner's «Очистить всё», DD-349) and one index.
+ * It rewrites no existing row, so a Backend built before it never reads the
+ * column and rollback is inert. Bumped in the same commit, and every
+ * regression that reads this constant is run for the release.
+ *
  * PROGRAM STRUCTURE: 60 -> 61. One additive migration,
  * `20261002120000_program_structure`: four nullable columns (a module's chapter
  * number and title, a level's learner-facing kind, a question's rewatch
@@ -166,7 +173,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 61;
+export const EXPECTED_MIGRATION_COUNT = 62;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

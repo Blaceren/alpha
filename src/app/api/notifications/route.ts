@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { apiAuthErrorResponse, requireUser } from "@/lib/apiAuth";
+import { learnerListWhere } from "@/lib/notification-list";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
@@ -7,16 +8,14 @@ export async function GET(request: Request) {
     const user = await requireUser();
 
     const [items, unreadCount] = await Promise.all([
+      /* A notification the learner cleared is not in their list (DD-349). */
       prisma.notification.findMany({
-        where: { userId: user.id },
+        where: learnerListWhere(user.id),
         orderBy: { createdAt: "desc" },
         take: 50,
       }),
       prisma.notification.count({
-        where: {
-          userId: user.id,
-          readAt: null,
-        },
+        where: { ...learnerListWhere(user.id), readAt: null },
       }),
     ]);
 

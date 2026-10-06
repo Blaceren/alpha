@@ -448,10 +448,13 @@ model Notification {
   message   String
   metadata  Json?
   readAt    DateTime?
+  /// The learner cleared it from their own list (DD-349): hidden there, never deleted.
+  clearedAt DateTime?
   createdAt DateTime         @default(now())
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
+  @@index([userId, clearedAt, createdAt])
 }
 
 model FileAsset {

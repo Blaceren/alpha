@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { apiAuthErrorResponse, requireUser } from "@/lib/apiAuth";
 import { createAuditLog } from "@/lib/audit";
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
+import { learnerListWhere } from "@/lib/notification-list";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(request: Request) {
@@ -14,10 +15,7 @@ export async function PATCH(request: Request) {
     const readAt = new Date();
 
     const result = await prisma.notification.updateMany({
-      where: {
-        userId: user.id,
-        readAt: null,
-      },
+      where: { ...learnerListWhere(user.id), readAt: null },
       data: { readAt },
     });
 
