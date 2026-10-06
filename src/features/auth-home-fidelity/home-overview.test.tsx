@@ -348,7 +348,7 @@ describe("the Home list: three walked, the learner's level, the next", () => {
   });
 });
 
-describe("Home's head is two areas, as the lesson header (DD-350)", () => {
+describe("Home's head is one block: the greeting leads, the figures follow smaller (DD-351)", () => {
   const css = SRC("home-hifi.css");
   const rule = (selector: string) => {
     const at = css.indexOf(`${selector} {`);
@@ -356,20 +356,27 @@ describe("Home's head is two areas, as the lesson header (DD-350)", () => {
     return css.slice(at, css.indexOf("}", at));
   };
 
-  it("the greeting on the raised plate, the facts on the ground surface — one corner", () => {
-    expect(rule(".hm .hm-head__who")).toContain("background: var(--hf-light), var(--hf-surface-raised)");
-    expect(rule(".hm .hm-facts")).toContain("background: var(--hf-surface)");
-    expect(rule(".hm .hm-head__who")).toContain("border-radius: var(--hf-radius-window)");
-    expect(rule(".hm .hm-facts")).toContain("border-radius: var(--hf-radius-window)");
+  it("one raised plate holds both; the figures carry no surface of their own", () => {
+    expect(rule(".hm .hm-head")).toContain("background: var(--hf-light), var(--hf-surface-raised)");
+    expect(rule(".hm .hm-head")).toContain("border-radius: var(--hf-radius-window)");
+    expect(rule(".hm .hm-head__who")).not.toContain("background");
+    expect(rule(".hm .hm-facts")).not.toContain("background");
+    expect(rule(".hm .hm-facts")).not.toContain("border:");
   });
 
-  it("the XP is the one lit fact", () => {
+  it("the figures are smaller than the greeting's statement", () => {
+    expect(rule(".hm .hm-fact dd")).toContain("17px");
+    expect(rule(".hm .hm-greeting")).toContain("var(--hf-title-xl)");
+  });
+
+  it("the XP is still the one lit figure", () => {
     expect(rule('.hm .hm-fact[data-fact="xp"] dd')).toContain("var(--signal-active)");
     expect(rule('.hm .hm-fact[data-fact="xp"]')).toContain("border-radius: 8px");
     const { container } = render(
       <HomeOverview name="Вера" position={programPosition(levelFourProgram({ xp: 300 }))} tools={null} news={null} priority={<p>p</p>} />,
     );
-    expect(container.querySelector('.hm-fact[data-fact="xp"] dd')!.textContent).toBe("300 XP");
-    expect(container.querySelectorAll('.hm-fact[data-fact="xp"]')).toHaveLength(1);
+    const head = container.querySelector(".hm-head")!;
+    expect(head.querySelector(".hm-head__who .hm-greeting")).not.toBeNull();
+    expect(head.querySelector('.hm-facts .hm-fact[data-fact="xp"] dd')!.textContent).toBe("300 XP");
   });
 });
