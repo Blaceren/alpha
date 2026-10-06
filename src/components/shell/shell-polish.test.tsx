@@ -247,8 +247,12 @@ describe("Shell — the bell and the avatar say where the learner is", () => {
   it("marks the bell on /notifications, and only there", () => {
     for (const id of ACTIVE_IDS) {
       const { container, unmount } = shell(id);
-      const bells = Array.from(container.querySelectorAll('a[href="/notifications"]'));
+      /* Since 2026-10-06 (DD-349) the bell opens its window in place: a button
+         that says whether its window is open and which one it is. */
+      const bells = Array.from(container.querySelectorAll('button.iconbtn[aria-controls^="nt-pop-"]'));
       expect(bells.length, id).toBe(2); // one per bar; one is hidden by a media query
+      expect(bells.map((bell) => bell.getAttribute("aria-controls")).sort(), id).toEqual(["nt-pop-desktop", "nt-pop-mobile"]);
+      for (const bell of bells) expect(bell.getAttribute("aria-expanded"), id).toBe("false");
       for (const bell of bells) {
         expect(bell.getAttribute("aria-current"), `${id} bell`).toBe(
           id === "notifications" ? "page" : null,
@@ -290,12 +294,12 @@ describe("Shell — the bell and the avatar say where the learner is", () => {
         <p>тело</p>
       </AppShell>,
     );
-    expect(withPresence.container.querySelectorAll('a[href="/notifications"][aria-current="page"]')).toHaveLength(2);
+    expect(withPresence.container.querySelectorAll('button.iconbtn[aria-controls^="nt-pop-"][aria-current="page"]')).toHaveLength(2);
     expect(withPresence.container.querySelectorAll(".dot").length).toBeGreaterThan(0);
     withPresence.unmount();
 
     const withoutPresence = shell("notifications");
-    expect(withoutPresence.container.querySelectorAll('a[href="/notifications"][aria-current="page"]')).toHaveLength(2);
+    expect(withoutPresence.container.querySelectorAll('button.iconbtn[aria-controls^="nt-pop-"][aria-current="page"]')).toHaveLength(2);
     expect(withoutPresence.container.querySelectorAll(".dot")).toHaveLength(0);
     withoutPresence.unmount();
 
@@ -305,7 +309,7 @@ describe("Shell — the bell and the avatar say where the learner is", () => {
         <p>тело</p>
       </AppShell>,
     );
-    expect(elsewhere.container.querySelectorAll('a[href="/notifications"][aria-current="page"]')).toHaveLength(0);
+    expect(elsewhere.container.querySelectorAll('button.iconbtn[aria-controls^="nt-pop-"][aria-current="page"]')).toHaveLength(0);
     expect(elsewhere.container.querySelectorAll(".dot").length).toBeGreaterThan(0);
     elsewhere.unmount();
   });

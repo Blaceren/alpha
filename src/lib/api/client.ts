@@ -241,6 +241,36 @@ export async function markAllNotificationsRead(): Promise<ApiResult<unknown>> {
 }
 
 /**
+ * One notification is read — the learner opened it from the bell's window
+ * (DD-349). Best-effort, no retry: the window's state does not wait on it.
+ */
+export async function markNotificationRead(id: string): Promise<ApiResult<unknown>> {
+  const csrf = await fetchCsrfToken();
+  if (!csrf.ok) return csrf;
+  return apiRequest<unknown>({
+    method: "POST",
+    path: `${PROXY_BASE}/notifications/${encodeURIComponent(id)}/read`,
+    csrfToken: csrf.data,
+    validate: (value): value is unknown => typeof value === "object" && value !== null,
+  });
+}
+
+/**
+ * «Очистить всё» (DD-349, owner 2026-10-06): the learner's list is cleared — the
+ * Backend hides every notification in it from the learner and deletes nothing.
+ */
+export async function clearAllNotifications(): Promise<ApiResult<unknown>> {
+  const csrf = await fetchCsrfToken();
+  if (!csrf.ok) return csrf;
+  return apiRequest<unknown>({
+    method: "POST",
+    path: `${PROXY_BASE}/notifications/clear-all`,
+    csrfToken: csrf.data,
+    validate: (value): value is unknown => typeof value === "object" && value !== null,
+  });
+}
+
+/**
  * Logout is a Backend mutation guarded by double-submit CSRF: we first bootstrap
  * a CSRF token, then send it as the `x-csrf-token` header. No auto-retry.
  */

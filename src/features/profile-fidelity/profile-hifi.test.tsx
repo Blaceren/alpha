@@ -9,7 +9,7 @@
  * profile. Signing out is where a person looks for it.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -27,7 +27,6 @@ const logout = vi.fn(async () => {});
 let session: unknown = null;
 vi.mock("@/features/auth/use-session", () => ({ useOptionalSession: () => session }));
 
-import { ProfileSupportCard, SUPPORT_CARD_COPY } from "@/features/profile-fidelity/profile-support-card";
 import { ProfileExit, EXIT_COPY } from "@/features/profile-fidelity/profile-exit";
 
 const ROOT = process.cwd();
@@ -161,41 +160,14 @@ describe("the parts", () => {
   });
 });
 
-describe("the support card", () => {
-  const row = (id: string, status: string, lastActivityAt: string) => ({
-    id, reference: `LO-${id}`, subject: `Вопрос ${id}`, status, lastActivityAt, createdAt: lastActivityAt,
-  });
-
-  it("shows the latest two requests with their state, and the way in", async () => {
-    listSupportCases.mockResolvedValue({ ok: true, data: [
-      row("1", "resolved", "2026-10-01T10:00:00Z"),
-      row("2", "waiting_learner", "2026-10-03T10:00:00Z"),
-      row("3", "in_progress", "2026-10-02T10:00:00Z"),
-    ] });
-    const { container } = render(<ProfileSupportCard />);
-    await waitFor(() => expect(container.querySelectorAll(".p-aside__case")).toHaveLength(2));
-    const cases = [...container.querySelectorAll(".p-aside__case")];
-    expect(cases[0]!.textContent).toContain("Вопрос 2");
-    expect(cases[0]!.textContent).toContain("Ждём вашего ответа");
-    expect(cases[1]!.textContent).toContain("В работе");
-    expect(container.querySelector(".p-aside__cases")!.getAttribute("aria-label")).toBe("Открытых обращений: 2");
-    expect(screen.getByRole("link", { name: SUPPORT_CARD_COPY.action })).toHaveAttribute("href", "/profile/support");
-    // Each row opens its own case (2026-10-04).
-    expect(cases[0]!.querySelector("a")!.getAttribute("href")).toBe("/profile/support?case=2");
-  });
-
-  it("says there are none, and a failed read leaves only the way in", async () => {
-    listSupportCases.mockResolvedValue({ ok: true, data: [] });
-    const none = render(<ProfileSupportCard />);
-    await waitFor(() => expect(none.container.textContent).toContain(SUPPORT_CARD_COPY.none));
-    none.unmount();
-
-    listSupportCases.mockResolvedValue({ ok: false, error: { category: "NETWORK_ERROR" } });
-    const failed = render(<ProfileSupportCard />);
-    await waitFor(() => expect(listSupportCases).toHaveBeenCalledTimes(2));
-    expect(failed.container.querySelector(".p-aside__cases")).toBeNull();
-    expect(failed.container.querySelector('[role="alert"]')).toBeNull();
-    expect(screen.getByRole("link", { name: SUPPORT_CARD_COPY.action })).toBeTruthy();
+describe("the account tab has no support card beside its rows (owner, 2026-10-06, DD-349)", () => {
+  it("is not rendered, and the component is gone", () => {
+    const page = readFileSync(join(process.cwd(), "src/app/(app)/profile/page.tsx"), "utf8");
+    expect(page).not.toContain("ProfileSupportCard");
+    expect(page).not.toMatch(/aside=\{/);
+    expect(existsSync(join(process.cwd(), "src/features/profile-fidelity/profile-support-card.tsx"))).toBe(false);
+    // The way into support stays: the «Поддержка» tab, and the email row's own link.
+    expect(page).toContain('<ProfileTabs current="account" />');
   });
 });
 
@@ -230,7 +202,7 @@ describe("the day the account was made", () => {
 });
 
 describe("what the profile never shows", () => {
-  const code = ["profile-passport.tsx", "profile-record.ts", "profile-tabs.tsx", "profile-exit.tsx", "profile-support-card.tsx"]
+  const code = ["profile-passport.tsx", "profile-record.ts", "profile-tabs.tsx", "profile-exit.tsx"]
     .map((f) => codeOnly(SRC(f)))
     .join("\n");
 

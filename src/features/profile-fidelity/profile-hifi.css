@@ -333,7 +333,7 @@
   padding: 18px 0 20px;
 }
 
-/* The rows and, beside them on a wide screen, the support card. */
+/* The rows, one column (the support card beside them went on 2026-10-06, DD-349). */
 .pf.pf--hifi .p-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -342,99 +342,6 @@
 
 .pf.pf--hifi .p-main {
   min-width: 0;
-}
-
-.pf.pf--hifi .p-aside {
-  min-width: 0;
-  max-width: var(--pp-rows);
-  margin: 0 0 40px;
-  padding: 8px 0 0;
-}
-
-.pf.pf--hifi .p-aside .p-section__title {
-  margin-bottom: 10px;
-}
-
-.pf.pf--hifi .p-aside__lead {
-  margin: 0 0 12px;
-  color: var(--txt-2);
-  font-size: 13.5px;
-  line-height: 1.55;
-}
-
-.pf.pf--hifi .p-aside__quiet {
-  margin: 0 0 6px;
-  color: var(--p-ink-quiet);
-  font-size: 13px;
-}
-
-.pf.pf--hifi .p-aside__cases {
-  margin: 0 0 6px;
-}
-
-.pf.pf--hifi .p-aside__case {
-  padding: 10px 0;
-  border-top: 1px solid var(--line-1);
-}
-
-/* Each case row opens its case (2026-10-04, launch audit). */
-.pf.pf--hifi .p-aside__case-link {
-  display: block;
-  color: inherit;
-  text-decoration: none;
-  border-radius: 8px;
-}
-.pf.pf--hifi .p-aside__case-link:hover .p-aside__subject { text-decoration: underline; text-underline-offset: 3px; }
-.pf.pf--hifi .p-aside__case-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
-
-.pf.pf--hifi .p-aside__subject {
-  display: block;
-  color: var(--txt-1);
-  font: 600 14px / 1.4 var(--ui);
-  overflow-wrap: anywhere;
-}
-
-.pf.pf--hifi .p-aside__meta {
-  display: block;
-  margin-top: 2px;
-  color: var(--p-ink-quiet);
-  font: 500 12px / 1.4 var(--mono);
-}
-
-.pf.pf--hifi .p-aside__action {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  color: var(--txt-1);
-  font: 600 13.5px / 1.3 var(--ui);
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: var(--p-rule-underline);
-}
-
-.pf.pf--hifi .p-aside__action:hover {
-  text-decoration-color: var(--txt-2);
-}
-
-@media (min-width: 1200px) {
-  /* The rows keep one measure inside the grid and after it (signing out), so
-     every row ends at the same x; the card takes what is left. */
-  .pf.pf--hifi .p-profile {
-    --pp-rows: 616px;
-  }
-
-  .pf.pf--hifi .p-body {
-    grid-template-columns: minmax(0, var(--pp-rows)) minmax(0, 1fr);
-    align-items: start;
-    column-gap: 56px;
-  }
-
-  .pf.pf--hifi .p-aside {
-    margin: 0;
-    padding: 2px 0 0 28px;
-    border-left: 1px solid var(--line-2);
-  }
 }
 
 /* Public Home's pill for the one save action, and for the desk's send. */
@@ -578,13 +485,5 @@
   .pp-support {
     padding-top: 22px;
     padding-inline: 16px;
-  }
-}
-
-/* Responsive pass (2026-10-03): type a phone can read. */
-@media (max-width: 599px) {
-  /* The aside's lead (where support answers) reads at 14.5px on a phone. */
-  .pf.pf--hifi .p-aside__lead {
-    font-size: 14.5px;
   }
 }

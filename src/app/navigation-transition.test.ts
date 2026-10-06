@@ -457,7 +457,6 @@ describe("the authenticated route group", () => {
   "src/features/profile-fidelity/profile-hifi.css",
   "src/features/profile-fidelity/profile-passport.tsx",
   "src/features/profile-fidelity/profile-record.ts",
-  "src/features/profile-fidelity/profile-support-card.tsx",
   "src/features/profile-fidelity/profile-tabs.tsx",
   "src/features/support/components/support-hub.tsx",
   "src/lib/curriculum/program-points.ts",
@@ -569,6 +568,12 @@ describe("the authenticated route group", () => {
   "src/app/film/[name]/route.ts",
   "src/features/public-home/hero-film.tsx",
   "src/server/media/public-film.ts",
+  /* The bell's window (DD-349, owner 2026-10-06): the bell opens a small window
+     in place, and the learner can clear their list — a named proxy operation. */
+  "src/app/api/backend/notifications/clear-all/route.ts",
+  "src/components/shell/notifications-bell.tsx",
+  "src/components/shell/notifications-popover.tsx",
+  "src/components/shell/notifications-popover.css",
 ];
 
   it("has brought no loading boundary back since the release", () => {

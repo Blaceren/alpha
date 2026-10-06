@@ -1,0 +1,310 @@
+/*
+ * THE BELL'S WINDOW (DD-349, owner 2026-10-06), in the product's own colours and
+ * language: the raised ink surface with Public Home's corner light, hairlines,
+ * the walked green for what is read and the Signal for what is new, the rose of
+ * a loss for the one step that takes something away.
+ *
+ * Desktop: hangs from the bell, right edges aligned. Below 900px it hangs from
+ * the phone's top bar, edge to edge with 8px gutters (the bar's backdrop filter
+ * makes it the window's containing block).
+ */
+
+.ntb {
+  position: relative;
+  display: inline-flex;
+}
+
+.ntp {
+  --ntp-new: var(--signal-active);
+  --ntp-rose: #d7a3a8;
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 14px);
+  right: -6px;
+  display: flex;
+  flex-direction: column;
+  width: 392px;
+  max-height: min(76vh, 600px);
+  border: 1px solid var(--hf-line-strong);
+  border-radius: var(--hf-radius-window);
+  background: var(--hf-light), var(--hf-surface-raised);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  color: var(--text-primary);
+  text-align: left;
+  animation: ntp-in 160ms var(--ease-standard);
+}
+
+@keyframes ntp-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.ntp__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--hf-line);
+}
+
+.ntp__title {
+  margin: 0;
+  font: 400 22px / 1.1 var(--hf-display);
+  letter-spacing: -0.01em;
+  outline: none;
+}
+
+.ntp__all {
+  color: var(--text-secondary);
+  font: 500 12px / 1.4 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.ntp__all:hover {
+  color: var(--text-primary);
+}
+
+.ntp__body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ntp__list {
+  margin: 0;
+  padding: 6px 8px;
+  list-style: none;
+}
+
+.ntp__item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 12px;
+  border-radius: 12px;
+}
+
+.ntp__item + .ntp__item::before {
+  position: absolute;
+  top: 0;
+  right: 12px;
+  left: 60px;
+  border-top: 1px dashed var(--hf-line);
+  content: "";
+}
+
+/* What is new carries the Signal: a faint wash, and a point on its glyph. */
+.ntp__item[data-unread] {
+  background: color-mix(in srgb, var(--ntp-new) 6%, transparent);
+}
+
+.ntp__glyph {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--hf-line);
+  border-radius: 50%;
+  background: rgba(243, 244, 239, 0.04);
+  color: var(--text-secondary);
+}
+
+.ntp__item[data-unread] .ntp__glyph {
+  border-color: color-mix(in srgb, var(--ntp-new) 40%, transparent);
+  color: var(--ntp-new);
+}
+
+.ntp__item[data-unread] .ntp__glyph::after {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ntp-new);
+  box-shadow: 0 0 0 2px var(--hf-surface-raised);
+  content: "";
+}
+
+.ntp__content {
+  min-width: 0;
+}
+
+.ntp__change {
+  margin: 0;
+  color: var(--text-primary);
+  font: 600 14.5px / 1.35 var(--font-ui);
+}
+
+.ntp__reason {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font: 400 13.5px / 1.45 var(--font-ui);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.ntp__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font: 500 11.5px / 1.4 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.ntp__go {
+  color: var(--text-primary);
+  font: 600 12.5px / 1.4 var(--font-ui);
+  text-decoration: underline;
+  text-decoration-color: var(--hf-line-strong);
+  text-underline-offset: 3px;
+}
+
+.ntp__go::after {
+  content: " →";
+}
+
+.ntp__go:hover {
+  text-decoration-color: currentColor;
+}
+
+/* Loading, empty and failed: one quiet block. */
+.ntp__state {
+  padding: 26px 20px 24px;
+}
+
+.ntp__state-lead {
+  margin: 0;
+  color: var(--text-primary);
+  font: 600 14.5px / 1.4 var(--font-ui);
+}
+
+.ntp__state-text {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font: 400 13.5px / 1.5 var(--font-ui);
+}
+
+.ntp__state .ntp__btn {
+  margin-top: 14px;
+}
+
+.ntp__item--ghost .ntp__glyph {
+  border-color: transparent;
+  background: rgba(243, 244, 239, 0.05);
+}
+
+.ntp__ghostline {
+  align-self: center;
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(243, 244, 239, 0.06);
+}
+
+/* The two buttons of the example, in the product's control language. */
+.ntp__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--hf-line);
+}
+
+.ntp__foot > .ntp__btn {
+  flex: 1 1 0;
+}
+
+.ntp__ask {
+  flex: 1 0 100%;
+  margin: 0 0 2px;
+  color: var(--text-primary);
+  font: 600 13.5px / 1.4 var(--font-ui);
+}
+
+.ntp__btn {
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--hf-line-strong);
+  border-radius: var(--hf-radius-control, 12px);
+  background: rgba(243, 244, 239, 0.03);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: 600 13.5px / 1 var(--font-ui);
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.ntp__btn:hover:not(:disabled) {
+  border-color: rgba(243, 244, 239, 0.34);
+  background: rgba(243, 244, 239, 0.07);
+}
+
+.ntp__btn:focus-visible,
+.ntp__go:focus-visible,
+.ntp__all:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.ntp__btn:disabled {
+  color: var(--text-muted);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.ntp__btn--danger {
+  border-color: color-mix(in srgb, var(--ntp-rose) 55%, transparent);
+  background: color-mix(in srgb, var(--ntp-rose) 10%, transparent);
+  color: var(--ntp-rose);
+}
+
+.ntp__btn--danger:hover:not(:disabled) {
+  border-color: var(--ntp-rose);
+  background: color-mix(in srgb, var(--ntp-rose) 16%, transparent);
+}
+
+/* Below the desktop band the bell sits in the phone's top bar: the window hangs
+   from that bar, edge to edge with gutters, and the bar stays above the page
+   while it is open. */
+@media (max-width: 899px) {
+  .mtop:has(.ntp) {
+    position: relative;
+    z-index: 46;
+  }
+
+  .mtop .ntb {
+    position: static;
+  }
+
+  .mtop .ntp {
+    top: calc(100% + 6px);
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: min(72vh, 560px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ntp {
+    animation: none;
+  }
+
+  .ntp__btn {
+    transition: none;
+  }
+}

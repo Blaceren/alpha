@@ -181,6 +181,8 @@ export type NotificationRow = {
 
 export type NotificationRecord = {
   id: string;
+  /** The Backend's type, for the bell window's glyph (DD-349). */
+  type: NotificationTypeName;
   consumption: "UNREAD" | "READ";
   consequence: "ACTION-RELEVANT" | "AWARENESS-ONLY";
   /** Always ACTION_UNKNOWN — see the file header. */
@@ -242,6 +244,7 @@ export function toRecord(row: NotificationRow, now: Date): NotificationRecord | 
 
   return {
     id: String(row.id),
+    type: type as NotificationTypeName,
     consumption: row.readAt ? "READ" : "UNREAD",
     consequence: consequenceOf(type as NotificationTypeName),
     actionability: "ACTION_UNKNOWN",

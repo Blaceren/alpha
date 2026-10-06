@@ -6,7 +6,6 @@ import { ProfileFidelity } from "@/features/profile-fidelity/profile-fidelity";
 import { ProfilePassport } from "@/features/profile-fidelity/profile-passport";
 import { ProfileTabs } from "@/features/profile-fidelity/profile-tabs";
 import { ProfileExit } from "@/features/profile-fidelity/profile-exit";
-import { ProfileSupportCard } from "@/features/profile-fidelity/profile-support-card";
 
 export const metadata: Metadata = {
   title: "Профиль — Alpha Trade Academy",
@@ -29,7 +28,8 @@ export const dynamic = "force-dynamic";
  * A NORMAL PROFILE (owner, 2026-10-03; DD-337): the passport — who, since when,
  * how far — and the profile's two parts, «Аккаунт» (this page) and «Поддержка»
  * (`/profile/support`, the only way into support now), then the account data,
- * security and signing out.
+ * security and signing out. The support card that stood beside the rows is gone
+ * (owner, 2026-10-06, DD-349): the «Поддержка» tab is one press away.
  */
 export default async function ProfilePage() {
   /* ACCOUNT RECOVERY — the address and what can be done with it come from the
@@ -50,7 +50,6 @@ export default async function ProfilePage() {
         account={account}
         frame={frame}
         closing={<ProfileExit />}
-        aside={viewer ? <ProfileSupportCard /> : null}
       />
     </AppShell>
   );

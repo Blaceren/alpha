@@ -86,7 +86,7 @@ export function AppShell({
         <DesktopRouteNavigation activeId={activeId} />
         <span className="spacer" />
         <div className="actions">
-          <NotificationButton presence={notificationPresence} current={onNotifications} />
+          <NotificationButton presence={notificationPresence} current={onNotifications} placement="desktop" />
           <UserAvatar name={userName} current={onProfile} placement="desktop" />
           <SessionControls />
         </div>
@@ -104,7 +104,7 @@ export function AppShell({
           <span className="mtop__context" aria-hidden="true">{sectionLabel}</span>
         ) : null}
         <div className="actions">
-          <NotificationButton presence={notificationPresence} current={onNotifications} />
+          <NotificationButton presence={notificationPresence} current={onNotifications} placement="mobile" />
           <UserAvatar name={userName} current={onProfile} placement="mobile" />
           <SessionControls />
         </div>
