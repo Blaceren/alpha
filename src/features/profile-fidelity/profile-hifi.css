@@ -588,3 +588,36 @@
     padding-left: 0;
   }
 }
+
+/* ------------------------------------ the actions on a phone (2026-10-07) -- */
+/*
+ * Every action of a row sits at the row's bottom right on a phone (owner
+ * 2026-10-07: «Выровнять все кнопки по правому нижнему углу»): beside the value
+ * where both fit, on a line of its own at the right where they do not — the
+ * frozen layer set them at the left once a row wrapped. A form's «Сохранить» /
+ * «Отмена» and the answers to «Завершить сеанс…?» go to the right as well.
+ */
+@media (max-width: 599px) {
+  .pf.pf--hifi .p-edit,
+  .pf.pf--hifi .p-edit--link {
+    align-self: flex-end;
+    justify-content: flex-end;
+    margin-left: auto;
+  }
+
+  .pf.pf--hifi .p-actions {
+    justify-content: flex-end;
+  }
+
+  .pf.pf--hifi .p-session__ask {
+    justify-content: flex-end;
+  }
+
+  .pf.pf--hifi .p-session__ask .p-edit {
+    margin-left: 0;
+  }
+
+  .pf.pf--hifi .p-session__question {
+    flex-basis: 100%;
+  }
+}

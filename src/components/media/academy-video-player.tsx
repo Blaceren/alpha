@@ -701,15 +701,36 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
     rateButtonRef.current?.focus();
   }, []);
 
+  /* FULL SCREEN. Where the browser can put an element on the whole screen, the
+     player's own frame goes there, with its controls. An iPhone cannot: Safari
+     there has no element fullscreen, so the press did nothing (owner
+     2026-10-07: «Не работает открытие видео на весь экран, в ПК версии все
+     ок»). There the video itself opens in the system's own full-screen player —
+     called straight from the press, with nothing awaited before it, which is
+     what lets the system allow it. */
   const toggleFullscreen = useCallback(async () => {
     const root = rootRef.current;
     if (!root) return;
-    try {
-      if (document.fullscreenElement) {
+    if (document.fullscreenElement) {
+      try {
         await document.exitFullscreen?.();
-      } else {
-        await root.requestFullscreen?.();
+      } catch {
+        // Nothing to undo: the frame simply stays where it is.
       }
+      return;
+    }
+    const video = videoRef.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
+    const elementFullscreen = document.fullscreenEnabled === true && typeof root.requestFullscreen === "function";
+    if (!elementFullscreen && typeof video?.webkitEnterFullscreen === "function") {
+      try {
+        video.webkitEnterFullscreen();
+      } catch {
+        // The system refused (no video loaded yet); the inline controls stay usable.
+      }
+      return;
+    }
+    try {
+      await root.requestFullscreen?.();
     } catch {
       // Browsers can deny fullscreen without a user gesture; controls stay usable.
     }

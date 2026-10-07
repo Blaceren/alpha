@@ -339,6 +339,17 @@ describe("what the profile never shows", () => {
   });
 });
 
+describe("on a phone every action sits at its row's bottom right (owner 2026-10-07)", () => {
+  it("the rows' actions, a form's buttons and the answers to closing a session go right", () => {
+    const css = SRC("profile-hifi.css").replace(/\/\*[\s\S]*?\*\//g, "");
+    const at = css.lastIndexOf("@media (max-width: 599px)");
+    const block = css.slice(at, css.indexOf("\n}\n", at));
+    expect(block).toMatch(/\.pf\.pf--hifi \.p-edit,\s*\.pf\.pf--hifi \.p-edit--link \{[^}]*align-self: flex-end;[^}]*margin-left: auto;/);
+    expect(block).toMatch(/\.pf\.pf--hifi \.p-actions \{\s*justify-content: flex-end;/);
+    expect(block).toMatch(/\.pf\.pf--hifi \.p-session__ask \{\s*justify-content: flex-end;/);
+  });
+});
+
 describe("the stylesheet is scoped", () => {
   it("lets no selector escape the profile or its support desk", () => {
     const css = SRC("profile-hifi.css").replace(/\/\*[\s\S]*?\*\//g, "");

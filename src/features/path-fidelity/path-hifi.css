@@ -770,7 +770,11 @@
     font-size: 44px;
   }
 
+  /* On a phone the counts take a line of their own under «Путь» and start where
+     it starts (owner 2026-10-07: «Выровнять строку по левой стороне»); the
+     frozen layer pushed them right with margin-left: auto. */
   .pth.pth--hifi .path-header__done {
+    margin-left: 0;
     padding-bottom: 6px;
   }
 

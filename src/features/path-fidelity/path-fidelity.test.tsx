@@ -918,6 +918,16 @@ function walkedTo(current: number): Enrolled {
 const codes = (container: HTMLElement) =>
   [...container.querySelectorAll(".level-node")].map((node) => node.getAttribute("data-level"));
 
+describe("Path — the counts on a phone (owner 2026-10-07: «Выровнять строку по левой стороне»)", () => {
+  it("start under «Путь» instead of being pushed right", () => {
+    const css = readFileSync(join(process.cwd(), "src/features/path-fidelity/path-hifi.css"), "utf8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    );
+    expect(css).toMatch(/@media \(max-width: 599px\) \{[^@]*\.pth\.pth--hifi \.path-header__done \{\s*margin-left: 0;/);
+  });
+});
+
 describe("Path — the strip is the module (DD-352)", () => {
   it("holds every level of the module in focus, wherever in it the learner stands", () => {
     for (const at of [4, 5, 7, 8]) {

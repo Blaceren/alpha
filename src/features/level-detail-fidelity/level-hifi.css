@@ -134,6 +134,16 @@
   display: none;
 }
 
+/* On a phone and a tablet the header does not say how long the video is: the
+   player right under it shows the same time, and the rail was crowded (owner
+   2026-10-07: «информация дублируется с видимым таймером плеера и визуально
+   перегружает блок»). The desktop keeps it. */
+@media (max-width: 899px) {
+  .ld.ld--hifi .ld-fact--video {
+    display: none;
+  }
+}
+
 /* The two chips of the rail share one corner, nested inside the rail's own
    (16px rail, 7px padding: 8px chips) — the state mark was a 3px box beside a
    pill (DD-350). */

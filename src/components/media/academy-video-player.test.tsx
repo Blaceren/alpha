@@ -284,6 +284,61 @@ describe("AcademyVideoPlayer", () => {
     });
   });
 
+  /* 2026-10-07, owner: «Не работает открытие видео на весь экран, в ПК версии
+     все ок» — an iPhone has no element fullscreen; its video has its own. */
+  describe("the full-screen button", () => {
+    function setFullscreenEnabled(value: boolean | undefined) {
+      Object.defineProperty(document, "fullscreenEnabled", { configurable: true, value });
+    }
+    afterEach(() => setFullscreenEnabled(undefined));
+
+    it("on an iPhone (no element fullscreen) opens the video in the system's own full-screen player", () => {
+      const { container } = render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" />);
+      const region = getRegion();
+      const requestFullscreen = vi.fn(() => Promise.resolve());
+      Object.defineProperty(region, "requestFullscreen", { configurable: true, value: requestFullscreen });
+      const video = container.querySelector("video") as HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+      const webkitEnterFullscreen = vi.fn();
+      Object.defineProperty(video, "webkitEnterFullscreen", { configurable: true, value: webkitEnterFullscreen });
+      setFullscreenEnabled(false);
+
+      fireEvent.click(screen.getByRole("button", { name: "На весь экран" }));
+
+      expect(webkitEnterFullscreen).toHaveBeenCalledOnce();
+      expect(requestFullscreen).not.toHaveBeenCalled();
+    });
+
+    it("where element fullscreen exists (a computer) puts the player's own frame on the screen", () => {
+      const { container } = render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" />);
+      const region = getRegion();
+      const requestFullscreen = vi.fn(() => Promise.resolve());
+      Object.defineProperty(region, "requestFullscreen", { configurable: true, value: requestFullscreen });
+      const video = container.querySelector("video") as HTMLVideoElement;
+      const webkitEnterFullscreen = vi.fn();
+      Object.defineProperty(video, "webkitEnterFullscreen", { configurable: true, value: webkitEnterFullscreen });
+      setFullscreenEnabled(true);
+
+      fireEvent.click(screen.getByRole("button", { name: "На весь экран" }));
+
+      expect(requestFullscreen).toHaveBeenCalledOnce();
+      expect(webkitEnterFullscreen).not.toHaveBeenCalled();
+    });
+
+    it("a system refusal leaves the controls working, with nothing thrown", () => {
+      const { container } = render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" />);
+      const video = container.querySelector("video") as HTMLVideoElement;
+      Object.defineProperty(video, "webkitEnterFullscreen", {
+        configurable: true,
+        value: () => {
+          throw new DOMException("not ready", "InvalidStateError");
+        },
+      });
+      setFullscreenEnabled(false);
+      expect(() => fireEvent.click(screen.getByRole("button", { name: "На весь экран" }))).not.toThrow();
+      expect(screen.getByRole("button", { name: "На весь экран" })).toBeTruthy();
+    });
+  });
+
   it("does not toggle play when a control is clicked", () => {
     vi.useFakeTimers();
     render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" />);

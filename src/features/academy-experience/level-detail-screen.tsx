@@ -433,7 +433,16 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
                 {explainState && summary.state === "locked" ? summary.stateLabel.split(":")[0] : summary.stateLabel}
               </span>
               {facts.map((fact) => (
-                <span key={fact} className={fact.endsWith(" XP") ? "ld-fact ld-fact--xp" : "ld-fact"}>
+                <span
+                  key={fact}
+                  className={
+                    fact.endsWith(" XP")
+                      ? "ld-fact ld-fact--xp"
+                      : fact.startsWith("видео ")
+                        ? "ld-fact ld-fact--video"
+                        : "ld-fact"
+                  }
+                >
                   {fact}
                 </span>
               ))}

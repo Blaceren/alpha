@@ -288,8 +288,16 @@ describe("XP is a secondary metric", () => {
     const rule = css.slice(at, css.indexOf("}", at));
     expect(rule).toMatch(/var\(--signal\)/);
     expect(rule).not.toMatch(/anim/i);
-    // The markup marks exactly the XP fact.
-    expect(detail).toContain('fact.endsWith(" XP") ? "ld-fact ld-fact--xp" : "ld-fact"');
+    // The markup marks exactly the XP fact (and, since 2026-10-07, the video's length, which a phone hides).
+    expect(detail).toMatch(/fact\.endsWith\(" XP"\)\s*\?\s*"ld-fact ld-fact--xp"/);
+  });
+
+  it("the video's length is not said in the header on a phone or a tablet — the player shows it (owner 2026-10-07)", () => {
+    expect(detail).toMatch(/fact\.startsWith\("видео "\)\s*\?\s*"ld-fact ld-fact--video"/);
+    const css = src("src/features/level-detail-fidelity/level-hifi.css");
+    expect(css).toMatch(/@media \(max-width: 899px\) \{\s*\.ld\.ld--hifi \.ld-fact--video \{\s*display: none;/);
+    // The desktop keeps it: no rule outside that block hides it.
+    expect(css.match(/\.ld-fact--video/g)?.length).toBe(1);
   });
 });
 
