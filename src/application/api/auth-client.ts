@@ -63,6 +63,28 @@ function withTimeout(options: AuthRequestOptions) {
  */
 let csrfToken: string | null = null;
 
+/**
+ * The backend's double-submit cookie as bridged onto this origin
+ * (`trading_platform_csrf`, see `server/set-cookie-bridge.ts`), or null.
+ */
+export const SHARED_CSRF_COOKIE_NAME = "trading_platform_csrf";
+
+function readSharedCsrfCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  for (const part of document.cookie.split(";")) {
+    const trimmed = part.trim();
+    if (!trimmed.startsWith(`${SHARED_CSRF_COOKIE_NAME}=`)) continue;
+    const value = trimmed.slice(SHARED_CSRF_COOKIE_NAME.length + 1);
+    if (!value) return null;
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 /** Test-only reset so one test's token cannot leak into the next. */
 export function resetCsrfTokenForTests(): void {
   csrfToken = null;
@@ -73,6 +95,17 @@ export function resetCsrfTokenForTests(): void {
  * via the server-side cookie bridge, so cookie and header always agree.
  */
 export async function ensureCsrfToken(options: AuthRequestOptions = {}): Promise<string | null> {
+  /* THE COOKIE FIRST (2026-10-07 audit). Every tab of this origin shares one
+     double-submit cookie, and a pair fetched in one tab replaces it for all of
+     them; a token held in this tab's memory then no longer matched, and every
+     write from it — «Выйти» included — was refused until a reload. The cookie
+     is readable by design (the backend sets it without HttpOnly), so the header
+     is taken from it at each use; memory and a fetch only when there is none. */
+  const shared = readSharedCsrfCookie();
+  if (shared) {
+    csrfToken = shared;
+    return shared;
+  }
   if (csrfToken) return csrfToken;
 
   const { fetchImpl = fetch } = options;

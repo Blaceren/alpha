@@ -61,6 +61,9 @@ function mapLoginFailure(httpStatus: number, body: unknown): LoginErrorCode {
   if (httpStatus === 400) return "invalid_input";
   if (httpStatus === 401) return "invalid_credentials";
   if (httpStatus === 403) {
+    // 2026-10-07: the backend refuses a non-staff account on this form itself,
+    // before it issues anything, and says so.
+    if (backendErrorCode(body) === "NOT_STAFF") return "not_staff";
     return backendErrorCode(body) === "EMAIL_NOT_VERIFIED" ? "email_not_verified" : "inactive";
   }
   if (httpStatus === 429) return "rate_limited";
@@ -95,8 +98,16 @@ function mapLoginFailure(httpStatus: number, body: unknown): LoginErrorCode {
  * The alternative — bridge the cookie and let the session boundary render "no
  * access" — would leave a live staff-origin session belonging to someone with no
  * business holding one, which is a strictly worse resting state for an internal
- * tool. Note this does not touch the account's sessions elsewhere: the cookie is
- * never delivered to the browser, so nothing the learner already had changes.
+ * tool.
+ *
+ * Since 2026-10-07 the backend takes that decision itself on this form, before
+ * it issues anything (`NOT_STAFF` → `not_staff`): an account has two session
+ * places, and a session issued here and then dropped took one of them for a
+ * week — closing the learner's other device to make room. The check below
+ * stays for anything the backend lets through.
+ *
+ * The session this browser already holds on the CRM goes along with the
+ * sign-in, so the backend replaces it rather than leaving it live and unheld.
  *
  * CSRF is not required here, matching the backend: `POST /api/auth/login` runs no
  * `validateCsrfToken`, because a login request carries no ambient authority to
@@ -131,6 +142,7 @@ export async function POST(request: Request) {
     // A CONSTANT, so a caller cannot declare a surface whose action pin it
     // would rather be judged against.
     authSurface: CRM_LOGIN_SURFACE,
+    cookie: presentedSessionCookie(request),
     // The ingress-measured address, so staff logins do not all share one
     // backend rate-limit bucket. `null` when no trustworthy value exists — we
     // forward nothing rather than inventing one.
@@ -180,4 +192,17 @@ export async function POST(request: Request) {
   // session cookie, plus a CSRF cookie if login happened to refresh one.
   const response = NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   return applyBridgedCookies(response, result.cookies);
+}
+
+/** `name=value` of the session this browser presents, or null — and nothing else of its cookies. */
+function presentedSessionCookie(request: Request): string | null {
+  const header = request.headers.get("cookie");
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith(`${SESSION_COOKIE_NAME}=`) && trimmed.length > SESSION_COOKIE_NAME.length + 1) {
+      return trimmed;
+    }
+  }
+  return null;
 }
