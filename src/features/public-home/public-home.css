@@ -6094,3 +6094,49 @@ html.ph-smooth-scroll {
     transform: translateY(-50%);
   }
 }
+
+/* =========================================================================
+ * SIGNED IN, ON A PHONE AND A TABLET (2026-10-07) — the header's own action.
+ *
+ * The owner: «на мобильной версии в шапке сделай кнопку как на десктопе в
+ * случае того что залогинен кнопка перейти в академию а не вход». Beside «Меню»
+ * a signed-in visitor gets the desktop's call to action, the signal button to
+ * /home, where a visitor gets «Войти». It is 153px at 14px sides: the pill's
+ * content is 309px at 360, and the wordmark (56), the button, the actions' gap
+ * (6) and «Меню» (72) need 299 once the pill's minimum gap is 12px — the
+ * pill spreads its two ends apart anyway, so the smaller minimum changes
+ * nothing a visitor sees. Below 360 the words would not fit (269px at 320) and
+ * the button reads «В Академию» (102px); its name stays «Перейти в Академию».
+ * ====================================================================== */
+.ph .mobile-academy {
+  padding-inline: 14px;
+  white-space: nowrap;
+}
+
+.ph .mobile-academy__short {
+  display: none;
+}
+
+/* The menu's own actions are a two-column row (login, then the call to
+   action). Signed in there is one action, and it takes the whole row. */
+@media (max-width: 1040px) {
+  .ph .primary-nav .nav-actions > .button:only-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  .ph .site-header__inner {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 359px) {
+  .ph .mobile-academy__full {
+    display: none;
+  }
+
+  .ph .mobile-academy__short {
+    display: inline;
+  }
+}

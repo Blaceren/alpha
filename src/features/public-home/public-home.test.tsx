@@ -533,6 +533,41 @@ describe("Public Home — session-aware calls to action", () => {
     const auth = render(<PublicHomeScreen authenticated />);
     expect(sections(auth.container)).toEqual(anonSections);
   });
+
+  /* 2026-10-07, the owner: «на мобильной версии в шапке сделай кнопку как на десктопе в случае
+     того что залогинен кнопка перейти в академию а не вход». */
+  it("signed in, the phone header offers the way into the Academy where «Войти» stands for a visitor", () => {
+    const auth = render(<PublicHomeScreen authenticated />);
+    const actions = auth.container.querySelector(".header-mobile-actions") as HTMLElement;
+    expect(actions.querySelector(".mobile-login")).toBeNull();
+    const academy = actions.querySelector("a.mobile-academy") as HTMLAnchorElement;
+    expect(academy.getAttribute("href")).toBe("/home");
+    expect(academy.getAttribute("aria-label")).toBe("Перейти в Академию");
+    // The desktop's own button, not a look-alike.
+    expect(academy.className).toContain("button--signal");
+    // The menu toggle still follows it.
+    expect(academy.nextElementSibling?.classList.contains("menu-toggle")).toBe(true);
+    auth.unmount();
+
+    const anon = render(<PublicHomeScreen authenticated={false} />);
+    const anonActions = anon.container.querySelector(".header-mobile-actions") as HTMLElement;
+    expect(anonActions.querySelector(".mobile-academy")).toBeNull();
+    expect(anonActions.querySelector("a.mobile-login")?.getAttribute("href")).toBe("/login");
+  });
+
+  it("the phone header's academy button shortens only on the narrowest phones, and the menu's single action fills its row", () => {
+    const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    );
+    expect(css).toMatch(/\n\.ph \.mobile-academy__short \{\s*display: none;\s*\}/);
+    expect(css).toMatch(
+      /@media \(max-width: 359px\) \{\s*\.ph \.mobile-academy__full \{\s*display: none;\s*\}\s*\.ph \.mobile-academy__short \{\s*display: inline;\s*\}\s*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 1040px\) \{\s*\.ph \.primary-nav \.nav-actions > \.button:only-child \{\s*grid-column: 1 \/ -1;\s*\}\s*\}/,
+    );
+  });
 });
 
 describe("Public Home — legal labels are not fake links", () => {
