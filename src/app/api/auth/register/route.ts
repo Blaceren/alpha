@@ -550,7 +550,7 @@ export async function POST(request: Request) {
   if (!verificationRequired) {
     response.cookies.set(
       SESSION_COOKIE_NAME,
-      await issueSession(user.id),
+      await issueSession(user.id, { userAgent: request.headers.get("user-agent") }),
       sessionCookieOptions,
     );
   }

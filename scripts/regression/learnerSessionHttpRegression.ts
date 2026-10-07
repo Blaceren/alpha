@@ -15,6 +15,7 @@
  */
 import assert from "node:assert/strict";
 import bcrypt from "bcryptjs";
+import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -136,14 +137,49 @@ async function main() {
       return String(body.csrfToken);
     }
 
-    async function login(jar: Jar): Promise<{ status: number; setCookie: string[] }> {
+    async function login(
+      jar: Jar,
+      who: { email: string; userAgent?: string } = { email },
+    ): Promise<{ status: number; setCookie: string[] }> {
       const token = await csrf(jar);
       const response = await fetch(`${baseUrl}/api/auth/login`, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-csrf-token": token, cookie: cookieHeader(jar) },
-        body: JSON.stringify({ email, password: PASSWORD }),
+        headers: {
+          "content-type": "application/json",
+          "x-csrf-token": token,
+          cookie: cookieHeader(jar),
+          ...(who.userAgent ? { "user-agent": who.userAgent } : {}),
+        },
+        body: JSON.stringify({ email: who.email, password: PASSWORD }),
       });
       return { status: response.status, setCookie: applySetCookie(jar, response) };
+    }
+
+    const SESSION = "__Host-trading_platform_session";
+    const hashOf = (jar: Jar) => createHash("sha256").update(jar.get(SESSION) ?? "", "utf8").digest("hex");
+    const rowOf = async (jar: Jar) => prisma.userSession.findUnique({ where: { tokenHash: hashOf(jar) } });
+    const liveCount = () => prisma.userSession.count({ where: { userId: user.id, revokedAt: null } });
+
+    type ListedSession = {
+      id: string;
+      current: boolean;
+      signedInAt: string;
+      lastSeenAt: string;
+      device: { browser: string | null; os: string | null; kind: string | null };
+    };
+    async function listSessions(jar: Jar): Promise<{ status: number; sessions: ListedSession[]; raw: string }> {
+      const response = await fetch(`${baseUrl}/api/auth/sessions`, { headers: { cookie: cookieHeader(jar) }, cache: "no-store" });
+      const raw = await response.text();
+      const body = response.ok ? (JSON.parse(raw) as { sessions: ListedSession[] }) : { sessions: [] };
+      return { status: response.status, sessions: body.sessions, raw };
+    }
+    async function closeSession(jar: Jar, id: string, withCsrf = true): Promise<number> {
+      // The CSRF pair first: fetching it sets its cookie in the jar, which the request must carry.
+      const csrfToken = withCsrf ? await csrf(jar) : null;
+      const headers: Record<string, string> = { cookie: cookieHeader(jar) };
+      if (csrfToken) headers["x-csrf-token"] = csrfToken;
+      const response = await fetch(`${baseUrl}/api/auth/sessions/${id}`, { method: "DELETE", headers });
+      return response.status;
     }
 
     async function sessionStatus(jar: Jar) {
@@ -170,10 +206,10 @@ async function main() {
       assert.ok(!/Domain=/i.test(attrs), "a __Host- cookie must carry no Domain");
     });
 
-    /* ORDER MATTERS HERE, and the reason is the feature. Every login revokes
-       whatever that user had, so a case that logs in again invalidates the jar
-       an earlier case is still holding. H3 therefore runs immediately after H1,
-       before anything else authenticates as this user. */
+    /* ORDER MATTERS HERE, and the reason is the feature. A third login closes
+       the session unused the longest, so a case that logs in again can
+       invalidate the jar an earlier case is still holding. H3 therefore runs
+       immediately after H1, before anything else authenticates as this user. */
     await check("H3. session-status accepts the new session and reports the role", async () => {
       const status = await sessionStatus(first);
       assert.equal(status.authenticated, true);
@@ -193,22 +229,89 @@ async function main() {
 
     const firstToken = first.get("__Host-trading_platform_session")!;
 
-    await check("H4. a second login revokes the first", async () => {
-      const second: Jar = new Map();
-      const { status } = await login(second);
+    /* TWO LIVE SESSIONS (owner 2026-10-07). H4a–H4f replace H-7's «a second
+       login revokes the first». */
+    const second: Jar = new Map();
+    await check("H4a. a second browser signs in alongside the first — both work, two rows live", async () => {
+      await prisma.userSession.updateMany({
+        where: { userId: user.id, revokedAt: null, NOT: { tokenHash: hashOf(first) } },
+        data: { revokedAt: new Date() },
+      });
+      const iphone =
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+      const { status } = await login(second, { email, userAgent: iphone });
       assert.equal(status, 200);
-      const secondToken = second.get("__Host-trading_platform_session")!;
-      assert.notEqual(secondToken, firstToken);
+      assert.notEqual(second.get(SESSION), firstToken);
+      assert.equal((await sessionStatus(first)).authenticated, true, "the second login closed the first");
+      assert.equal((await sessionStatus(second)).authenticated, true, "the second session does not work");
+      assert.equal(await liveCount(), 2);
+    });
 
-      // The first browser still holds its cookie and is now a stranger.
-      const stale = await sessionStatus(new Map([["__Host-trading_platform_session", firstToken]]));
-      assert.equal(stale.authenticated, false, "the first session survived the second login");
+    await check("H4b. each browser lists both sessions, itself marked current, named by device, with no secret in the answer", async () => {
+      const fromSecond = await listSessions(second);
+      assert.equal(fromSecond.status, 200);
+      assert.equal(fromSecond.sessions.length, 2);
+      const mine = fromSecond.sessions.filter((row) => row.current);
+      assert.equal(mine.length, 1, "not exactly one session is marked current");
+      assert.equal(mine[0]!.id, (await rowOf(second))!.id);
+      assert.deepEqual(mine[0]!.device, { browser: "Safari", os: "iPhone", kind: "phone" });
+      for (const value of [first.get(SESSION)!, second.get(SESSION)!, hashOf(first), hashOf(second)]) {
+        assert.ok(!fromSecond.raw.includes(value), "a token or its hash is in the list");
+      }
+      assert.ok(!/userAgent|tokenHash|Mozilla/.test(fromSecond.raw), "the raw description or the hash is in the list");
+      const fromFirst = await listSessions(first);
+      assert.equal(fromFirst.sessions.find((row) => row.current)?.id, (await rowOf(first))!.id);
+    });
 
-      const live = await sessionStatus(second);
-      assert.equal(live.authenticated, true, "the second session does not work");
+    await check("H4c. the second browser closes the first — the first is a stranger at once", async () => {
+      const firstId = (await rowOf(first))!.id;
+      assert.equal(await closeSession(second, firstId, false), 403, "a close without CSRF was accepted");
+      assert.equal((await sessionStatus(first)).authenticated, true, "a refused close still closed");
+      assert.equal(await closeSession(second, firstId), 200);
+      assert.equal((await sessionStatus(first)).authenticated, false, "the closed session still works");
+      assert.equal((await sessionStatus(second)).authenticated, true, "closing the other closed this one");
+      assert.equal(await closeSession(second, firstId), 404, "closing twice did not answer «not found»");
+      assert.equal(await closeSession(second, (await rowOf(second))!.id), 409, "a session closed itself here");
+      assert.equal(await closeSession(second, "not-a-session-id!"), 404);
+      assert.equal(await liveCount(), 1);
+    });
 
-      const rows = await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } });
-      assert.equal(rows, 1);
+    const third: Jar = new Map();
+    const fourth: Jar = new Map();
+    await check("H4d. a third sign-in closes the session unused the longest, and the audit says so", async () => {
+      await login(third);
+      assert.equal(await liveCount(), 2);
+      // The second browser was last used an hour ago, the third just now.
+      await prisma.userSession.update({ where: { id: (await rowOf(second))!.id }, data: { lastSeenAt: new Date(Date.now() - 3_600_000) } });
+      const evictedId = (await rowOf(second))!.id;
+      await login(fourth);
+      assert.equal(await liveCount(), 2);
+      assert.equal((await sessionStatus(second)).authenticated, false, "the session unused the longest survived");
+      assert.equal((await sessionStatus(third)).authenticated, true, "the recently used session was closed");
+      assert.equal((await sessionStatus(fourth)).authenticated, true);
+      const audit = await prisma.auditLog.findFirst({ where: { action: "AUTH_SESSION_EVICTED", entityId: evictedId } });
+      assert.ok(audit, "the eviction was not recorded");
+    });
+
+    await check("H4e. another account cannot see or close this account's sessions", async () => {
+      const otherEmail = `http-other-${process.pid}@example.test`;
+      await prisma.user.create({
+        data: { email: otherEmail, passwordHash: await bcrypt.hash(PASSWORD, 10), name: "Other", role: "user", emailVerifiedAt: new Date() },
+      });
+      const stranger: Jar = new Map();
+      assert.equal((await login(stranger, { email: otherEmail })).status, 200);
+      const theirs = await listSessions(stranger);
+      assert.equal(theirs.sessions.length, 1, "another account sees more than its own session");
+      const target = (await rowOf(third))!.id;
+      assert.equal(await closeSession(stranger, target), 404, "another account closed this account's session");
+      assert.equal((await sessionStatus(third)).authenticated, true);
+    });
+
+    await check("H4f. signed out, the list and the close are refused", async () => {
+      const nobody: Jar = new Map();
+      assert.equal((await listSessions(nobody)).status, 401);
+      assert.equal(await closeSession(nobody, (await rowOf(third))!.id), 401);
+      assert.equal((await sessionStatus(third)).authenticated, true);
     });
 
     const active: Jar = new Map();
@@ -225,8 +328,11 @@ async function main() {
       assert.ok(lines.some((c) => c.startsWith("__Host-trading_platform_session=") && /Max-Age=0/i.test(c)));
       assert.ok(lines.some((c) => c.startsWith("trading_platform_session=") && /Max-Age=0/i.test(c)));
 
-      const live = await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } });
-      assert.equal(live, 0, "logout left a live session row");
+      const row = await prisma.userSession.findUnique({
+        where: { tokenHash: createHash("sha256").update(token, "utf8").digest("hex") },
+      });
+      assert.ok(row?.revokedAt, "logout left this session's row live");
+      assert.ok((await liveCount()) <= 1, "logout left two live rows");
 
       // The copied token, replayed exactly as an attacker would.
       const replay = await sessionStatus(new Map([["__Host-trading_platform_session", token]]));
@@ -284,9 +390,9 @@ async function main() {
       assert.ok(!logs.includes(token), "the raw token appears in the server log");
     });
 
-    await check("H11. the database still holds exactly one live row for this user", async () => {
-      const live = await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } });
-      assert.equal(live, 1);
+    await check("H11. the database never holds more than two live rows for this user", async () => {
+      const live = await liveCount();
+      assert.ok(live >= 1 && live <= 2, `${live} live rows`);
     });
   } finally {
     await stop(server);

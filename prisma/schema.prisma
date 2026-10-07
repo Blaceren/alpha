@@ -5402,15 +5402,27 @@ model UserSession {
   tokenHash String    @unique
   createdAt DateTime  @default(now())
   expiresAt DateTime
-  /// Null while live. Set by logout, and by the next successful login.
+  /// Null while live. Set by logout, by closing it from the account's other
+  /// session, by a password change or reset, and by a third sign-in when this
+  /// is the session unused the longest.
   revokedAt DateTime?
+  /// One of the two places a live session can hold: 0 or 1 (a CHECK in the
+  /// migration). Revoked rows keep theirs as history.
+  slot       Int       @default(0)
+  /// The browser's own description at sign-in, to name the device in the
+  /// learner's list of sessions. Never shown raw.
+  userAgent  String?
+  /// When the session was last used, written at most every few minutes.
+  lastSeenAt DateTime?
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  /// ONE LIVE SESSION PER USER IS ENFORCED BY THE DATABASE, not by this file.
-  /// The migration creates `UserSession_userId_active_key`, a UNIQUE index on
-  /// (userId) WHERE revokedAt IS NULL. Prisma cannot express a partial index,
-  /// so it lives in SQL — but it is a real constraint, and a second live row
-  /// fails at the database no matter which writer attempts it.
+  /// TWO LIVE SESSIONS PER USER ARE ENFORCED BY THE DATABASE, not by this file
+  /// (owner 2026-10-07). The migration `20261007120000_two_live_sessions`
+  /// creates `UserSession_userId_slot_active_key`, a UNIQUE index on
+  /// (userId, slot) WHERE revokedAt IS NULL, with `slot` checked to 0 or 1.
+  /// Prisma cannot express a partial index, so it lives in SQL — but it is a
+  /// real constraint, and a third live row fails at the database no matter
+  /// which writer attempts it. (H-7 held one, in `UserSession_userId_active_key`.)
 
   @@index([userId])
   @@index([expiresAt])

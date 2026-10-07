@@ -149,9 +149,27 @@ export async function POST(request: Request) {
   });
 
   const response = NextResponse.json({ user: toPublicUser(user) });
-  /* Issuing revokes whatever this user had, in one transaction, so a second
-     login ends the first session rather than running alongside it (H-7). */
-  response.cookies.set(SESSION_COOKIE_NAME, await issueSession(user.id), sessionCookieOptions);
+  /* A sign-in takes one of the account's two places (owner 2026-10-07); with
+     both taken it closes the session unused the longest, in the same
+     transaction, and that is recorded. The browser's own description is kept
+     only to name the device in the learner's list of sessions. */
+  const evicted: { sessionId: string | null } = { sessionId: null };
+  const token = await issueSession(user.id, {
+    userAgent: request.headers.get("user-agent"),
+    onEvicted: (sessionId) => {
+      evicted.sessionId = sessionId;
+    },
+  });
+  if (evicted.sessionId) {
+    await createAuditLog({
+      userId: user.id,
+      action: "AUTH_SESSION_EVICTED",
+      entityType: "UserSession",
+      entityId: evicted.sessionId,
+      request,
+    });
+  }
+  response.cookies.set(SESSION_COOKIE_NAME, token, sessionCookieOptions);
   /* And expire the pre-`__Host-` cookie, so a browser holding one stops sending
      a value nothing will ever accept. Its value is never read. */
   response.cookies.set(LEGACY_SESSION_COOKIE_NAME, "", clearedLegacySessionCookieOptions);

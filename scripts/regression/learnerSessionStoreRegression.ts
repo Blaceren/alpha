@@ -5,9 +5,10 @@
  * deleted at the end. The live PREPROD database is never opened, never migrated
  * and never written to, and no real login or logout is performed.
  *
- * The matrix is the one the product decision names: one active session per
- * user, the newest login wins, logout revokes on the server, and every failure
- * mode is closed rather than open.
+ * The matrix is the one the product decision names: TWO live sessions per user
+ * since 2026-10-07 (H-7 held one) — a third sign-in closes the session unused
+ * the longest — a password change rotates to one, logout revokes on the server,
+ * and every failure mode is closed rather than open.
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -83,30 +84,105 @@ async function main() {
   });
 
   let secondToken = "";
-  await check("3. a second login revokes the first", async () => {
+  await check("3. a second login runs alongside the first — two live sessions (owner 2026-10-07)", async () => {
     secondToken = await session.issueSession(user.id);
     assert.notEqual(secondToken, firstToken);
-    const live = await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } });
-    assert.equal(live, 1, "two sessions survived a second login");
+    const live = await prisma.userSession.findMany({ where: { userId: user.id, revokedAt: null } });
+    assert.equal(live.length, 2, "a second login did not keep the first");
+    assert.deepEqual(live.map((row) => row.slot).sort(), [0, 1], "the two live sessions do not hold the two slots");
   });
 
-  await check("4. the first token no longer authenticates", async () => {
-    assert.equal(await session.resolveSession(firstToken), null);
+  await check("4. the first token still authenticates", async () => {
+    assert.equal((await session.resolveSession(firstToken))?.userId, user.id);
   });
 
   await check("5. the second token does", async () => {
     assert.equal((await session.resolveSession(secondToken))?.userId, user.id);
   });
 
+  let thirdToken = "";
+  await check("5a. a third login closes the session unused the longest, and only that one", async () => {
+    // The first was used a minute ago, the second an hour ago: the second goes.
+    const rows = await prisma.userSession.findMany({ where: { userId: user.id, revokedAt: null }, orderBy: { createdAt: "asc" } });
+    await prisma.userSession.update({ where: { id: rows[0]!.id }, data: { lastSeenAt: new Date(Date.now() - 60_000) } });
+    await prisma.userSession.update({ where: { id: rows[1]!.id }, data: { lastSeenAt: new Date(Date.now() - 3_600_000) } });
+    const evicted: string[] = [];
+    thirdToken = await session.issueSession(user.id, { onEvicted: (id) => evicted.push(id) });
+    assert.deepEqual(evicted, [rows[1]!.id], "the wrong session was closed, or none was reported");
+    assert.equal(await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } }), 2);
+    assert.equal((await session.resolveSession(firstToken))?.userId, user.id, "the recently used session was closed");
+    assert.equal(await session.resolveSession(secondToken), null, "the session unused the longest survived");
+    assert.equal((await session.resolveSession(thirdToken))?.userId, user.id);
+  });
+
+  await check("5b. a session's id and its last use: resolve names the row, a touch records the use", async () => {
+    const resolved = await session.resolveSession(thirdToken);
+    const row = await prisma.userSession.findUnique({ where: { id: resolved!.sessionId } });
+    assert.equal(row?.userId, user.id);
+    await prisma.userSession.update({ where: { id: row!.id }, data: { lastSeenAt: new Date(Date.now() - 3_600_000) } });
+    await session.resolveSession(thirdToken);
+    const untouched = await prisma.userSession.findUnique({ where: { id: row!.id } });
+    assert.ok(Date.now() - untouched!.lastSeenAt!.getTime() > 3_000_000, "a read without touch wrote");
+    await session.resolveSession(thirdToken, { touch: true });
+    const touched = await prisma.userSession.findUnique({ where: { id: row!.id } });
+    assert.ok(Date.now() - touched!.lastSeenAt!.getTime() < 60_000, "a touch did not record the use");
+  });
+
+  await check("5c. the list shows the user's live sessions only, most recently used first, without tokens", async () => {
+    const list = await session.listLiveSessions(user.id);
+    assert.equal(list.length, 2);
+    assert.ok(list[0]!.lastSeenAt.getTime() >= list[1]!.lastSeenAt.getTime());
+    const dump = JSON.stringify(list);
+    assert.ok(!dump.includes("tokenHash") && !dump.includes(thirdToken) && !dump.includes(firstToken));
+    assert.deepEqual(await session.listLiveSessions(other.id), []);
+  });
+
+  await check("5d. a session is closed from the other one — and nobody else's can be", async () => {
+    const mine = await session.listLiveSessions(user.id);
+    const currentId = (await session.resolveSession(thirdToken))!.sessionId;
+    const target = mine.find((row) => row.id !== currentId)!;
+    assert.equal(await session.revokeUserSession(other.id, target.id), false, "another user closed my session");
+    assert.equal(await session.revokeUserSession(user.id, target.id), true);
+    assert.equal(await session.revokeUserSession(user.id, target.id), false, "closing twice reported a change");
+    assert.equal(await session.revokeUserSession(user.id, "c0000000000000000000000000"), false);
+    assert.equal((await session.listLiveSessions(user.id)).length, 1);
+  });
+
+  await check("5e. a rotation (password change) ends every other session and leaves this browser's", async () => {
+    const before = await session.issueSession(user.id);
+    assert.equal(await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } }), 2);
+    const rotated = await session.issueSessionWithin(user.id, undefined, { userAgent: "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0" });
+    assert.equal(await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } }), 1);
+    assert.equal(await session.resolveSession(before), null);
+    assert.equal(await session.resolveSession(thirdToken), null);
+    assert.equal((await session.resolveSession(rotated))?.userId, user.id);
+    thirdToken = rotated;
+  });
+
+  await check("5f. the browser's description is kept clean and short, and only when given", async () => {
+    await session.revokeAllSessionsForUser(user.id);
+    const long = `Mozilla/5.0\u0000\n${"x".repeat(1000)}`;
+    const token = await session.issueSession(user.id, { userAgent: long });
+    const row = await prisma.userSession.findUnique({ where: { id: (await session.resolveSession(token))!.sessionId } });
+    assert.ok(row!.userAgent!.length <= 400, "the description was not cut");
+    assert.ok(!/[\u0000-\u001f]/.test(row!.userAgent!), "control characters were kept");
+    const bare = await session.issueSession(user.id);
+    const bareRow = await prisma.userSession.findUnique({ where: { id: (await session.resolveSession(bare))!.sessionId } });
+    assert.equal(bareRow!.userAgent, null);
+    await session.revokeSession(token);
+    thirdToken = bare;
+  });
+
   // ------------------------------------------------------------------ logout
   await check("6. logout revokes the session on the server", async () => {
-    await session.revokeSession(secondToken);
-    assert.equal(await session.resolveSession(secondToken), null);
+    await session.revokeSession(thirdToken);
+    assert.equal(await session.resolveSession(thirdToken), null);
     const live = await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } });
     assert.equal(live, 0);
   });
 
   await check("7. logging out again is safe", async () => {
+    await session.revokeSession(thirdToken);
     await session.revokeSession(secondToken);
     await session.revokeSession("a-token-that-never-existed");
     await session.revokeSession(undefined);
@@ -120,7 +196,7 @@ async function main() {
   });
 
   // ------------------------------------------------------------- concurrency
-  await check("9. concurrent logins leave exactly one live session", async () => {
+  await check("9. concurrent logins leave exactly two live sessions", async () => {
     const tokens = await Promise.all([
       session.issueSession(other.id),
       session.issueSession(other.id),
@@ -128,10 +204,10 @@ async function main() {
       session.issueSession(other.id),
     ]);
     const live = await prisma.userSession.count({ where: { userId: other.id, revokedAt: null } });
-    assert.equal(live, 1, `four concurrent logins left ${live} live sessions`);
+    assert.equal(live, 2, `four concurrent logins left ${live} live sessions`);
     const working = [];
     for (const token of tokens) if (await session.resolveSession(token)) working.push(token);
-    assert.equal(working.length, 1, "more than one token still authenticates");
+    assert.equal(working.length, 2, `${working.length} tokens still authenticate, not two`);
   });
 
   // ----------------------------------------------------------- failure modes
@@ -188,12 +264,19 @@ async function main() {
     assert.equal(live, 0);
   });
 
-  await check("17. one user's login does not touch another's session", async () => {
+  await check("17. one user's logins do not touch another's sessions", async () => {
+    await session.revokeAllSessionsForUser(user.id);
     const mine = await session.issueSession(user.id);
+    await prisma.userSession.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { lastSeenAt: new Date(Date.now() - 3_600_000) },
+    });
     const theirs = await session.issueSession(other.id);
     await session.issueSession(user.id);
-    assert.equal(await session.resolveSession(mine), null, "my old token survived my new login");
-    assert.ok(await session.resolveSession(theirs), "their session was revoked by my login");
+    assert.ok(await session.resolveSession(mine), "my second login closed my first");
+    await session.issueSession(user.id);
+    assert.equal(await session.resolveSession(mine), null, "my third login kept the session unused the longest");
+    assert.ok(await session.resolveSession(theirs), "their session was revoked by my logins");
   });
 
   // ------------------------------------------------------------ cookie shape
@@ -234,25 +317,29 @@ async function main() {
   });
 
   /* -------------------------------------------- the database's own invariant
-     Everything above proves the APPLICATION keeps one session live. That is not
+     Everything above proves the APPLICATION keeps at most two sessions live. That is not
      the same as the invariant holding: any other writer can insert a row without
      going through issueSession. These prove the database refuses it. */
 
-  await check("25. the database itself rejects a second live session", async () => {
+  await check("25. the database itself rejects a third live session", async () => {
     await prisma.userSession.deleteMany({ where: { userId: user.id } });
     await session.issueSession(user.id);
-    let rejected = false;
-    try {
-      // Straight past issueSession, exactly as a script or an incident would.
-      await prisma.userSession.create({
-        data: { userId: user.id, tokenHash: `bypass-${Date.now()}`, expiresAt: new Date(Date.now() + 60_000) },
-      });
-    } catch {
-      rejected = true;
+    await session.issueSession(user.id);
+    // Straight past issueSession, exactly as a script or an incident would —
+    // into either slot, and into a slot that does not exist.
+    for (const slot of [0, 1, 2]) {
+      let rejected = false;
+      try {
+        await prisma.userSession.create({
+          data: { userId: user.id, tokenHash: `bypass-${slot}-${Date.now()}`, expiresAt: new Date(Date.now() + 60_000), slot },
+        });
+      } catch {
+        rejected = true;
+      }
+      assert.equal(rejected, true, `the database allowed a third live session in slot ${slot}`);
     }
-    assert.equal(rejected, true, "the database allowed a second live session");
     const live = await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } });
-    assert.equal(live, 1);
+    assert.equal(live, 2);
   });
 
   await check("26. one revoked plus one live is allowed", async () => {
@@ -277,18 +364,23 @@ async function main() {
     assert.equal(await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } }), 1);
   });
 
-  await check("28. the index exists, is unique, and is partial", async () => {
+  await check("28. the index exists, is unique over (userId, slot), and is partial — and H-7's is gone", async () => {
     const rows: Array<{ sql: string | null }> = await prisma.$queryRawUnsafe(
-      "SELECT sql FROM sqlite_master WHERE type='index' AND name='UserSession_userId_active_key'",
+      "SELECT sql FROM sqlite_master WHERE type='index' AND name='UserSession_userId_slot_active_key'",
     );
     assert.equal(rows.length, 1, "the partial unique index is missing");
     const sql = (rows[0]?.sql ?? "").toUpperCase();
     assert.ok(sql.includes("UNIQUE"), "the index is not unique");
+    assert.ok(sql.includes('"USERID"') && sql.includes('"SLOT"'), "the index is not over (userId, slot)");
     assert.ok(sql.includes("WHERE"), "the index is not partial — it would forbid revoked history");
     assert.ok(sql.includes("REVOKEDAT") && sql.includes("NULL"));
+    const old: Array<{ name: string }> = await prisma.$queryRawUnsafe(
+      "SELECT name FROM sqlite_master WHERE type='index' AND name='UserSession_userId_active_key'",
+    );
+    assert.deepEqual(old, [], "the one-session index is still in force");
   });
 
-  await check("29. concurrent logins still leave exactly one live row, now with the index in force", async () => {
+  await check("29. concurrent logins still leave exactly two live rows, now with the index in force", async () => {
     await prisma.userSession.deleteMany({ where: { userId: other.id } });
     const results = await Promise.allSettled(
       Array.from({ length: 6 }, () => session.issueSession(other.id)),
@@ -303,11 +395,11 @@ async function main() {
       "a concurrent login failed instead of retrying",
     );
     const live = await prisma.userSession.count({ where: { userId: other.id, revokedAt: null } });
-    assert.equal(live, 1, `six concurrent logins left ${live} live rows`);
+    assert.equal(live, 2, `six concurrent logins left ${live} live rows`);
     const tokens = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
     let working = 0;
     for (const token of tokens) if (await session.resolveSession(token)) working += 1;
-    assert.equal(working, 1, `${working} tokens still authenticate`);
+    assert.equal(working, 2, `${working} tokens still authenticate`);
   });
 
   await check("37. a failed issue throws — it never hands back an unpersisted token", async () => {

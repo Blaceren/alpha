@@ -115,10 +115,17 @@ export async function POST(request: Request) {
 
     const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
 
-    const token = await issueSessionWithin(user.id, async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
-      await retireLinksOnPasswordChange(tx, user.id);
-    });
+    /* Every other session ends with the old password — the account's second
+       one included (two may be live since 2026-10-07) — and this browser gets
+       a fresh one. */
+    const token = await issueSessionWithin(
+      user.id,
+      async (tx) => {
+        await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
+        await retireLinksOnPasswordChange(tx, user.id);
+      },
+      { userAgent: request.headers.get("user-agent") },
+    );
 
     await createAuditLog({
       userId: user.id,
