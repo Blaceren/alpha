@@ -1177,3 +1177,37 @@ describe("Public Home — the phone composition (DD-342)", () => {
   });
 });
 
+
+/* 2026-10-07, the owner: «шапка слишком резко меняется и привлекает внимание после,
+   выделяется, сделай более органично и менее привлекающей». */
+describe("the header stays put while the page scrolls", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("brings the blur behind it in with the first 80px of scroll — never all at once", async () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const header = container.querySelector("[data-header]") as HTMLElement;
+    expect(header.style.getPropertyValue("--ph-shade")).toBe("0.000");
+    const scrollTo = async (y: number) => {
+      Object.defineProperty(window, "scrollY", { configurable: true, value: y });
+      fireEvent.scroll(window);
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
+    };
+    await scrollTo(20);
+    expect(header.style.getPropertyValue("--ph-shade")).toBe("0.250");
+    await scrollTo(60);
+    expect(header.style.getPropertyValue("--ph-shade")).toBe("0.750");
+    await scrollTo(400);
+    expect(header.style.getPropertyValue("--ph-shade")).toBe("1.000");
+    await scrollTo(0);
+    expect(header.style.getPropertyValue("--ph-shade")).toBe("0.000");
+  });
+
+  it("neither moves nor resizes the pill, and lays no band of its own colour", () => {
+    expect(css).not.toMatch(/\.is-compact/);
+    expect(css).toMatch(/\.ph \.site-header::before \{[^}]*backdrop-filter: blur\(14px\)[^}]*opacity: var\(--ph-shade, 0\)/);
+    expect(css).not.toMatch(/\.ph \.site-header::before \{[^}]*background/);
+  });
+});

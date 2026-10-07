@@ -18,12 +18,12 @@ import { useEffect } from "react";
  *      the only rule keyed on it lives in public-home.css — so no other route
  *      can ever see its effect.
  *
- *   3. The compact-header class toggle on scroll past 32px.
- *      NOTE, DELIBERATELY PRESERVED AS-IS: the frozen stylesheet contains no
- *      rule for `.is-compact`, so this toggle has no visual effect in HomeATA
- *      either. It is reproduced because the behaviour is part of the frozen
- *      page; inventing a compact-header style here would be designing, which
- *      this phase is explicitly not authorised to do.
+ *   3. The compact-header class toggle on scroll past 32px — and, since
+ *      2026-10-07, `--ph-shade` on the header: how far the page has scrolled
+ *      over its first 80px, 0 to 1, which brings in the soft blur behind the
+ *      header gradually (the owner: «шапка слишком резко меняется … сделай
+ *      более органично»). No rule styles `.is-compact` any more; the toggle is
+ *      kept as the frozen page's behaviour. Written once per frame.
  *
  *   4. The reveal observer: threshold 0.08, rootMargin "0px 0px -3%", adds
  *      `is-visible` once and unobserves. Without IntersectionObserver every
@@ -41,11 +41,18 @@ export function PublicHomeEffects() {
     root?.classList.add("has-js");
     document.documentElement.classList.add("ph-smooth-scroll");
 
+    let frame = 0;
     const updateHeader = () => {
-      header?.classList.toggle("is-compact", window.scrollY > 32);
+      frame = 0;
+      const y = window.scrollY;
+      header?.classList.toggle("is-compact", y > 32);
+      header?.style.setProperty("--ph-shade", Math.min(1, Math.max(0, y / 80)).toFixed(3));
+    };
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateHeader);
     };
     updateHeader();
-    window.addEventListener("scroll", updateHeader, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
 
     const revealElements =
       document.querySelectorAll<HTMLElement>("[data-reveal]");
@@ -68,7 +75,8 @@ export function PublicHomeEffects() {
     }
 
     return () => {
-      window.removeEventListener("scroll", updateHeader);
+      window.removeEventListener("scroll", onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
       observer?.disconnect();
       // Leave the document exactly as it was found.
       document.documentElement.classList.remove("ph-smooth-scroll");
