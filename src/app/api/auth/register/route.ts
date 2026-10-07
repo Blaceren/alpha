@@ -35,11 +35,13 @@ import {
 import { getRequestIp, rateLimit } from "@/lib/rateLimit";
 import {
   issueSession,
+  readSessionToken,
   LEGACY_SESSION_COOKIE_NAME,
   SESSION_COOKIE_NAME,
   clearedLegacySessionCookieOptions,
   sessionCookieOptions,
 } from "@/lib/session";
+import { isUniqueViolationOn } from "@/lib/unique-violation";
 import { registerSchema, validateJsonBody } from "@/lib/validation";
 
 /**
@@ -148,10 +150,7 @@ export async function POST(request: Request) {
   });
 
   if (existingUser) {
-    return NextResponse.json(
-      { error: "Email уже занят" },
-      { status: 400 },
-    );
+    return emailTaken();
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
@@ -442,6 +441,10 @@ export async function POST(request: Request) {
     // would corrupt the acquisition ledger for a reason unrelated to it. It
     // leaves this handler as an explicit, bounded 503.
     if (isEnrollmentDomainError(error)) return enrollmentUnavailable(error, request);
+    // Two registrations of one address at once (two tabs, each with its own
+    // challenge): the check above passed for both, the unique index let one
+    // through. The other gets the same answer the check gives, not a 500.
+    if (isEmailTaken(error)) return emailTaken();
     if (attributionCandidate === null || !isVisitorAlreadyAttributed(error)) throw error;
     // The whole transaction rolled back, so no partial user exists to clean up.
     attributionCandidate = null;
@@ -449,6 +452,7 @@ export async function POST(request: Request) {
       committed = await runRegistration();
     } catch (retryError) {
       if (isEnrollmentDomainError(retryError)) return enrollmentUnavailable(retryError, request);
+      if (isEmailTaken(retryError)) return emailTaken();
       throw retryError;
     }
   }
@@ -550,7 +554,12 @@ export async function POST(request: Request) {
   if (!verificationRequired) {
     response.cookies.set(
       SESSION_COOKIE_NAME,
-      await issueSession(user.id, { userAgent: request.headers.get("user-agent") }),
+      /* The session this browser still presents is closed, not left to take
+         one of the two places of the account it belonged to (2026-10-07). */
+      await issueSession(user.id, {
+        userAgent: request.headers.get("user-agent"),
+        replacing: await readSessionToken(),
+      }),
       sessionCookieOptions,
     );
   }
@@ -584,3 +593,12 @@ export async function POST(request: Request) {
 
   return response;
 }
+
+function emailTaken() {
+  return NextResponse.json(
+    { error: "Email уже занят" },
+    { status: 400 },
+  );
+}
+
+const isEmailTaken = (error: unknown) => isUniqueViolationOn(error, "User", "email");

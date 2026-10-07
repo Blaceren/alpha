@@ -15,7 +15,7 @@ import {
   SESSION_COOKIE_NAME,
   sessionCookieOptions,
 } from "@/lib/session";
-import { passwordSchema, validateJsonBody } from "@/lib/validation";
+import { newPasswordSchema, validateJsonBody } from "@/lib/validation";
 
 /**
  * CHANGE YOUR OWN PASSWORD.
@@ -55,7 +55,7 @@ const changePasswordSchema = z.object({
      hash, never against a policy. Applying today's minimum to it would lock out
      anyone whose password predates the rule. */
   currentPassword: z.string().min(1, "Введите текущий пароль"),
-  newPassword: passwordSchema,
+  newPassword: newPasswordSchema,
 });
 
 export async function POST(request: Request) {

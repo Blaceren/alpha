@@ -43,7 +43,44 @@ export function rateLimitedResponse() {
   );
 }
 
+/**
+ * ONLY AN AUTH FAILURE IS A 401 (2026-10-07 audit).
+ *
+ * This is the catch-all of most route handlers, and it used to answer 401 to
+ * EVERYTHING that was not a 403 — a database busy for a moment, a timeout, a
+ * bug. The Academy reads a 401 as «Сеанс завершён» and sends the learner to
+ * sign in again, so a hiccup looked like being thrown out (and signing in again
+ * took one of the account's two places). A 401 now means what it says; anything
+ * else is logged and answered 500, which the Academy shows as a temporary
+ * failure with the learner still signed in.
+ */
+function serverErrorResponse() {
+  return NextResponse.json(
+    {
+      error: "INTERNAL_ERROR",
+      message: "Не удалось выполнить запрос. Попробуйте ещё раз.",
+    },
+    { status: 500 },
+  );
+}
+
+function isAuthFailure(error: unknown, status: 401 | 403): boolean {
+  if (error instanceof ApiAuthError) return error.status === status;
+  // `requireCurrentUser` / `requireRole` in lib/auth throw these plain errors.
+  return error instanceof Error && error.message === (status === 401 ? "UNAUTHORIZED" : "FORBIDDEN");
+}
+
 export async function apiAuthErrorResponse(error: unknown, request?: Request) {
+  if (isAuthFailure(error, 401)) return unauthorizedResponse();
+
+  if (!isAuthFailure(error, 403)) {
+    console.error(
+      `[api] unexpected error${request ? ` on ${request.method} ${new URL(request.url).pathname}` : ""}:`,
+      error instanceof Error ? `${error.name}: ${error.message}` : error,
+    );
+    return serverErrorResponse();
+  }
+
   if (error instanceof ApiAuthError && error.status === 403) {
     await createAuditLog({
       userId: error.userId,
@@ -59,7 +96,7 @@ export async function apiAuthErrorResponse(error: unknown, request?: Request) {
     return forbiddenResponse();
   }
 
-  return unauthorizedResponse();
+  return forbiddenResponse();
 }
 
 export async function requireUser() {

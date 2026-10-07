@@ -699,15 +699,28 @@ async function main() {
       true,
       "the password is compared before the challenge is verified",
     );
+    /* 2026-10-07 audit: the limit counts wrong passwords, not attempts. It is
+       still CHECKED before the challenge (a limited request spends no token);
+       it is COUNTED only after a wrong password, and cleared by a right one. */
     assert.equal(
-      at("rateLimit(") < at("verifyCaptcha("),
+      at("peekRateLimit(") < at("verifyCaptcha("),
       true,
-      "the challenge is verified before the rate limit is applied",
+      "the challenge is verified before the rate limit is checked",
     );
     assert.equal(
-      at("getRequestIp(") < at("rateLimit("),
+      at("getRequestIp(") < at("peekRateLimit("),
       true,
-      "the rate limit is applied before the client IP is resolved",
+      "the rate limit is checked before the client IP is resolved",
+    );
+    assert.equal(
+      at("bcrypt.compare(parsed.data.password, user.passwordHash)") < at("rateLimit(failureKey"),
+      true,
+      "an attempt is counted before its password is compared",
+    );
+    assert.equal(
+      at("rateLimit(failureKey") < at("clearRateLimit(failureKey)"),
+      true,
+      "a right password does not clear the count of wrong ones",
     );
   });
 }

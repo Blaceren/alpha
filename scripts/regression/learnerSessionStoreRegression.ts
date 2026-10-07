@@ -423,6 +423,52 @@ async function main() {
     assert.equal(orphans, 0);
   });
 
+  /* ------------------------------------- 2026-10-07 audit: a sign-in in context */
+  await check("38. a sign-in that presents its own browser's session replaces it — the other device keeps its place", async () => {
+    await prisma.userSession.updateMany({ where: { userId: other.id, revokedAt: null }, data: { revokedAt: new Date() } });
+    const laptop = await session.issueSession(other.id);
+    const phone = await session.issueSession(other.id);
+    const phoneRow = await prisma.userSession.findUnique({ where: { tokenHash: createHash("sha256").update(phone, "utf8").digest("hex") } });
+    // The phone is the session unused the longest: without the replacement it would be the one closed.
+    await prisma.userSession.update({ where: { id: phoneRow!.id }, data: { lastSeenAt: new Date(Date.now() - 3_600_000) } });
+    const evicted: string[] = [];
+    const again = await session.issueSession(other.id, { replacing: laptop, onEvicted: (id) => evicted.push(id) });
+    assert.deepEqual(evicted, [], "a replacement was reported as an eviction");
+    assert.equal(await session.resolveSession(laptop), null, "the replaced session still works");
+    assert.equal((await session.resolveSession(phone))?.userId, other.id, "the other device was closed");
+    assert.equal((await session.resolveSession(again))?.userId, other.id);
+    assert.equal(await prisma.userSession.count({ where: { userId: other.id, revokedAt: null } }), 2);
+  });
+
+  await check("39. a browser that signs in to another account closes the session it held for the first", async () => {
+    const held = await session.issueSession(user.id);
+    const theirs = await session.issueSession(other.id, { replacing: held });
+    assert.equal(await session.resolveSession(held), null, "the first account's session is still live, held by nobody");
+    assert.equal((await session.resolveSession(theirs))?.userId, other.id);
+  });
+
+  await check("40. a password changed after the check issues nothing", async () => {
+    await prisma.user.update({ where: { id: other.id }, data: { passwordHash: "hash-at-check" } });
+    const liveBefore = await prisma.userSession.count({ where: { userId: other.id, revokedAt: null } });
+    await prisma.user.update({ where: { id: other.id }, data: { passwordHash: "hash-after-change" } });
+    await assert.rejects(
+      session.issueSession(other.id, { expectedPasswordHash: "hash-at-check" }),
+      (error: unknown) => error instanceof session.SessionIssueRefusedError,
+    );
+    assert.equal(await prisma.userSession.count({ where: { userId: other.id, revokedAt: null } }), liveBefore);
+    const fresh = await session.issueSession(other.id, { expectedPasswordHash: "hash-after-change" });
+    assert.equal((await session.resolveSession(fresh))?.userId, other.id);
+  });
+
+  await check("41. an account blocked after the check gets no session", async () => {
+    await prisma.user.update({ where: { id: other.id }, data: { status: "blocked" } });
+    await assert.rejects(
+      session.issueSession(other.id, { expectedPasswordHash: "hash-after-change" }),
+      (error: unknown) => error instanceof session.SessionIssueRefusedError,
+    );
+    await prisma.user.update({ where: { id: other.id }, data: { status: "active" } });
+  });
+
   /* ---------------------------------------------- analytics is not authority
      Click classification labels a row; it grants nothing. But a label that
      anyone can set by writing a cookie is not a label, and an intermediate

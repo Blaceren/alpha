@@ -94,6 +94,35 @@ export type SessionMeta = {
   userAgent?: string | null;
 };
 
+/**
+ * What a sign-in knows about the request it answers (2026-10-07 audit).
+ *
+ * `replacing` is the raw token the browser still presents, if any. A browser
+ * that signs in again — a link from a messenger hides a SameSite=Strict cookie
+ * from the page, so the learner meets /login while still signed in — would
+ * otherwise leave its old session live, held by nobody, taking one of the
+ * account's two places, and the new session would close the account's OTHER
+ * device to make room. The old session is closed instead, whoever it belongs
+ * to: the browser is about to overwrite the cookie that held it.
+ *
+ * `expectedPasswordHash` is the hash the password was checked against. Read
+ * again inside the transaction, so a password changed (or an account blocked)
+ * between the check and the insert cannot leave behind a session issued on
+ * the old password: `issueSession` refuses with `SessionIssueRefusedError`.
+ */
+export type SignInContext = {
+  replacing?: string | null;
+  expectedPasswordHash?: string;
+};
+
+/** The account changed between the password check and the session — nothing was issued. */
+export class SessionIssueRefusedError extends Error {
+  constructor() {
+    super("SESSION_ISSUE_REFUSED");
+    this.name = "SessionIssueRefusedError";
+  }
+}
+
 function cleanUserAgent(value?: string | null): string | null {
   if (!value) return null;
   const printable = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
@@ -232,13 +261,17 @@ export async function issueSessionWithin(
  */
 export async function issueSession(
   userId: number,
-  meta: SessionMeta & { onEvicted?: (sessionId: string) => void } = {},
+  meta: SessionMeta & SignInContext & { onEvicted?: (sessionId: string) => void } = {},
 ): Promise<string> {
   /* The same discipline as a rotation: two sign-ins racing for the last free
      slot cannot both insert into it, the loser re-reads and takes what is left
      (closing the session unused the longest if nothing is). Five attempts, not
      three: a burst of sign-ins can lose more than one race in a row. */
   let lastError: unknown = null;
+  const replacingHash =
+    meta.replacing && meta.replacing.length >= 16 && meta.replacing.length <= 512
+      ? hashToken(meta.replacing)
+      : null;
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const token = randomBytes(32).toString("base64url");
@@ -248,6 +281,23 @@ export async function issueSession(
 
     try {
       const evicted = await prisma.$transaction(async (tx) => {
+        if (meta.expectedPasswordHash !== undefined) {
+          const account = await tx.user.findUnique({
+            where: { id: userId },
+            select: { passwordHash: true, status: true },
+          });
+          if (!account || account.passwordHash !== meta.expectedPasswordHash || account.status === "blocked") {
+            throw new SessionIssueRefusedError();
+          }
+        }
+        /* This browser's previous session ends here — it frees its own place
+           rather than closing the account's other device (see SignInContext). */
+        if (replacingHash) {
+          await tx.userSession.updateMany({
+            where: { tokenHash: replacingHash, revokedAt: null },
+            data: { revokedAt: now },
+          });
+        }
         await tx.userSession.updateMany({
           where: { userId, revokedAt: null, expiresAt: { lte: now } },
           data: { revokedAt: now },

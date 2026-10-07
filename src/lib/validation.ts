@@ -96,8 +96,26 @@ export const passwordSchema = z
   .string()
   .min(6, "Пароль должен быть не короче 6 символов");
 
+/**
+ * A password being SET — at registration, a reset, a change (2026-10-07 audit).
+ *
+ * bcrypt reads only the first 72 bytes of what it hashes and ignores the rest
+ * without a word, so a longer passphrase was stored as its first 72 bytes — 36
+ * Cyrillic letters. A new password is refused past that, plainly; signing in
+ * keeps `passwordSchema`, so a password set before this still works.
+ */
+export const PASSWORD_MAX_BYTES = 72;
+
+export const newPasswordSchema = passwordSchema.refine(
+  (value) => Buffer.byteLength(value, "utf8") <= PASSWORD_MAX_BYTES,
+  "Пароль слишком длинный: не больше 72 латинских символов (русская буква считается за две)",
+);
+
+/** RFC 5321 bounds an address at 254 characters; nothing longer is anybody's email. */
+export const EMAIL_MAX_LENGTH = 254;
+
 export const loginSchema = z.object({
-  email: z.string().trim().email("Введите корректный email").toLowerCase(),
+  email: z.string().trim().max(EMAIL_MAX_LENGTH, "Введите корректный email").email("Введите корректный email").toLowerCase(),
   password: passwordSchema,
   captchaToken: z.string().trim().optional(),
 });
@@ -122,6 +140,7 @@ export const nameSchema = z
   .max(50, "Имя должно быть не длиннее 50 символов");
 
 export const registerSchema = loginSchema.extend({
+  password: newPasswordSchema,
   name: nameSchema,
   referralCode: z.string().trim().min(1).max(100).optional(),
 });

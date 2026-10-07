@@ -390,6 +390,155 @@ async function main() {
       assert.ok(!logs.includes(token), "the raw token appears in the server log");
     });
 
+    /* ------------------------------------------- the 2026-10-07 audit, over HTTP */
+
+    async function postJson(
+      route: string,
+      jar: Jar,
+      body: unknown,
+      extra: Record<string, string> = {},
+    ): Promise<Response> {
+      const token = await csrf(jar);
+      const response = await fetch(`${baseUrl}${route}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-csrf-token": token, cookie: cookieHeader(jar), ...extra },
+        body: JSON.stringify(body),
+      });
+      applySetCookie(jar, response);
+      return response;
+    }
+    const signIn = (jar: Jar, ip: string, password = PASSWORD, who = email, extra: Record<string, string> = {}) =>
+      postJson("/api/auth/login", jar, { email: who, password }, { "x-forwarded-for": ip, ...extra });
+    async function logoutFrom(jar: Jar, ip: string): Promise<number> {
+      const token = await csrf(jar);
+      const response = await fetch(`${baseUrl}/api/auth/logout`, {
+        method: "POST",
+        headers: { "x-csrf-token": token, cookie: cookieHeader(jar), "x-forwarded-for": ip },
+      });
+      applySetCookie(jar, response);
+      return response.status;
+    }
+
+    await check("H12. signing in again in one browser replaces its own session — the other device stays signed in", async () => {
+      await prisma.userSession.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
+      const laptop: Jar = new Map();
+      const phone: Jar = new Map();
+      assert.equal((await signIn(laptop, "203.0.113.12")).status, 200);
+      assert.equal((await signIn(phone, "203.0.113.13")).status, 200);
+      // The phone was used least recently: the old rule would have closed it.
+      await prisma.userSession.update({ where: { id: (await rowOf(phone))!.id }, data: { lastSeenAt: new Date(Date.now() - 3_600_000) } });
+      const oldLaptop = laptop.get(SESSION)!;
+      const evictionsBefore = await prisma.auditLog.count({ where: { action: "AUTH_SESSION_EVICTED", userId: user.id } });
+      assert.equal((await signIn(laptop, "203.0.113.12")).status, 200);
+      assert.notEqual(laptop.get(SESSION), oldLaptop, "no new session was issued");
+      assert.equal((await sessionStatus(phone)).authenticated, true, "signing in again on the laptop signed the phone out");
+      assert.equal((await sessionStatus(laptop)).authenticated, true);
+      assert.equal((await sessionStatus(new Map([[SESSION, oldLaptop]]))).authenticated, false, "the laptop's old session is still live");
+      assert.equal(await liveCount(), 2);
+      const evictionsAfter = await prisma.auditLog.count({ where: { action: "AUTH_SESSION_EVICTED", userId: user.id } });
+      assert.equal(evictionsAfter, evictionsBefore, "an eviction was recorded for a replacement");
+    });
+
+    await check("H13. sign-ins that succeed are never refused by the limit", async () => {
+      const jar: Jar = new Map();
+      for (let i = 0; i < 7; i += 1) {
+        const response = await signIn(jar, "203.0.113.21");
+        assert.equal(response.status, 200, `sign-in ${i + 1} answered ${response.status}`);
+      }
+    });
+
+    await check("H14. five wrong passwords stop that address and email — not another address", async () => {
+      const jar: Jar = new Map();
+      for (let i = 0; i < 5; i += 1) {
+        assert.equal((await signIn(jar, "203.0.113.31", "Wrong-password-1")).status, 401, `wrong password ${i + 1}`);
+      }
+      assert.equal((await signIn(jar, "203.0.113.31")).status, 429, "the sixth try was not refused");
+      assert.equal((await signIn(new Map(), "203.0.113.32")).status, 200, "another address was refused too");
+    });
+
+    await check("H15. the right password clears the wrong ones before it", async () => {
+      const jar: Jar = new Map();
+      for (let round = 0; round < 2; round += 1) {
+        for (let i = 0; i < 4; i += 1) {
+          assert.equal((await signIn(jar, "203.0.113.41", "Wrong-password-1")).status, 401);
+        }
+        assert.equal((await signIn(jar, "203.0.113.41")).status, 200, `round ${round + 1}: the right password was refused`);
+      }
+    });
+
+    await check("H16. the CRM's form signs in staff only — a learner gets no session at all", async () => {
+      const before = await prisma.userSession.count({ where: { userId: user.id } });
+      const jar: Jar = new Map();
+      const response = await signIn(jar, "203.0.113.51", PASSWORD, email, { "x-ata-auth-surface": "crm_login" });
+      assert.equal(response.status, 403);
+      assert.equal(((await response.json()) as { error?: string }).error, "NOT_STAFF");
+      assert.equal(jar.get(SESSION), undefined, "a session cookie was set for a learner on the CRM form");
+      assert.equal(await prisma.userSession.count({ where: { userId: user.id } }), before, "a session row was created");
+
+      const staffEmail = `http-staff-${process.pid}@example.test`;
+      const staff = await prisma.user.create({
+        data: { email: staffEmail, passwordHash: await bcrypt.hash(PASSWORD, 10), name: "Staff", role: "support", emailVerifiedAt: new Date() },
+      });
+      await prisma.staffProfile.create({ data: { userId: staff.id, displayName: "Staff", staffRole: "crm_manager" } });
+      const staffJar: Jar = new Map();
+      const ok = await signIn(staffJar, "203.0.113.52", PASSWORD, staffEmail, { "x-ata-auth-surface": "crm_login" });
+      assert.equal(ok.status, 200, "staff could not sign in on the CRM form");
+      assert.ok(staffJar.get(SESSION), "staff got no session");
+    });
+
+    await check("H17. a logout is never refused — past the per-address limit it still ends the session", async () => {
+      for (let i = 0; i < 22; i += 1) {
+        assert.equal(await logoutFrom(new Map(), "203.0.113.61"), 200, `logout ${i + 1} was refused`);
+      }
+      const jar: Jar = new Map();
+      assert.equal((await signIn(jar, "203.0.113.62")).status, 200);
+      const token = jar.get(SESSION)!;
+      assert.equal(await logoutFrom(jar, "203.0.113.61"), 200);
+      assert.equal((await sessionStatus(new Map([[SESSION, token]]))).authenticated, false, "the session outlived its logout");
+    });
+
+    await check("H18. a block ends every session — lifting it brings none back", async () => {
+      const adminEmail = `http-admin-${process.pid}@example.test`;
+      await prisma.user.create({
+        data: { email: adminEmail, passwordHash: await bcrypt.hash(PASSWORD, 10), name: "Admin", role: "admin", emailVerifiedAt: new Date() },
+      });
+      const admin: Jar = new Map();
+      assert.equal((await signIn(admin, "203.0.113.71", PASSWORD, adminEmail)).status, 200);
+      const learner: Jar = new Map();
+      assert.equal((await signIn(learner, "203.0.113.72")).status, 200);
+      const learnerToken = learner.get(SESSION)!;
+      const patch = async (status: "blocked" | "active") => {
+        const token = await csrf(admin);
+        const response = await fetch(`${baseUrl}/api/admin/users/${user.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json", "x-csrf-token": token, cookie: cookieHeader(admin) },
+          body: JSON.stringify({ status }),
+        });
+        return response.status;
+      };
+      assert.equal(await patch("blocked"), 200);
+      assert.equal(await patch("active"), 200);
+      assert.equal(
+        (await sessionStatus(new Map([[SESSION, learnerToken]]))).authenticated,
+        false,
+        "a session from before the block works again after it",
+      );
+      assert.equal(await liveCount(), 0, "the block left a live session");
+      // Unblocked, the account signs in as usual.
+      assert.equal((await signIn(new Map(), "203.0.113.73")).status, 200);
+    });
+
+    await check("H19. a password past bcrypt's 72 bytes is refused when it is set, plainly", async () => {
+      const jar: Jar = new Map();
+      const response = await postJson("/api/auth/register", jar, {
+        email: `http-long-${process.pid}@example.test`,
+        password: "пароль".repeat(7),
+        name: "Long",
+      });
+      assert.equal(response.status, 400);
+      assert.match(await response.text(), /72/);
+    });
+
     await check("H11. the database never holds more than two live rows for this user", async () => {
       const live = await liveCount();
       assert.ok(live >= 1 && live <= 2, `${live} live rows`);
