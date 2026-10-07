@@ -69,6 +69,14 @@ function buildForwardHeaders(request: Request, route: ProxyRoute): Headers {
     }
   }
 
+  // Where a session is issued, the browser's own description goes along, so the
+  // learner's list of sessions can name the device (owner 2026-10-07). Kept
+  // short here as well; it authorises nothing.
+  if (route.forwardUserAgent) {
+    const userAgent = request.headers.get("user-agent");
+    if (userAgent) headers.set("user-agent", userAgent.slice(0, 400));
+  }
+
   // AFD-3A3: name the authentication surface, from the allow-list constant and
   // from nowhere else. `set` after the loop above, so even if the forwarded
   // allow-list ever grew this name by mistake, the browser's value is overwritten

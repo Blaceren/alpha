@@ -73,6 +73,13 @@ export type ProxyRoute = {
    * a browser cannot supply, influence or survive it.
    */
   authSurface: BackendAuthSurface | null;
+  /**
+   * Whether the browser's own description (`user-agent`) is forwarded — only
+   * where a session is issued, so the learner's list of sessions can name the
+   * device (owner 2026-10-07). It names a device and authorises nothing: the
+   * Backend keeps it short, never shows it raw, and decides nothing by it.
+   */
+  forwardUserAgent?: true;
 };
 
 export const PROXY_ALLOW_LIST: Record<ProxyOperation, ProxyRoute> = {
@@ -89,6 +96,7 @@ export const PROXY_ALLOW_LIST: Record<ProxyOperation, ProxyRoute> = {
     // this on `register` applies here, only more sharply.
     forwardClientIp: true,
     authSurface: "academy_login",
+    forwardUserAgent: true,
   },
   session: {
     method: "GET",
@@ -125,6 +133,7 @@ export const PROXY_ALLOW_LIST: Record<ProxyOperation, ProxyRoute> = {
     hasBody: true,
     forwardClientIp: true,
     authSurface: "academy_register",
+    forwardUserAgent: true,
   },
   /**
    * ATA-PROFILE-FOUNDATION-1 — the learner changes their own password.
@@ -154,6 +163,7 @@ export const PROXY_ALLOW_LIST: Record<ProxyOperation, ProxyRoute> = {
     hasBody: true,
     forwardClientIp: true,
     authSurface: null,
+    forwardUserAgent: true,
   },
 
   /* ------------------------------------------------- ACCOUNT RECOVERY --

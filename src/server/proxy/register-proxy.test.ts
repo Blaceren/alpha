@@ -103,6 +103,9 @@ describe("register proxy — route matrix", () => {
       // AFD-3A3 — the Backend refuses a token whose action does not match this
       // surface, so the registration route must declare its own.
       authSurface: "academy_register",
+      // DD-354 — a session is issued here, so the device can be named in the
+      // learner's list of sessions.
+      forwardUserAgent: true,
     });
     /* Adjacent Backend auth routes are reachable only by name. `verify-email`
        and `resend-verification` were unreachable while the product could send no

@@ -487,3 +487,104 @@
     padding-inline: 16px;
   }
 }
+
+/* ------------------------------------------------- the sessions (DD-354) -- */
+/*
+ * «Сеансы» (owner 2026-10-07: «можно было иметь 2 активных сеанса в 1 аккаунте
+ * и в профиле снизу есть сеансы … и возможность закрыть сеанс с другого
+ * сеанса»). The rows of the account part, one per live session: the device's
+ * kind in the label column, its name over a quiet line — this browser, or when
+ * it was last used — and when it signed in, and one action. This browser is
+ * named in the Signal. Closing the other one asks once more, in place.
+ */
+.pf.pf--hifi .p-sessions__intro {
+  max-width: 62ch;
+  margin: 6px 0 8px;
+  color: var(--p-ink-quiet);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.pf.pf--hifi .p-sessions__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pf.pf--hifi .p-session__what {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pf.pf--hifi .p-session__device {
+  color: var(--p-ink-identity);
+  font-size: 15px;
+}
+
+.pf.pf--hifi .p-session__meta {
+  color: var(--p-ink-quiet);
+  font-size: 13px;
+}
+
+.pf.pf--hifi .p-session__here {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--sig-500);
+}
+
+.pf.pf--hifi .p-session__here::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sig-500);
+  box-shadow: 0 0 8px rgba(199, 247, 109, 0.5);
+  content: "";
+}
+
+/* The question takes a line of its own under the device it is about, in the
+   value column. */
+.pf.pf--hifi .p-session__ask {
+  display: inline-flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 16px;
+  padding-left: calc(var(--pp-label) + 20px);
+}
+
+.pf.pf--hifi .p-session__question {
+  color: var(--p-ink-body);
+  font-size: 13.5px;
+}
+
+.pf.pf--hifi .p-session__yes {
+  color: #f0a3a3;
+}
+
+.pf.pf--hifi .p-sessions__note {
+  margin: 10px 0 0;
+  color: var(--p-ink-quiet);
+  font-size: 13px;
+}
+
+.pf.pf--hifi .p-sessions__note:empty {
+  margin: 0;
+}
+
+.pf.pf--hifi .p-sessions__said {
+  margin: 0;
+  color: var(--p-ink-body);
+  font-size: 13px;
+}
+
+.pf.pf--hifi .p-sessions__said:not(:empty) {
+  margin-top: 10px;
+}
+
+@media (max-width: 599px) {
+  .pf.pf--hifi .p-session__ask {
+    padding-left: 0;
+  }
+}

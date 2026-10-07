@@ -453,7 +453,6 @@ describe("the authenticated route group", () => {
   "src/features/auth-home-fidelity/home-overview.tsx",
   "src/features/auth-home-fidelity/home-program-line.tsx",
   "src/features/profile-fidelity/local-day.tsx",
-  "src/features/profile-fidelity/profile-exit.tsx",
   "src/features/profile-fidelity/profile-hifi.css",
   "src/features/profile-fidelity/profile-passport.tsx",
   "src/features/profile-fidelity/profile-record.ts",
@@ -574,6 +573,16 @@ describe("the authenticated route group", () => {
   "src/components/shell/notifications-bell.tsx",
   "src/components/shell/notifications-popover.tsx",
   "src/components/shell/notifications-popover.css",
+  /* Two sessions per account (DD-354, owner 2026-10-07): the profile lists the
+     account's live sessions and closes the other one — a named proxy pair with
+     one validated id; sign-in operations forward the browser's own description
+     so the list can name the device. «Сеанс» (profile-exit.tsx) became
+     «Сеансы» (profile-sessions.tsx). */
+  "src/app/api/backend/auth/sessions/route.ts",
+  "src/app/api/backend/auth/sessions/[id]/close/route.ts",
+  "src/features/profile-fidelity/profile-sessions.tsx",
+  "src/server/proxy/backend-proxy.ts",
+  "src/server/proxy/sessions-proxy.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {

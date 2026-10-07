@@ -240,7 +240,9 @@ export const COPY = {
   password_confirm: "Повторите новый пароль",
   password_constraint: "Минимум 6 символов.",
   password_submit: "Сменить пароль",
-  password_changed: "Пароль изменён.",
+  /* A new password ends every other session — since 2026-10-07 the account may
+     have two (DD-354) — so the learner hears what happens on the other device. */
+  password_changed: "Пароль изменён. На других устройствах нужно будет войти снова.",
   password_too_short: "Пароль должен быть не короче 6 символов.",
   password_mismatch: "Пароли не совпадают.",
   /* Neutral by design: the caller is already signed in, so this says something
@@ -276,5 +278,6 @@ export const COPY = {
   /* A new password withdraws a pending change of address (Backend
      `account/lifecycle.ts`). Said once, in the password row, at the moment the
      pending row disappears — otherwise it would simply vanish. */
-  password_changed_email_dropped: "Пароль изменён. Запрос на смену почты отменён — при необходимости отправьте его заново.",
+  password_changed_email_dropped:
+    "Пароль изменён. На других устройствах нужно будет войти снова. Запрос на смену почты отменён — при необходимости отправьте его заново.",
 } as const;

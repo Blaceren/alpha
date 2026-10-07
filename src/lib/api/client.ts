@@ -270,6 +270,70 @@ export async function clearAllNotifications(): Promise<ApiResult<unknown>> {
   });
 }
 
+/** One of the account's live sessions, as the Backend lists it — no token in it. */
+export type AccountSession = {
+  id: string;
+  current: boolean;
+  signedInAt: string;
+  lastSeenAt: string;
+  device: {
+    browser: string | null;
+    os: string | null;
+    kind: "phone" | "tablet" | "computer" | null;
+  };
+};
+
+export type AccountSessions = { limit: number; sessions: AccountSession[] };
+
+const nullableString = (value: unknown) => value === null || typeof value === "string";
+
+function isAccountSessions(value: unknown): value is AccountSessions {
+  if (typeof value !== "object" || value === null) return false;
+  const { limit, sessions } = value as { limit?: unknown; sessions?: unknown };
+  if (typeof limit !== "number" || !Array.isArray(sessions)) return false;
+  return sessions.every((row) => {
+    if (typeof row !== "object" || row === null) return false;
+    const s = row as Record<string, unknown>;
+    const device = s.device as Record<string, unknown> | null;
+    return (
+      typeof s.id === "string" &&
+      typeof s.current === "boolean" &&
+      typeof s.signedInAt === "string" &&
+      typeof s.lastSeenAt === "string" &&
+      typeof device === "object" &&
+      device !== null &&
+      nullableString(device.browser) &&
+      nullableString(device.os) &&
+      (device.kind === null || device.kind === "phone" || device.kind === "tablet" || device.kind === "computer")
+    );
+  });
+}
+
+/** The account's live sessions (owner 2026-10-07), the most recently used first. */
+export function listAccountSessions(signal?: AbortSignal): Promise<ApiResult<AccountSessions>> {
+  return apiRequest<AccountSessions>({
+    method: "GET",
+    path: `${PROXY_BASE}/auth/sessions`,
+    validate: isAccountSessions,
+    signal,
+  });
+}
+
+/**
+ * Close another of the account's sessions — from this one (owner 2026-10-07:
+ * «возможность закрыть сеанс с другого сеанса»). CSRF like every write.
+ */
+export async function closeAccountSession(id: string): Promise<ApiResult<unknown>> {
+  const csrf = await fetchCsrfToken();
+  if (!csrf.ok) return csrf;
+  return apiRequest<unknown>({
+    method: "POST",
+    path: `${PROXY_BASE}/auth/sessions/${encodeURIComponent(id)}/close`,
+    csrfToken: csrf.data,
+    validate: (value): value is unknown => typeof value === "object" && value !== null,
+  });
+}
+
 /**
  * Logout is a Backend mutation guarded by double-submit CSRF: we first bootstrap
  * a CSRF token, then send it as the `x-csrf-token` header. No auto-retry.
