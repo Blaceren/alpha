@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { nearnessAt } from "@/features/path-fidelity/path-state";
 
 /**
  * Path rail controller — the frozen surface's geometry behaviour.
@@ -14,21 +15,21 @@ import { useEffect } from "react";
  *   * `positionCurrent` — bring the current node to 42% of the rail width, the
  *     frozen landing position. Instant on load, and instant under reduced
  *     motion.
- *   * `layoutFocusJoin` — the leader line that visually joins the current node's
- *     mark to the focus panel, including the merged case when the node sits at
- *     the panel's left edge and the hidden case when it is past the right edge.
- *     Since 2026-10-06 it joins the POINTED node: the current one at rest, an
- *     opened level under the pointer or keyboard focus (`point`, DD-346).
  *   * `updateRailFades` — the more-left / more-right edge fades, the per-node
  *     `--peek` class for nodes clipped by the window, and the return-to-current
  *     utility whose visibility threshold is the current node's CENTRE leaving
  *     the window, with a directional arrow.
  *   * the return utility hands focus to the detail heading after use, so a
  *     keyboard user is never dropped to body.
- *   * `light` (DD-352) — the panel is marked lit while an opened level or the
- *     panel itself holds the pointer (or an opened level holds the keyboard),
- *     and told where the branch lands, so the stylesheet can run the light
- *     along the panel's edge from there and fade it slowly afterwards.
+ *   * `nearness` (DD-353) — how near the pointer is to each opened level's
+ *     block, so the stylesheet can brighten that level's branch and run the
+ *     light along its block's outline.
+ *
+ * The frozen leader that joined the current mark to the detail panel is gone
+ * (DD-353, owner 2026-10-07: «она не должна входить в следующую область»), and
+ * with it DD-346's single branch that moved to the pointed level and DD-352's
+ * light along the panel's edge: each opened level has its own branch now, and
+ * it ends in its own block.
  *
  * The frozen script's transition engine (workflow / advance / module swaps) is
  * deliberately NOT reproduced. Those are driven by its synthetic transition
@@ -36,14 +37,13 @@ import { useEffect } from "react";
  * the new state. Reproducing them would mean simulating progression on the
  * client, which is exactly the authority inversion the contracts forbid.
  */
+
 export function PathRail() {
   useEffect(() => {
     const root = document.querySelector<HTMLElement>("[data-pth-root]");
     const scroller = root?.querySelector<HTMLElement>("[data-scroller]");
     const rail = root?.querySelector<HTMLElement>(".rail");
-    const leader = root?.querySelector<HTMLElement>("[data-leader]");
-    const focusPanel = root?.querySelector<HTMLElement>("[data-focus]");
-    const flow = root?.querySelector<HTMLElement>("[data-flow]");
+    const workspace = root?.querySelector<HTMLElement>(".workspace");
     const returnBtn = root?.querySelector<HTMLButtonElement>("[data-return]");
     if (!root || !scroller || !rail) return;
 
@@ -60,91 +60,57 @@ export function PathRail() {
     const strip = root.querySelector<HTMLElement>(".level-strip");
 
     /*
-     * THE POINTED LEVEL (2026-10-06, owner: «по наведению двигается палочка
-     * наша с подсветкой, но на уровни которые еще не открыты ее завести нельзя»).
-     * The branch rests on the level in focus. Under a mouse or a pen it moves to
-     * the opened level the pointer is on — a walked one, or the current one —
-     * and back when the pointer leaves the strip; keyboard focus inside a level
-     * does the same. A level that is not open is not a place for it: over one,
-     * the branch stays at rest. Touch has no hover, so on touch it never moves.
+     * THE BLOCKS WAKE AS THE POINTER NEARS (DD-353, owner 2026-10-07: «она
+     * должна в момент того как водишь и приближаешься к блоку становиться ярче
+     * и начинать свечение обводки постепенно, блоки пройденные»). While a mouse
+     * or a pen is over the module's field (`data-pointer` on it), every opened
+     * level — walked, or the one in focus — gets `--near`: 1 inside its block,
+     * fading to 0 at `NEAR_REACH` away. All reads come before all writes. When
+     * the pointer leaves the field every block goes back to 0, and the
+     * stylesheet lets the light out slowly. Keyboard focus on a level's way in
+     * holds that level at 1. Touch has no hover, so a finger wakes nothing.
      */
-    const restNode = () =>
-      root.querySelector<HTMLElement>("[data-rest]") ?? currentNode();
-    let pointed: HTMLElement | null = restNode();
+    let pointer: { x: number; y: number } | null = null;
+    let held: HTMLElement | null = null;
 
-    function point(target: HTMLElement | null) {
-      const next = target ?? restNode();
-      if (!next || next === pointed) return;
-      pointed?.classList.remove("level-node--pointed");
-      next.classList.add("level-node--pointed");
-      pointed = next;
-      /* The branch glides between levels — and the light where it flows into
-         the panel glides with it; on a scroll or a resize both follow the level
-         at once, and with reduced motion they never glide. */
-      for (const el of [leader, flow]) {
-        if (!el) continue;
-        if (prefersReduced()) delete el.dataset.glide;
-        else el.dataset.glide = "";
-      }
-      layoutFocusJoin();
+    function nearness() {
+      const nodes = Array.from(root!.querySelectorAll<HTMLElement>(".level-node[data-open]"));
+      const values = nodes.map((node) => {
+        if (node === held) return 1;
+        const block = node.querySelector<HTMLElement>(".level-node__block");
+        if (!pointer || !block) return 0;
+        const r = block.getBoundingClientRect();
+        const dx = Math.max(r.left - pointer.x, 0, pointer.x - r.right);
+        const dy = Math.max(r.top - pointer.y, 0, pointer.y - r.bottom);
+        return nearnessAt(Math.hypot(dx, dy));
+      });
+      nodes.forEach((node, i) => node.style.setProperty("--near", values[i]!.toFixed(3)));
     }
 
-    /*
-     * THE LIGHT ALONG THE PANEL (DD-352, owner 2026-10-06: «линия должна
-     * втекать не вниз а в блок и расходиться по нему в обе стороны на моменте
-     * наведения, в момент убора курсора свечение пропадает постепенно»). While
-     * an opened level holds the pointer or the keyboard — or the pointer rests
-     * on the panel the branch flows into — the panel is lit (`data-lit`); the
-     * stylesheet runs the light from the branch along the panel's edge both
-     * ways and fades it slowly once the mark is gone. Touch has no hover, so a
-     * finger never lights it.
-     */
-    let onLevel = false;
-    let onPanel = false;
-    function light() {
-      if (!focusPanel) return;
-      if (onLevel || onPanel) focusPanel.dataset.lit = "";
-      else delete focusPanel.dataset.lit;
-    }
-
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      pointer = { x: event.clientX, y: event.clientY };
+      if (workspace) workspace.dataset.pointer = "";
+      nearness();
+    };
+    const onPointerLeave = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      pointer = null;
+      if (workspace) delete workspace.dataset.pointer;
+      nearness();
+    };
     const openNodeAt = (target: EventTarget | null) => {
       const node = target instanceof Element ? target.closest<HTMLElement>(".level-node") : null;
       return node && node.hasAttribute("data-open") ? node : null;
     };
-    const onPointerOver = (event: PointerEvent) => {
-      if (event.pointerType === "touch") return;
-      const node = openNodeAt(event.target);
-      onLevel = node !== null;
-      point(node);
-      light();
-    };
-    const onPointerLeave = (event: PointerEvent) => {
-      if (event.pointerType === "touch") return;
-      onLevel = false;
-      point(null);
-      light();
-    };
     const onFocusIn = (event: FocusEvent) => {
-      const node = openNodeAt(event.target);
-      onLevel = node !== null;
-      point(node);
-      light();
+      held = openNodeAt(event.target);
+      nearness();
     };
     const onFocusOut = (event: FocusEvent) => {
-      if (strip?.contains(event.relatedTarget as Node | null)) return;
-      onLevel = false;
-      point(null);
-      light();
-    };
-    const onPanelEnter = (event: PointerEvent) => {
-      if (event.pointerType === "touch") return;
-      onPanel = true;
-      light();
-    };
-    const onPanelLeave = (event: PointerEvent) => {
-      if (event.pointerType === "touch") return;
-      onPanel = false;
-      light();
+      if (held && held.contains(event.relatedTarget as Node | null)) return;
+      held = null;
+      nearness();
     };
 
     function positionCurrent(smooth = false) {
@@ -165,39 +131,6 @@ export function PathRail() {
         left,
         behavior: smooth && !prefersReduced() ? "smooth" : "instant",
       });
-    }
-
-    /*
-     * THE BRANCH (2026-10-04, owner: «задумка хорошая, но реализация ужасная»).
-     * The leader used to fill only the gap above the panel — or, for a level at
-     * the left edge, fuse into the panel's corner — so it hung half a screen
-     * below the node it belonged to. It is now one line from the current mark's
-     * lower edge straight down to the panel, at the mark's own centre, and it
-     * hides when the mark is panned out of the panel's width. (The mark is the
-     * pointed level's since 2026-10-06 — the current one unless a pointer or
-     * keyboard focus rests on another opened level.) Since DD-352 it ends IN
-     * the panel's edge, and the light along the edge starts where it lands
-     * (`--flow-x`, measured from the panel's outer left edge).
-     */
-    function layoutFocusJoin() {
-      const cur = pointed ?? currentNode();
-      if (!cur || !focusPanel || !leader) return;
-      const mark = cur.querySelector<HTMLElement>(".level-node__mark");
-      if (!mark) return;
-      const markRect = mark.getBoundingClientRect();
-      const focusRect = focusPanel.getBoundingClientRect();
-      const x = markRect.left + markRect.width / 2 - focusRect.left;
-      const top = markRect.bottom - focusRect.top;
-      leader.classList.remove("focus__leader--merged");
-      if (x < 18 || x > focusRect.width - 18 || top >= 0) {
-        leader.hidden = true;
-        return;
-      }
-      leader.style.left = `${Math.round(x - 1)}px`;
-      leader.style.top = `${Math.round(top)}px`;
-      leader.style.height = `${Math.round(-top)}px`;
-      leader.hidden = false;
-      flow?.style.setProperty("--flow-x", `${Math.round(x)}px`);
     }
 
     function updateRailFades() {
@@ -248,46 +181,41 @@ export function PathRail() {
       );
     };
 
-    const stopGliding = () => {
-      if (leader) delete leader.dataset.glide;
-      if (flow) delete flow.dataset.glide;
-    };
+    /* A scroll moves the blocks under a still pointer; a resize moves them too. */
     const onResize = () => {
-      stopGliding();
       positionCurrent();
-      layoutFocusJoin();
       updateRailFades();
+      if (pointer) nearness();
     };
     const onScroll = () => {
-      stopGliding();
-      layoutFocusJoin();
       updateRailFades();
+      if (pointer) nearness();
+    };
+    const onPageScroll = () => {
+      if (pointer) nearness();
     };
 
     positionCurrent();
-    layoutFocusJoin();
     updateRailFades();
 
     returnBtn?.addEventListener("click", onReturn);
     window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onPageScroll, { passive: true });
     scroller.addEventListener("scroll", onScroll, { passive: true });
-    strip?.addEventListener("pointerover", onPointerOver);
-    strip?.addEventListener("pointerleave", onPointerLeave);
+    workspace?.addEventListener("pointermove", onPointerMove);
+    workspace?.addEventListener("pointerleave", onPointerLeave);
     strip?.addEventListener("focusin", onFocusIn);
     strip?.addEventListener("focusout", onFocusOut);
-    focusPanel?.addEventListener("pointerenter", onPanelEnter);
-    focusPanel?.addEventListener("pointerleave", onPanelLeave);
 
     return () => {
       returnBtn?.removeEventListener("click", onReturn);
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onPageScroll);
       scroller.removeEventListener("scroll", onScroll);
-      strip?.removeEventListener("pointerover", onPointerOver);
-      strip?.removeEventListener("pointerleave", onPointerLeave);
+      workspace?.removeEventListener("pointermove", onPointerMove);
+      workspace?.removeEventListener("pointerleave", onPointerLeave);
       strip?.removeEventListener("focusin", onFocusIn);
       strip?.removeEventListener("focusout", onFocusOut);
-      focusPanel?.removeEventListener("pointerenter", onPanelEnter);
-      focusPanel?.removeEventListener("pointerleave", onPanelLeave);
     };
   }, []);
 

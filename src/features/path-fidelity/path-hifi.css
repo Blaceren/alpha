@@ -183,8 +183,8 @@
  * they meet the marks the same way everywhere.
  */
 .pth.pth--hifi .level-node::before {
-  left: 10px;
-  right: -10px;
+  left: 22px;
+  right: -22px;
   background: linear-gradient(90deg, var(--axis-future) 50%, transparent 50%) 0 0 / 12px 100% round no-repeat;
 }
 
@@ -329,71 +329,140 @@
 }
 
 /*
- * (3) THE BRANCH. The idea is kept — the current level and its detail are one
- * object — and drawn whole: one line from the current mark straight down to
- * the panel, landing on its edge in a joint (the rail controller measures it).
- * The level's words step right of the line, a soft light runs down its column,
- * and the panel's corner brackets — which the line used to fuse into, half a
- * screen below the node it belonged to — are not drawn.
+ * (3) THE BRANCH. The idea was kept from the frozen composition — the current
+ * level and its detail are one object — and drawn whole: one line from the
+ * current mark straight down to the panel. The panel's corner brackets, which
+ * the line used to fuse into, are not drawn. Since DD-353 (owner 2026-10-07:
+ * «она не должна входить в следующую область») the line no longer reaches the
+ * panel: each opened level has its own branch, into its own block (below).
  */
-/*
- * THE COLUMNS (DD-352). One grammar for every level, open or not: its mark at
- * the column's left edge, the line — and the branch, when it comes — through
- * the mark's centre, its words 28px in, right of where the branch runs. (Since
- * DD-346 only the opened levels took that room, 52px in after the first; with
- * a whole module on the strip up to five levels are open, and the room they
- * took broke the longest words — «остановиться» at 1440, «Регистрация» at 900,
- * measured 2026-10-06.) The columns share the strip evenly and none gets
- * narrower than its longest word: where the words cannot all fit — a module
- * of six levels at 900px — the strip pans instead of breaking one.
- */
-.pth.pth--hifi .level-node,
-.pth.pth--hifi .level-node + .level-node {
-  min-width: min-content;
-  padding-left: 28px;
-  padding-right: 6px;
-}
-
-.pth.pth--hifi .level-node + .level-node .level-node__mark {
-  left: 0;
-}
-
-/* Every OPENED level — walked, or the current one — can hold the branch
-   (DD-346) and carries its light, lit only while the branch is on it. */
-.pth.pth--hifi .level-node--open {
-  isolation: isolate;
-}
-
-.pth.pth--hifi .level-node--open::after {
-  position: absolute;
-  z-index: -1;
-  top: 30px;
-  right: 2px;
-  bottom: -8px;
-  left: -8px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(199, 247, 109, 0.075), rgba(199, 247, 109, 0) 82%);
-  content: "";
-  opacity: 0;
-  /* It lights at once and goes out slowly (DD-352, owner: «в момент убора
-     курсора свечение пропадает постепенно»). */
-  transition: opacity var(--flow-fade) var(--flow-fade-ease);
-}
-
-.pth.pth--hifi .level-node--open.level-node--pointed::after {
-  opacity: 1;
-  transition-duration: var(--motion-standard);
-}
-
 .pth.pth--hifi .frame-corner {
   display: none;
 }
 
-/* The strip steps in from the panel's rounded corner, so even the first
-   level's branch lands on the panel's straight edge (its centre 20px in, past
-   the 16px corner). */
+/*
+ * THE COLUMNS (DD-352, DD-353). One grammar for every level, open or not: its
+ * mark 12px into the column; under it, 40px down, the column's block — as wide
+ * as the column less an 8px gap; the words inside the block, 16px in. The branch
+ * runs from the mark's centre down into the block's top edge, so it never
+ * crosses the words. The columns share the strip evenly and none gets narrower
+ * than its longest word: where the words cannot all fit — a module of six
+ * levels at 900px — the strip pans instead of breaking one (measured
+ * 2026-10-06: «остановиться», «Регистрация» broke when they could).
+ */
+.pth.pth--hifi .level-node,
+.pth.pth--hifi .level-node + .level-node {
+  min-width: min-content;
+  padding: 54px 22px 18px 16px;
+}
+
+.pth.pth--hifi .level-node__mark,
+.pth.pth--hifi .level-node + .level-node .level-node__mark {
+  left: 12px;
+}
+
+/*
+ * THE BLOCK AND ITS BRANCH (DD-353, owner 2026-10-07: «она должна в момент того
+ * как водишь и приближаешься к блоку становиться ярче и начинать свечение
+ * обводки постепенно, блоки пройденные»). Every opened level — walked, or the
+ * one in focus — has both, and `--near` (0–1 from the rail controller: how near
+ * the pointer is to the block) drives them:
+ *
+ *   the branch, from the mark down into the block's top edge, brightens and
+ *     glows;
+ *   the block's outline lights from where the branch enters and runs both
+ *     ways — along the top and down the sides — the further the nearer the
+ *     pointer, brightest at the branch; a soft halo follows;
+ *   the block's own faint light comes up with them.
+ *
+ * The level in focus keeps its branch and its light at rest: it is where the
+ * learner is. A walked level's appear only as the pointer nears. Walked levels
+ * speak in the route's green, the one in focus in the Signal. The light follows
+ * the pointer at once while it moves over the module's field (`data-pointer`)
+ * and goes out slowly when it leaves (DD-352: «пропадает постепенно»); a
+ * browser without `@property` switches it instead of fading it.
+ */
+@property --near {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.pth.pth--hifi .level-node--open {
+  --glow: 168, 216, 79;
+  isolation: isolate;
+  transition: --near var(--flow-fade) var(--flow-fade-ease);
+}
+
+.pth.pth--hifi .level-node--current {
+  --glow: 199, 247, 109;
+}
+
+.pth.pth--hifi .workspace[data-pointer] .level-node--open {
+  transition: --near 140ms linear;
+}
+
+.pth.pth--hifi .level-node--rest {
+  --rest-branch: 0.7;
+  --rest-light: 1;
+}
+
+.pth.pth--hifi .level-node__stem {
+  position: absolute;
+  top: 23px;
+  left: 21px;
+  width: 2px;
+  height: 17px;
+  border-radius: 1px;
+  background: rgb(var(--glow));
+  box-shadow: 0 0 calc(10px * var(--near)) rgba(var(--glow), calc(0.6 * var(--near)));
+  opacity: max(var(--rest-branch, 0), var(--near));
+  pointer-events: none;
+}
+
+.pth.pth--hifi .level-node__block {
+  position: absolute;
+  z-index: -1;
+  inset: 40px 8px 0 0;
+  border-radius: 14px;
+  box-shadow: 0 0 calc(24px * var(--near)) rgba(var(--glow), calc(0.14 * var(--near)));
+  pointer-events: none;
+}
+
+.pth.pth--hifi .level-node__block::before,
+.pth.pth--hifi .level-node__block::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: "";
+}
+
+.pth.pth--hifi .level-node__block::before {
+  background: linear-gradient(180deg, rgba(var(--glow), 0.08), rgba(var(--glow), 0) 82%);
+  opacity: max(var(--rest-light, 0), var(--near));
+}
+
+/* The outline is the block's own 1px edge, lit from where the branch enters
+   (22px in, on the top edge). */
+.pth.pth--hifi .level-node__block::after {
+  padding: 1px;
+  background: radial-gradient(
+    calc(var(--near) * 140%) calc(var(--near) * 110%) at 22px 0,
+    rgba(var(--glow), 0.95),
+    rgba(var(--glow), 0.5) 35%,
+    rgba(var(--glow), 0.14) 75%,
+    rgba(var(--glow), 0)
+  );
+  opacity: var(--near);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* The strip's blocks start at the module's left edge, under its name. */
 .pth.pth--hifi .rail {
-  margin-left: 10px;
+  margin-left: 0;
 }
 
 /* Where the strip pans, the level the branch rests on takes the room its name
@@ -422,56 +491,29 @@
   }
 }
 
-.pth.pth--hifi .focus__leader,
-.pth.pth--hifi .focus__leader--merged {
-  width: 2px;
-  border-radius: 2px 2px 0 0;
-  background: linear-gradient(180deg, var(--signal), rgba(199, 247, 109, 0.85));
-  box-shadow: 0 0 10px rgba(199, 247, 109, 0.3);
-  transition: none;
-}
-
-/* Where the branch meets the panel it flows INTO the edge (DD-352, owner:
-   «линия должна втекать не вниз а в блок»): no joint any more — the line runs
-   through the panel's border, and the border itself carries the light from
-   there (`.focus__flow`, below). The frozen patch that opened the panel's edge
-   for the stem is not drawn either. */
-.pth.pth--hifi .focus__leader::after,
-.pth.pth--hifi .focus__leader--merged::after {
-  display: none;
-}
-
 /* ------------------------------------------ the pointed level, 2026-10-06 -- */
 /*
  * THE OWNER'S REQUEST (2026-10-06): «было видно … 1 прошедший», «завершен и
  * начать появляется в момент наведения, так же по наведению двигается палочка
  * наша с подсветкой, но на уровни которые еще не открыты ее завести нельзя и
- * они затемненные».
+ * они затемненные». (DD-346's one branch that glided to the pointed level is
+ * each level's own branch since DD-353, lit by nearness — above.)
  *
- * (1) THE BRANCH GLIDES. The rail controller moves it to the opened level under
- * the pointer and marks the move with `data-glide`; a scroll or a resize takes
- * the mark away, so there the line follows its level at once.
+ * (1) A WALKED LEVEL NEARED BY THE POINTER lights its mark in the walked green,
+ * as the current one is lit, and its name comes up under the pointer.
  */
-.pth.pth--hifi .focus__leader[data-glide] {
-  transition: left var(--motion-structural) var(--ease-ata);
-}
-
-/* A walked level holding the branch lights up as the current one does, in
-   the walked green — at once, and it goes out slowly (DD-352). */
 .pth.pth--hifi .level-node--done .level-node__mark {
-  transition: box-shadow var(--flow-fade) var(--flow-fade-ease);
-}
-
-.pth.pth--hifi .level-node--done.level-node--pointed .level-node__mark {
-  box-shadow: 0 0 0 4px rgba(168, 216, 79, 0.16), 0 0 14px rgba(168, 216, 79, 0.4);
-  transition-duration: var(--motion-standard);
+  box-shadow:
+    0 0 0 calc(4px * var(--near)) rgba(168, 216, 79, calc(0.16 * var(--near))),
+    0 0 calc(14px * var(--near)) rgba(168, 216, 79, calc(0.4 * var(--near)));
 }
 
 .pth.pth--hifi .level-node--done .level-node__name {
   transition: color var(--motion-standard) var(--ease-ata);
 }
 
-.pth.pth--hifi .level-node--done.level-node--pointed .level-node__name {
+.pth.pth--hifi .level-node--done:hover .level-node__name,
+.pth.pth--hifi .level-node--done:focus-within .level-node__name {
   color: var(--text-primary);
 }
 
@@ -547,9 +589,8 @@
    asked for the upright to go: «нужно убрать серую палку».) */
 
 @media (prefers-reduced-motion: reduce) {
-  .pth.pth--hifi .focus__leader[data-glide],
-  .pth.pth--hifi .level-node--open::after,
-  .pth.pth--hifi .level-node--done .level-node__mark,
+  .pth.pth--hifi .level-node--open,
+  .pth.pth--hifi .workspace[data-pointer] .level-node--open,
   .pth.pth--hifi .level-node--done .level-node__name,
   .pth.pth--hifi .level-node--open .level-node__state {
     transition: none;
@@ -559,99 +600,15 @@
 /* --------------------------------------------------------------- the focus -- */
 
 .pth.pth--hifi .focus {
+  margin-top: 30px;
   padding: 30px 32px 30px;
   background: var(--hf-surface-raised);
   border-color: var(--hf-line-strong);
   border-radius: var(--hf-radius-window);
 }
 
-/*
- * THE LIGHT ALONG THE PANEL (DD-352, owner 2026-10-06: «линия должна втекать
- * не вниз а в блок и расходиться по нему в обе стороны на моменте наведения, в
- * момент убора курсора свечение пропадает постепенно»). Two rings over the
- * panel's own 1px border, both lit from where the branch lands (`--flow-x`,
- * from the rail controller), so neither can leave the panel's shape:
- *
- *   ::after — always: the branch spills a little along the edge both ways,
- *     which is what makes it read as flowing in rather than stopping on it;
- *   ::before — while the panel is lit (`data-lit`: an opened level or the panel
- *     holds the pointer): the light runs out from that point both ways along
- *     the edge and down the sides, brightest where the branch lands and
- *     thinning with distance; when the pointer leaves it lingers a moment and
- *     fades out slowly, and only then gathers back.
- *
- * Both values are registered so they animate; a browser without `@property`
- * shows the light whole instead of running it.
- */
-@property --flow-x {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
-}
-
-@property --flow-reach {
-  syntax: "<percentage>";
-  inherits: false;
-  initial-value: 0%;
-}
-
-.pth.pth--hifi .focus__flow {
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  pointer-events: none;
-  filter: drop-shadow(0 0 4px rgba(199, 247, 109, 0.45));
-}
-
-.pth.pth--hifi .focus__flow::before,
-.pth.pth--hifi .focus__flow::after {
-  position: absolute;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  content: "";
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-}
-
-.pth.pth--hifi .focus__flow::after {
-  background: radial-gradient(46px 22px at var(--flow-x) 0, var(--signal), rgba(199, 247, 109, 0));
-}
-
-.pth.pth--hifi .focus__flow::before {
-  background: radial-gradient(
-    var(--flow-reach) calc(var(--flow-reach) * 0.6) at var(--flow-x) 0,
-    rgba(199, 247, 109, 0.95),
-    rgba(199, 247, 109, 0.45) 30%,
-    rgba(199, 247, 109, 0.12) 70%,
-    rgba(199, 247, 109, 0)
-  );
-  opacity: 0;
-  transition:
-    opacity var(--flow-fade) var(--flow-fade-ease),
-    --flow-reach 0s linear var(--flow-fade);
-}
-
-.pth.pth--hifi .focus[data-lit] .focus__flow::before {
-  --flow-reach: 110%;
-  opacity: 1;
-  transition:
-    opacity 200ms var(--ease-ata),
-    --flow-reach 900ms var(--ease-ata);
-}
-
-/* It glides with the branch (`data-glide`, as the leader does). */
-.pth.pth--hifi .focus__flow[data-glide] {
-  transition: --flow-x var(--motion-structural) var(--ease-ata);
-}
-
-/* No branch, no light: where the branch is hidden — its level panned out of
-   the panel's width — the edge stays dark. */
-.pth.pth--hifi .focus__leader[hidden] ~ .focus__flow {
-  display: none;
-}
+/* (DD-352's light along the panel's edge went with the branch into the panel —
+   DD-353.) */
 
 .pth.pth--hifi .frame-corner {
   width: 30px;

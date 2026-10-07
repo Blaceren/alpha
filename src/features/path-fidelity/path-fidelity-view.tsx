@@ -33,8 +33,9 @@ import "@/features/path-fidelity/path-hifi.css";
  *
  * VISUAL AUTHORITY: PuthATA @ 3c740ccf8eb9182e858706a7423f07d29019858e. The
  * module ribbon (the module's own small scale since DD-352), the horizontal
- * level rail and the focus panel that joins the
- * current node to its detail as one object (the Decision Frame). Element order,
+ * level rail and the focus panel that joined the
+ * current node to its detail as one object (the Decision Frame — since DD-353
+ * each level's branch ends in its own block instead). Element order,
  * class names, the `data-*` hooks the geometry needs and the text shapes all
  * follow `index.html` and the `render*` functions of `script.js`.
  *
@@ -269,12 +270,20 @@ export function PathFidelityView({
                   through the walked levels to the current one, so a module is
                   one filling, and the next module starts a new strip. (DD-346's
                   window across module edges, its edge mark and its «· модуль NN»
-                  are gone with it.) The levels the learner has opened — walked,
-                  and the one in focus — can take the branch: the rail controller
-                  moves it to the level under the pointer, and that level shows
+                  are gone with it.)
+
+                  EACH OPENED LEVEL HAS ITS BRANCH AND ITS BLOCK (DD-353, owner
+                  2026-10-07: «она не должна входить в следующую область … она
+                  должна в момент того как водишь и приближаешься к блоку
+                  становиться ярче и начинать свечение обводки постепенно, блоки
+                  пройденные»). A walked level and the one in focus each carry a
+                  short branch from their mark into the top of their own block;
+                  the nearer the pointer comes, the brighter the branch and the
+                  further the light runs along the block's outline, both ways
+                  (the rail controller measures the nearness). The branch no
+                  longer reaches the panel below. Under the pointer a level shows
                   what it is to the learner — «Завершён», or «Начать» with the way
-                  in. A level that is not open yet is drawn dim and takes
-                  nothing. */}
+                  in. A level that is not open yet is drawn dim and has neither. */}
               <ol className="level-strip">
                 {focusModule.levels.map((level) => {
                   const st = nodeState(level, currentOrder);
@@ -288,7 +297,7 @@ export function PathFidelityView({
                     "level-node",
                     `level-node--${st}`,
                     open ? "level-node--open" : "level-node--closed",
-                    rest ? "level-node--rest level-node--pointed" : "",
+                    rest ? "level-node--rest" : "",
                     level.typeInfo.isCheckpoint ? "level-node--cp" : "",
                     st === "current" ? `level-node--wf-${kind}` : "",
                     st === "locked" && beyond ? "level-node--far" : "",
@@ -305,6 +314,12 @@ export function PathFidelityView({
                       {...(st === "current" ? { "aria-current": "step" as const } : {})}
                     >
                       <span className="level-node__mark" aria-hidden="true" />
+                      {open ? (
+                        <>
+                          <span className="level-node__stem" aria-hidden="true" />
+                          <span className="level-node__block" aria-hidden="true" />
+                        </>
+                      ) : null}
                       <span className="level-node__code">{levelCodeLabel(level.order)}</span>
                       <span className="level-node__name">{level.title}</span>
                       {beyond ? null : (
@@ -356,16 +371,13 @@ export function PathFidelityView({
             </button>
           </div>
 
-          {/* current progression focus: node + detail as one object (Decision Frame) */}
+          {/* current progression focus: the detail of the level in focus. The
+              frozen composition joined it to its node with a stem (the
+              Decision Frame); since DD-353 (owner 2026-10-07: «она не должна
+              входить в следующую область») nothing on the strip reaches into
+              it — each level's branch ends in that level's own block. */}
           {focusLevel ? (
             <section className="focus" aria-labelledby="detail-title" data-focus>
-              <span className="focus__leader" data-leader aria-hidden="true" />
-              {/* Where the branch flows into the panel (DD-352): while a pointer
-                  rests on an opened level or on the panel, its light runs from
-                  the branch along the panel's edge both ways, and fades slowly
-                  when the pointer leaves. Drawn by the stylesheet; the rail
-                  controller only says where the branch lands and when. */}
-              <span className="focus__flow" data-flow aria-hidden="true" />
               <span className="frame-corner frame-corner--tl" aria-hidden="true" />
               <span className="frame-corner frame-corner--br" aria-hidden="true" />
               <h2 id="detail-title" data-detail-title tabIndex={-1}>

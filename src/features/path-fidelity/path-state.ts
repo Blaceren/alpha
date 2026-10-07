@@ -202,6 +202,20 @@ export function levelsWord(n: number): string {
   return n % 10 === 1 && n % 100 !== 11 ? "уровня" : "уровней";
 }
 
+/**
+ * HOW NEAR THE POINTER IS TO A LEVEL'S BLOCK (DD-353, owner 2026-10-07:
+ * «приближаешься к блоку — становиться ярче и начинать свечение обводки
+ * постепенно»). 1 inside the block, 0 from `NEAR_REACH` CSS pixels away, eased
+ * between, so the light wakes gradually as the pointer comes and settles as it
+ * arrives.
+ */
+export const NEAR_REACH = 110;
+
+export function nearnessAt(distance: number, reach = NEAR_REACH): number {
+  const t = Math.min(1, Math.max(0, 1 - distance / reach));
+  return t * t * (3 - 2 * t);
+}
+
 /** `L07` — the frozen code format. */
 export function levelCodeLabel(order: number): string {
   return `L${String(order).padStart(2, "0")}`;

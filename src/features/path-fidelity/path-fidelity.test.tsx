@@ -31,6 +31,8 @@ import {
   moduleFill,
   levelsWord,
   levelCodeLabel,
+  nearnessAt,
+  NEAR_REACH,
   PATH_WAITING_REVIEW,
 } from "@/features/path-fidelity/path-state";
 import type {
@@ -360,13 +362,12 @@ describe("Path — the frozen composition", () => {
     expect(near?.querySelector(".level-node__type")?.textContent).toBe("урок + тест");
   });
 
-  it("keeps the Decision Frame whole — leader, both corners, and the focused heading", () => {
+  it("keeps the detail whole — both corners and the focused heading — and nothing reaches into it from the strip", () => {
     const { container } = render(<PathFidelityView view={standardView()} userName="Тест" />);
     const focus = container.querySelector(".focus");
     expect(focus).not.toBeNull();
-    expect(focus!.querySelector("[data-leader]")).not.toBeNull();
-    // Where the branch flows into the panel (DD-352): after the leader, so a hidden leader darkens it.
-    expect(focus!.querySelector("[data-leader] ~ [data-flow]")?.getAttribute("aria-hidden")).toBe("true");
+    // DD-353 (owner 2026-10-07: «она не должна входить в следующую область»): no line joins the panel.
+    expect(container.querySelector("[data-leader], .focus__leader, [data-flow], .focus__flow")).toBeNull();
     expect(focus!.querySelectorAll(".frame-corner")).toHaveLength(2);
     const title = focus!.querySelector("[data-detail-title]") as HTMLElement;
     expect(title.tagName).toBe("H2");
@@ -381,12 +382,12 @@ describe("Path — the frozen composition", () => {
       "[data-pth-root]",
       "[data-scroller]",
       "[data-focus]",
-      "[data-leader]",
-      "[data-flow]",
       "[data-detail-title]",
       "[data-return]",
       ".rail",
+      ".workspace",
       ".level-node__mark",
+      ".level-node__block",
     ]) {
       expect(container.querySelector(hook), hook).not.toBeNull();
     }
@@ -989,20 +990,27 @@ describe("Path — the strip is the module (DD-352)", () => {
     expect(container.querySelector(".level-node--done .level-node__state")?.textContent).not.toBe("пройден");
   });
 
-  it("only opened levels can take the branch; the rest are drawn closed", () => {
+  it("every opened level has its own branch and block; the rest are drawn closed and have neither", () => {
     const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
     const open = [...container.querySelectorAll("[data-open]")].map((n) => n.getAttribute("data-level"));
     expect(open).toEqual(["v2.l004", "v2.l005"]);
+    for (const node of container.querySelectorAll("[data-open]")) {
+      expect(node.querySelector(".level-node__stem")?.getAttribute("aria-hidden")).toBe("true");
+      expect(node.querySelector(".level-node__block")?.getAttribute("aria-hidden")).toBe("true");
+    }
     const closed = [...container.querySelectorAll(".level-node--closed")].map((n) => n.getAttribute("data-level"));
     expect(closed).toEqual(["v2.l006", "v2.l007", "v2.l008"]);
-    // At rest the branch is on the current level.
+    for (const node of container.querySelectorAll(".level-node--closed")) {
+      expect(node.querySelector(".level-node__stem, .level-node__block")).toBeNull();
+    }
+    // The level in focus is the one lit at rest — where the learner is.
     const rest = container.querySelector("[data-rest]")!;
     expect(rest.getAttribute("aria-current")).toBe("step");
-    expect(container.querySelectorAll(".level-node--pointed")).toHaveLength(1);
-    expect(rest.classList.contains("level-node--pointed")).toBe(true);
+    expect(rest.classList.contains("level-node--rest")).toBe(true);
+    expect(container.querySelectorAll(".level-node--rest")).toHaveLength(1);
   });
 
-  it("with every level walked, the branch rests on the level in focus", () => {
+  it("with every level walked, the level in focus is the one lit at rest", () => {
     const view = walkedTo(10);
     const last = view.modules[2]!.levels[1]!;
     Object.assign(last, { state: "completed", stateLabel: "Пройден" });
@@ -1011,149 +1019,103 @@ describe("Path — the strip is the module (DD-352)", () => {
     expect(container.querySelector("[data-rest]")?.getAttribute("data-level")).toBe("v2.l010");
   });
 
-  describe("the rail controller moves the branch", () => {
-    const pointer = (type: string, pointerType = "mouse") => {
-      const event = new MouseEvent(type, { bubbles: type !== "pointerleave" });
+  /* DD-353, owner 2026-10-07: «она не должна входить в следующую область … она
+     должна в момент того как водишь и приближаешься к блоку становиться ярче и
+     начинать свечение обводки постепенно, блоки пройденные». The controller
+     measures how near the pointer is to each opened level's block (`--near`,
+     0–1); the stylesheet brightens the branch and runs the outline's light. */
+  describe("the rail controller wakes a block as the pointer nears it", () => {
+    const pointer = (type: string, at: { x: number; y: number } = { x: 0, y: 0 }, pointerType = "mouse") => {
+      const event = new MouseEvent(type, { bubbles: type === "pointermove", clientX: at.x, clientY: at.y });
       Object.defineProperty(event, "pointerType", { value: pointerType });
       return event;
     };
-    const pointedCode = (container: HTMLElement) =>
-      [...container.querySelectorAll(".level-node--pointed")].map((n) => n.getAttribute("data-level"));
-
-    it("to an opened level under the pointer, and back when the pointer leaves", () => {
-      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
-      const walked = container.querySelector('[data-level="v2.l004"] .level-node__name')!;
-      walked.dispatchEvent(pointer("pointerover"));
-      expect(pointedCode(container)).toEqual(["v2.l004"]);
-      expect(container.querySelector("[data-leader]")!.hasAttribute("data-glide")).toBe(true);
-      container.querySelector(".level-strip")!.dispatchEvent(pointer("pointerleave"));
-      expect(pointedCode(container)).toEqual(["v2.l005"]);
-    });
-
-    it("never onto a level that is not open — over one it stays at rest", () => {
-      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
-      container.querySelector('[data-level="v2.l004"]')!.dispatchEvent(pointer("pointerover"));
-      container.querySelector('[data-level="v2.l007"] .level-node__name')!.dispatchEvent(pointer("pointerover"));
-      expect(pointedCode(container)).toEqual(["v2.l005"]);
-    });
-
-    it("without the glide when the learner asked for reduced motion", () => {
-      const original = window.matchMedia;
-      window.matchMedia = ((query: string) => ({
-        matches: query.includes("reduce"),
-        media: query,
-        onchange: null,
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        addListener: () => {},
-        removeListener: () => {},
-        dispatchEvent: () => false,
-      })) as unknown as typeof window.matchMedia;
-      try {
-        const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
-        container.querySelector('[data-level="v2.l004"]')!.dispatchEvent(pointer("pointerover"));
-        expect(pointedCode(container)).toEqual(["v2.l004"]);
-        expect(container.querySelector("[data-leader]")!.hasAttribute("data-glide")).toBe(false);
-      } finally {
-        window.matchMedia = original;
+    /* jsdom lays nothing out: each block is given a box. L04's block spans
+       x 0–150, L05's 160–310, both y 100–300. */
+    function laidOut() {
+      const rendered = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+      const boxes: Record<string, [number, number, number, number]> = {
+        "v2.l004": [0, 100, 150, 300],
+        "v2.l005": [160, 100, 310, 300],
+      };
+      for (const [code, [left, top, right, bottom]] of Object.entries(boxes)) {
+        const block = rendered.container.querySelector(`[data-level="${code}"] .level-node__block`) as HTMLElement;
+        block.getBoundingClientRect = () =>
+          ({ left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON() {} }) as DOMRect;
       }
+      return rendered;
+    }
+    const near = (container: HTMLElement, code: string) =>
+      Number((container.querySelector(`[data-level="${code}"]`) as HTMLElement).style.getPropertyValue("--near") || 0);
+    const field = (container: HTMLElement) => container.querySelector(".workspace") as HTMLElement;
+
+    it("1 inside a block, less and less further away, 0 beyond its reach", () => {
+      const { container } = laidOut();
+      field(container).dispatchEvent(pointer("pointermove", { x: 75, y: 200 }));
+      expect(near(container, "v2.l004")).toBe(1);
+      expect(near(container, "v2.l005")).toBeGreaterThan(0);
+      expect(near(container, "v2.l005")).toBeLessThan(0.5);
+      expect(field(container).hasAttribute("data-pointer")).toBe(true);
+      // 55px above L04's block: on the way, half awake or so.
+      field(container).dispatchEvent(pointer("pointermove", { x: 75, y: 45 }));
+      expect(near(container, "v2.l004")).toBeGreaterThan(0.3);
+      expect(near(container, "v2.l004")).toBeLessThan(0.7);
+      // Far below both: asleep.
+      field(container).dispatchEvent(pointer("pointermove", { x: 75, y: 600 }));
+      expect(near(container, "v2.l004")).toBe(0);
+      expect(near(container, "v2.l005")).toBe(0);
     });
 
-    it("not under a finger: touch has no hover", () => {
-      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
-      container.querySelector('[data-level="v2.l004"]')!.dispatchEvent(pointer("pointerover", "touch"));
-      expect(pointedCode(container)).toEqual(["v2.l005"]);
+    it("lets every block go when the pointer leaves the module's field", () => {
+      const { container } = laidOut();
+      field(container).dispatchEvent(pointer("pointermove", { x: 200, y: 200 }));
+      expect(near(container, "v2.l005")).toBe(1);
+      field(container).dispatchEvent(pointer("pointerleave"));
+      expect(near(container, "v2.l005")).toBe(0);
+      expect(field(container).hasAttribute("data-pointer")).toBe(false);
     });
 
-    it("follows keyboard focus inside the strip, and returns when focus leaves it", () => {
-      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
-      container.querySelector('[data-level="v2.l004"]')!.dispatchEvent(pointer("pointerover"));
+    it("wakes nothing under a finger", () => {
+      const { container } = laidOut();
+      field(container).dispatchEvent(pointer("pointermove", { x: 75, y: 200 }, "touch"));
+      expect(near(container, "v2.l004")).toBe(0);
+      expect(field(container).hasAttribute("data-pointer")).toBe(false);
+    });
+
+    it("holds the level whose way in has the keyboard, and lets it go after", () => {
+      const { container } = laidOut();
       const go = container.querySelector("a.level-node__go") as HTMLAnchorElement;
       go.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-      expect(pointedCode(container)).toEqual(["v2.l005"]);
+      expect(near(container, "v2.l005")).toBe(1);
       go.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: document.body }));
-      expect(pointedCode(container)).toEqual(["v2.l005"]);
-    });
-  });
-
-  /* DD-352: «линия должна втекать не вниз а в блок и расходиться по нему в обе
-     стороны на моменте наведения, в момент убора курсора свечение пропадает
-     постепенно». The controller says when the panel is lit; the stylesheet runs
-     the light and fades it. */
-  describe("the panel the branch flows into is lit while the pointer holds it", () => {
-    const pointer = (type: string, pointerType = "mouse") => {
-      const event = new MouseEvent(type, { bubbles: type === "pointerover" });
-      Object.defineProperty(event, "pointerType", { value: pointerType });
-      return event;
-    };
-    const lit = (container: HTMLElement) => container.querySelector("[data-focus]")!.hasAttribute("data-lit");
-
-    it("dark at rest; lit while an opened level holds the pointer; dark again when the pointer leaves the strip", () => {
-      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
-      expect(lit(container)).toBe(false);
-      container.querySelector('[data-level="v2.l004"] .level-node__name')!.dispatchEvent(pointer("pointerover"));
-      expect(lit(container)).toBe(true);
-      // The current level holds it as well — the branch does not move, the light stays.
-      container.querySelector('[data-level="v2.l005"] .level-node__code')!.dispatchEvent(pointer("pointerover"));
-      expect(lit(container)).toBe(true);
-      container.querySelector(".level-strip")!.dispatchEvent(pointer("pointerleave"));
-      expect(lit(container)).toBe(false);
+      expect(near(container, "v2.l005")).toBe(0);
     });
 
-    it("a level that is not open lights nothing — over one the light goes out", () => {
-      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
-      container.querySelector('[data-level="v2.l005"]')!.dispatchEvent(pointer("pointerover"));
-      expect(lit(container)).toBe(true);
-      container.querySelector('[data-level="v2.l007"] .level-node__name')!.dispatchEvent(pointer("pointerover"));
-      expect(lit(container)).toBe(false);
+    it("eases from nothing to everything over the reach", () => {
+      expect(nearnessAt(0)).toBe(1);
+      expect(nearnessAt(NEAR_REACH)).toBe(0);
+      expect(nearnessAt(NEAR_REACH * 3)).toBe(0);
+      expect(nearnessAt(NEAR_REACH / 2)).toBeCloseTo(0.5, 5);
+      expect(nearnessAt(NEAR_REACH * 0.25)).toBeGreaterThan(nearnessAt(NEAR_REACH * 0.75));
     });
 
-    it("lit while the pointer rests on the panel itself", () => {
-      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
-      const panel = container.querySelector("[data-focus]")!;
-      panel.dispatchEvent(pointer("pointerenter"));
-      expect(lit(container)).toBe(true);
-      panel.dispatchEvent(pointer("pointerleave"));
-      expect(lit(container)).toBe(false);
-    });
-
-    it("never under a finger", () => {
-      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
-      container.querySelector('[data-level="v2.l004"]')!.dispatchEvent(pointer("pointerover", "touch"));
-      container.querySelector("[data-focus]")!.dispatchEvent(pointer("pointerenter", "touch"));
-      expect(lit(container)).toBe(false);
-    });
-
-    it("lit while the keyboard is on an opened level's way in, dark when it leaves the strip", () => {
-      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
-      const go = container.querySelector("a.level-node__go") as HTMLAnchorElement;
-      go.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-      expect(lit(container)).toBe(true);
-      go.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: document.body }));
-      expect(lit(container)).toBe(false);
-    });
-
-    it("its light glides with the branch", () => {
-      const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
-      container.querySelector('[data-level="v2.l004"]')!.dispatchEvent(pointer("pointerover"));
-      expect(container.querySelector("[data-flow]")!.hasAttribute("data-glide")).toBe(true);
-      expect(container.querySelector("[data-leader]")!.hasAttribute("data-glide")).toBe(true);
-    });
-
-    it("the stylesheet lights it at once and lets it go slowly, and keeps it dark without a branch", () => {
+    it("the stylesheet lights the branch and the outline from where it enters, and lets them go slowly", () => {
       const css = readFileSync(join(process.cwd(), "src/features/path-fidelity/path-hifi.css"), "utf8").replace(
         /\/\*[\s\S]*?\*\//g,
         "",
       );
       const fade = Number(/--flow-fade:\s*(\d+)ms/.exec(css)?.[1]);
       expect(fade).toBeGreaterThanOrEqual(600);
-      expect(css).toMatch(/\.focus\[data-lit\] \.focus__flow::before \{[^}]*opacity: 1;[^}]*transition:\s*opacity 200ms/);
-      expect(css).toMatch(/\.focus__flow::before \{[^}]*transition:\s*opacity var\(--flow-fade\)/);
-      // At rest the branch still spills into the edge — inside the panel's own border, never past its corner.
-      expect(css).toMatch(/\.focus__flow::after \{\s*background: radial-gradient\([^)]*at var\(--flow-x\) 0/);
-      expect(css).toContain(".focus__leader[hidden] ~ .focus__flow");
-      // No joint where the branch meets the panel: it flows into the edge.
-      expect(css).not.toMatch(/\.focus__leader::after[^{]*\{[^}]*border-radius: 50%/);
+      // The nearness fades out slowly; while the pointer moves over the field it follows at once.
+      expect(css).toMatch(/\.level-node--open \{[^}]*transition: --near var\(--flow-fade\)/);
+      expect(css).toMatch(/\.workspace\[data-pointer\] \.level-node--open \{\s*transition: --near 140ms/);
+      // The outline is lit from the branch's entry (22px in, on the top edge) and grows with nearness.
+      expect(css).toMatch(/\.level-node__block::after \{[^}]*radial-gradient\(\s*calc\(var\(--near\) \* 140%\) calc\(var\(--near\) \* 110%\) at 22px 0/);
+      // The branch ends at the block's top edge: 23px (the mark's foot) + 17px = 40px, where the block starts.
+      expect(css).toMatch(/\.level-node__stem \{[^}]*top: 23px;[^}]*height: 17px;/);
+      expect(css).toMatch(/\.level-node__block \{[^}]*inset: 40px 8px 0 0;/);
+      // Nothing of the old line into the panel is left.
+      expect(css).not.toMatch(/focus__leader|focus__flow|data-lit|data-glide/);
     });
   });
 });
