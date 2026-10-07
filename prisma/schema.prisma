@@ -5559,7 +5559,7 @@ model ToolEntryCheck {
   minPayoutPercent Int?
   /// The version of the fixed item list the answers belong to.
   listVersion      Int      @default(1)
-  /// Nine characters, "1" = the learner confirmed the item.
+  /// One character per item of that list version, "1" = the learner confirmed the item.
   answers          String
   /// enter | skip_stop | skip_condition — written by the server from the answers.
   verdict          String

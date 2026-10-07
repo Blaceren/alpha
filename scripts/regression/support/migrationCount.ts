@@ -19,6 +19,13 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  *
+ * ENTRY CHECKLIST, THE SECOND LIST: 63 -> 64. One migration,
+ * `20261007180000_entry_checklist_seven`: the ToolEntryCheck table rebuilt
+ * with constraints that know both lists — listVersion 1 with nine answers and
+ * listVersion 2 with seven — every row copied as it was, the index recreated.
+ * A Backend built before it writes version 1, which the new constraints allow.
+ * Bumped in the same commit.
+ *
  * TWO LIVE SESSIONS: 62 -> 63. One migration,
  * `20261007120000_two_live_sessions`: three columns on UserSession (slot with
  * a default and a CHECK, userAgent and lastSeenAt nullable) and the partial
@@ -181,7 +188,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 63;
+export const EXPECTED_MIGRATION_COUNT = 64;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;
