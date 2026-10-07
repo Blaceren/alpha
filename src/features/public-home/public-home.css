@@ -5393,6 +5393,28 @@ html.ph-smooth-scroll {
     container-type: inline-size;
   }
 
+  /* What the rail is for, said above it (2026-10-07, the owner: «было понятно
+     … что можно выбрать уровень и посмотреть превью»). */
+  .ph .trail__hint {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0 0 14px;
+    color: var(--text-on-dark);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .ph .trail__hint::before {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--signal-400);
+    box-shadow: 0 0 10px rgba(199, 247, 109, 0.6);
+    content: "";
+  }
+
   .ph .trail {
     position: relative;
     display: grid;
@@ -5429,23 +5451,35 @@ html.ph-smooth-scroll {
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Every level is a button and looks like one (2026-10-07, the owner:
+     «кружки с номером уровня нужно подсветить что бы интуитивно было понятно
+     что можно по ним нажимать»): a lit Signal ring with a soft glow, a faint
+     light inside, the number in full white; a press pushes it in. */
   .ph .trail__num {
     position: relative;
     z-index: 1;
     display: grid;
     width: 44px;
     height: 44px;
-    border: 1px solid rgba(243, 244, 239, 0.22);
+    border: 1.5px solid rgba(199, 247, 109, 0.5);
     border-radius: 50%;
-    background: var(--ink-950);
-    color: var(--text-on-dark-muted);
+    background:
+      radial-gradient(circle at 50% 35%, rgba(199, 247, 109, 0.14), rgba(199, 247, 109, 0.03) 70%),
+      var(--ink-950);
+    box-shadow: 0 0 14px rgba(199, 247, 109, 0.16);
+    color: var(--text-on-dark);
     font-size: 12px;
     letter-spacing: 0.02em;
     place-items: center;
     transition:
       background-color 240ms var(--ease),
       border-color 240ms var(--ease),
-      color 240ms var(--ease);
+      color 240ms var(--ease),
+      transform 120ms var(--ease);
+  }
+
+  .ph .trail__button:active .trail__num {
+    transform: scale(0.93);
   }
 
   .ph .trail__step.is-reached .trail__num {
@@ -5482,6 +5516,11 @@ html.ph-smooth-scroll {
 
   .ph .trail__note strong {
     color: var(--text-on-dark);
+    font-weight: 600;
+  }
+
+  .ph .trail__lvl {
+    color: var(--signal-400);
     font-weight: 600;
   }
 

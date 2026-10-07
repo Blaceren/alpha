@@ -140,13 +140,17 @@ export function ProductRoute() {
   }, [active]);
 
   // The deck: the card on show is the one whose start is nearest the deck's
-  // own start (its padding), read once per frame while it scrolls.
+  // own start (its padding) — read once the deck comes to rest, not on every
+  // frame of a swipe or of a press's glide (2026-10-07, the owner: «во время
+  // переключения название инструмента пропадает и появляется»). Read per frame,
+  // the rail named every card the deck slid past, stepped back to the first
+  // before a press's glide began, and lit each passing card up and down.
   useEffect(() => {
     const deck = deckRef.current;
     if (!deck) return;
-    let frame = 0;
-    const read = () => {
-      frame = 0;
+    let timer = 0;
+    const settle = () => {
+      timer = 0;
       const start = deck.getBoundingClientRect().left + (parseFloat(getComputedStyle(deck).paddingLeft) || 0);
       let best = 0;
       let distance = Number.POSITIVE_INFINITY;
@@ -159,13 +163,22 @@ export function ProductRoute() {
       });
       setTool(best);
     };
+    // A scroll that has gone quiet for a moment has ended — the fallback for a
+    // browser without `scrollend`.
     const onScroll = () => {
-      if (!frame) frame = window.requestAnimationFrame(read);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(settle, 120);
+    };
+    const onScrollEnd = () => {
+      window.clearTimeout(timer);
+      settle();
     };
     deck.addEventListener("scroll", onScroll, { passive: true });
+    deck.addEventListener("scrollend", onScrollEnd);
     return () => {
       deck.removeEventListener("scroll", onScroll);
-      if (frame) window.cancelAnimationFrame(frame);
+      deck.removeEventListener("scrollend", onScrollEnd);
+      window.clearTimeout(timer);
     };
   }, []);
 
@@ -325,8 +338,13 @@ export function ProductRoute() {
               </p>
             </div>
             {/* The deck's rail — narrow screens only (CSS): the levels the six
-                tools open on, lit up to the card on show. */}
+                tools open on, lit up to the card on show. It says what it is
+                for (2026-10-07, the owner: «было понятно что тут рассказываем
+                про инструменты, показываем что они открываются на определенном
+                уровне и можно выбрать уровень и посмотреть превью»), and its
+                levels look like what they are — buttons. */}
             <div className="tdeck__rail">
+              <p className="trail__hint">Нажмите на уровень, чтобы посмотреть превью инструмента</p>
               <ol
                 className="trail"
                 aria-label="Инструменты по уровням открытия"
@@ -354,7 +372,8 @@ export function ProductRoute() {
               </ol>
               <p className="trail__note">
                 <span>
-                  <strong>{shownTool.name}</strong> — открывается на уровне {shownTool.level}
+                  <strong>{shownTool.name}</strong> — открывается на уровне{" "}
+                  <b className="trail__lvl">{shownTool.level}</b>
                 </span>
                 <span className="trail__count pw-mono">
                   {tool + 1} / {TOOL_STEPS.length}

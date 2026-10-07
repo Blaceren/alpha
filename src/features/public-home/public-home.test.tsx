@@ -1067,6 +1067,65 @@ describe("Public Home — the phone composition (DD-342)", () => {
     expect(deck.querySelector(":scope > .is-shown")?.id).toBe(buttons[2]!.getAttribute("aria-controls"));
   });
 
+  /* 2026-10-07, the owner: «Баг во время переключения название инструмента
+     пропадает и появляется … кружки с номером уровня нужно подсветить … было
+     понятно … что можно выбрать уровень и посмотреть превью». */
+  it("says what the rail is for, above it", () => {
+    const { rail } = mountDeck();
+    const hint = rail.querySelector(".trail__hint");
+    expect(hint?.textContent).toBe("Нажмите на уровень, чтобы посмотреть превью инструмента");
+    expect(rail.firstElementChild).toBe(hint);
+  });
+
+  it("names a tool once — at the press, and when the deck comes to rest — never every card it slides past", () => {
+    vi.useFakeTimers();
+    try {
+      const { buttons, rail, deck } = mountDeck();
+      const cards = Array.from(deck.children) as HTMLElement[];
+      // Lay the deck out with the card `at` at its start.
+      const layOut = (at: number) =>
+        cards.forEach((card, index) => {
+          card.getBoundingClientRect = () => ({ left: (index - at) * 300, top: 0, right: (index - at) * 300 + 280, bottom: 500, width: 280, height: 500, x: (index - at) * 300, y: 0, toJSON() {} }) as DOMRect;
+        });
+      const note = () => rail.querySelector(".trail__note strong")?.textContent;
+      // The tool each rail button names, in rail order.
+      const TOOL_STEPS_NAMES = () => buttons.map((b) => (b.getAttribute("aria-label") ?? "").split(",")[0]);
+
+      layOut(0);
+      fireEvent.click(buttons[4]!);
+      expect(note()).toBe(TOOL_STEPS_NAMES()[4]);
+      // The glide passes the cards between: the rail keeps the pressed tool.
+      for (const at of [1, 2, 3]) {
+        layOut(at);
+        fireEvent.scroll(deck);
+        vi.advanceTimersByTime(16);
+        expect(note()).toBe(TOOL_STEPS_NAMES()[4]);
+      }
+      layOut(4);
+      fireEvent.scroll(deck);
+      vi.advanceTimersByTime(200);
+      expect(note()).toBe(TOOL_STEPS_NAMES()[4]);
+
+      // A swipe back to the second card: named when the deck comes to rest.
+      layOut(2);
+      fireEvent.scroll(deck);
+      vi.advanceTimersByTime(60);
+      expect(note()).toBe(TOOL_STEPS_NAMES()[4]);
+      layOut(1);
+      fireEvent(deck, new Event("scrollend"));
+      expect(note()).toBe(TOOL_STEPS_NAMES()[1]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("draws every level as a button: a lit ring, a glow, and a press that pushes it in", () => {
+    const narrow = media("max-width: 920px");
+    expect(narrow).toMatch(/\.ph \.trail__num \{[^}]*border: 1\.5px solid rgba\(199, 247, 109, 0\.5\)[^}]*box-shadow: 0 0 14px/);
+    expect(narrow).toMatch(/\.ph \.trail__button:active \.trail__num \{\s*transform: scale\(0\.93\);/);
+    expect(narrow).toMatch(/\.ph \.trail__hint \{[^}]*display: flex/);
+  });
+
   it("a tool's title in the deck brings its card sideways and leaves the page where it is", () => {
     const { deck, buttons, scrollTo } = mountDeck();
     const scrollIntoView = vi.fn();
