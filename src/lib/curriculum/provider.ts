@@ -19,6 +19,7 @@ import {
   toAcademyCurriculumView,
 } from "@/lib/curriculum/view-model";
 import { makeReadError, type CurriculumReadError } from "@/lib/curriculum/read-errors";
+import { mediaIsCrossOrigin } from "@/server/media/delivery";
 import type {
   AcademyCurriculumView,
   AcademyLevelDetail,
@@ -79,9 +80,19 @@ async function apiLevelDetail(levelCode: string, locale: string): Promise<LevelD
       : mapLevelContent(null, contentResult.reason === "feature_disabled" ? "unavailable" : contentResult.reason);
   }
 
-  const detail = buildLevelDetail(view, levelCode, content);
+  const detail = withMediaDelivery(buildLevelDetail(view, levelCode, content));
   if (!detail) return { ok: false, error: makeReadError("LEVEL_NOT_FOUND") };
   return { ok: true, detail, view };
+}
+
+/**
+ * The lesson's media as this deployment serves it (2026-10-07): from the CDN
+ * the `<video>` must ask with CORS for its captions to load, and only the
+ * server knows which deployment this is. The address itself does not change.
+ */
+function withMediaDelivery(detail: AcademyLevelDetail | null): AcademyLevelDetail | null {
+  if (!detail?.content.media || !mediaIsCrossOrigin()) return detail;
+  return { ...detail, content: { ...detail.content, media: { ...detail.content.media, crossOrigin: "anonymous" } } };
 }
 
 /* ----------------------------- fixture mode ----------------------------- */

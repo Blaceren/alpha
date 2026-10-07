@@ -214,6 +214,7 @@ export function LessonMedia({
         markers={line.points}
         resumeFrom={reading && reading.positionSeconds > 0 ? reading.positionSeconds : null}
         dockable
+        crossOrigin={media.crossOrigin}
         onPositionSave={reading?.save && levelCode ? (seconds) => void savePosition(seconds) : undefined}
         captions={media.captions.map((track) => ({
           src: track.src,

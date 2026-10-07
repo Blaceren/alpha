@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { resetMediaDeliveryForTests } from "@/server/media/delivery";
 import { GET, HEAD } from "./route";
 
 let root: string;
@@ -16,6 +17,9 @@ beforeEach(() => {
 });
 afterEach(() => {
   process.env.ATA_MEDIA_ROOT = saved;
+  delete process.env.ATA_MEDIA_DELIVERY;
+  delete process.env.ATA_MEDIA_CDN_ORIGIN;
+  resetMediaDeliveryForTests();
   fs.rmSync(root, { recursive: true, force: true });
 });
 const call = (name: string, init?: RequestInit) =>
@@ -53,5 +57,22 @@ describe("/film/<name>", () => {
     }
     process.env.ATA_MEDIA_ROOT = "";
     expect((await call("hero.mp4")).status).toBe(404);
+  });
+});
+
+/* 2026-10-07: on the CDN the film's names answer a redirect to their public address. */
+describe("/film/<name> on the CDN", () => {
+  it("redirects a known name to the CDN and refuses the rest, with no file on this host", async () => {
+    process.env.ATA_MEDIA_DELIVERY = "cdn";
+    process.env.ATA_MEDIA_CDN_ORIGIN = "https://d1abc.cloudfront.net";
+    process.env.ATA_MEDIA_ROOT = "";
+    resetMediaDeliveryForTests();
+    const res = await call("hero.mp4");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("https://d1abc.cloudfront.net/public/film/hero.mp4");
+    expect(res.headers.get("cache-control")).toBe("public, max-age=60");
+    expect((await call("hero.vtt")).status).toBe(302);
+    expect((await call("anything.txt")).status).toBe(404);
+    expect((await call("../hero.mp4")).status).toBe(404);
   });
 });

@@ -592,6 +592,13 @@ describe("the authenticated route group", () => {
   "src/lib/auth/login-outcome.ts",
   "src/lib/navigation/hard-replace.ts",
   "src/server/proxy/cross-site.ts",
+  /* Media on Amazon CloudFront (owner 2026-10-07: «подготовь продукт к работе с
+     amazon cdn видео уроков и на главной лежат на нем»): where this deployment
+     serves a lesson's files and the film from, and the Academy's own signer for
+     a lesson's CloudFront links. The addresses the rows and the pages use do
+     not change; the routes answer them with a redirect in `cdn` delivery. */
+  "src/server/media/cloudfront-signing.ts",
+  "src/server/media/delivery.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {

@@ -1,14 +1,17 @@
 import fs from "node:fs";
 import { Readable } from "node:stream";
 import { parseRangeHeader } from "@/server/media/lesson-media-file";
-import { locatePublicFilmFile } from "@/server/media/public-film";
+import { locatePublicFilmFile, PUBLIC_FILM_FILES } from "@/server/media/public-film";
+import { mediaDelivery, PUBLIC_FILM_CDN_FOLDER } from "@/server/media/delivery";
 
 /**
  * `/film/<name>` — the public home's film, its poster and its captions
  * (2026-10-04). Public by design: it is the first thing a visitor may watch.
  * Only the fixed names in `public-film.ts` are served, from one folder of the
  * media directory, with byte ranges so a player can seek; every other request
- * is not found.
+ * is not found. On the CDN (2026-10-07) the same names answer a redirect to
+ * their public CloudFront address — the page itself links the CDN directly;
+ * this keeps an older address working.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,6 +24,17 @@ const NOT_FOUND = () =>
 
 async function serve(request: Request, params: Promise<{ name?: string }>, headOnly: boolean): Promise<Response> {
   const name = (await params).name ?? "";
+  const delivery = mediaDelivery();
+  if (delivery.mode === "cdn") {
+    if (!Object.prototype.hasOwnProperty.call(PUBLIC_FILM_FILES, name)) return NOT_FOUND();
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: `${delivery.origin}/${PUBLIC_FILM_CDN_FOLDER}/${name}`,
+        "cache-control": "public, max-age=60",
+      },
+    });
+  }
   const located = await locatePublicFilmFile(name);
   if (!located) return NOT_FOUND();
 

@@ -194,6 +194,8 @@ export type AcademyLessonMedia = {
   poster: string | null;
   durationSeconds: number | null;
   captions: ReadonlyArray<{ src: string; srcLang: string; label: string }>;
+  /** Set by the server when the deployment serves media from another origin (the CDN). */
+  crossOrigin?: "anonymous";
   /**
    * The lesson line's points: where the answer to each question of the level's
    * test is taught. Empty for a lesson without a test, or a Backend that does

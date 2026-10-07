@@ -1,0 +1,218 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Alpha Trade Academy - media on S3 behind CloudFront (2026-10-07). One private bucket, one
+  distribution with two behaviours: /lessons/* needs a CloudFront signed URL made by the Academy
+  with the key of the key group below, /public/* is open (the film on the home page). CORS answers
+  the Academy's origin so a <video crossorigin="anonymous"> can load captions. Nothing here is
+  specific to PREPROD or PROD: one stack per environment, with its own bucket name, key and origin.
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [preprod, prod]
+    Description: Which environment this stack serves (used in names only).
+  BucketName:
+    Type: String
+    AllowedPattern: "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+    Description: The private bucket that holds lessons/... and public/film/... (created by this stack).
+  AcademyOrigin:
+    Type: String
+    AllowedPattern: "^https://[A-Za-z0-9.-]+$"
+    Description: The Academy's origin, e.g. https://preprod.alfatrade.media - the one origin CORS answers.
+  SigningPublicKeyPem:
+    Type: String
+    NoEcho: false
+    Description: >-
+      The PUBLIC half of the Academy's signing key, PEM (-----BEGIN PUBLIC KEY----- ...). The private
+      half stays on the Academy host as ATA_MEDIA_CDN_PRIVATE_KEY_FILE and never enters AWS.
+  VideoHostName:
+    Type: String
+    Default: ""
+    Description: Optional alternate domain for the distribution, e.g. video.alfatrade.media (needs the certificate below).
+  VideoCertificateArn:
+    Type: String
+    Default: ""
+    Description: ACM certificate ARN in us-east-1 for VideoHostName; empty when no alternate domain is used.
+
+Conditions:
+  HasAlias: !Not [!Equals [!Ref VideoHostName, ""]]
+
+Resources:
+  MediaBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      Tags:
+        - Key: ata:environment
+          Value: !Ref Environment
+
+  # Only this distribution may read the bucket (origin access control, always signed).
+  MediaBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MediaBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${MediaBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${MediaDistribution}"
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "ata-${Environment}-media-oac"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # The Academy's signing key, as CloudFront knows it. ATA_MEDIA_CDN_KEY_PAIR_ID is this key's id.
+  SigningPublicKey:
+    Type: AWS::CloudFront::PublicKey
+    Properties:
+      PublicKeyConfig:
+        Name: !Sub "ata-${Environment}-media-signing"
+        CallerReference: !Sub "ata-${Environment}-media-signing-1"
+        EncodedKey: !Ref SigningPublicKeyPem
+        Comment: The Academy signs lesson links with the private half of this key.
+
+  SigningKeyGroup:
+    Type: AWS::CloudFront::KeyGroup
+    Properties:
+      KeyGroupConfig:
+        Name: !Sub "ata-${Environment}-media-signers"
+        Items:
+          - !Ref SigningPublicKey
+
+  # CORS for the one origin that plays the files; the rest of the headers are the usual hardening.
+  MediaResponseHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub "ata-${Environment}-media-headers"
+        CorsConfig:
+          AccessControlAllowCredentials: false
+          AccessControlAllowHeaders:
+            Items: ["Range", "Origin", "Accept", "Accept-Encoding"]
+          AccessControlAllowMethods:
+            Items: [GET, HEAD, OPTIONS]
+          AccessControlAllowOrigins:
+            Items: [!Ref AcademyOrigin]
+          AccessControlExposeHeaders:
+            Items: ["Content-Length", "Content-Range", "Accept-Ranges", "ETag"]
+          AccessControlMaxAgeSec: 600
+          OriginOverride: true
+        SecurityHeadersConfig:
+          ContentTypeOptions:
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: false
+            Override: false
+
+  # No query string, cookie or header in the cache key: every learner shares one cached copy of a file
+  # (CloudFront strips the signature parameters itself before they reach the origin).
+  MediaCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub "ata-${Environment}-media-cache"
+        DefaultTTL: 86400
+        MaxTTL: 31536000
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingGzip: false
+          EnableAcceptEncodingBrotli: false
+          CookiesConfig:
+            CookieBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+
+  MediaDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "ATA ${Environment} media: lessons (signed) and the public film"
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        Aliases: !If [HasAlias, [!Ref VideoHostName], !Ref "AWS::NoValue"]
+        ViewerCertificate: !If
+          - HasAlias
+          - AcmCertificateArn: !Ref VideoCertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+        Origins:
+          - Id: media-bucket
+            DomainName: !GetAtt MediaBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        DefaultCacheBehavior:
+          # Anything outside the two areas is refused: no default-open path exists.
+          TargetOriginId: media-bucket
+          ViewerProtocolPolicy: https-only
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: false
+          CachePolicyId: !Ref MediaCachePolicy
+          ResponseHeadersPolicyId: !Ref MediaResponseHeadersPolicy
+          TrustedKeyGroups:
+            - !Ref SigningKeyGroup
+        CacheBehaviors:
+          - PathPattern: "public/*"
+            TargetOriginId: media-bucket
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            Compress: false
+            CachePolicyId: !Ref MediaCachePolicy
+            ResponseHeadersPolicyId: !Ref MediaResponseHeadersPolicy
+          - PathPattern: "lessons/*"
+            TargetOriginId: media-bucket
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            Compress: false
+            CachePolicyId: !Ref MediaCachePolicy
+            ResponseHeadersPolicyId: !Ref MediaResponseHeadersPolicy
+            TrustedKeyGroups:
+              - !Ref SigningKeyGroup
+
+Outputs:
+  DistributionDomainName:
+    Description: ATA_MEDIA_CDN_ORIGIN is https:// plus this (or the alternate domain).
+    Value: !GetAtt MediaDistribution.DomainName
+  SigningKeyPairId:
+    Description: ATA_MEDIA_CDN_KEY_PAIR_ID.
+    Value: !Ref SigningPublicKey
+  BucketNameOut:
+    Description: --bucket for scripts/ops/syncMediaToS3.ts.
+    Value: !Ref MediaBucket

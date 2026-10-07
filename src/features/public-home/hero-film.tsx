@@ -44,6 +44,7 @@ export function HeroFilm({ film }: { film: PublicFilm | null }) {
             aspectRatio="16 / 9"
             autoPlay
             endedEyebrow="Фильм просмотрен"
+            crossOrigin={film.crossOrigin}
             className="hfilm__player"
           />
         ) : (

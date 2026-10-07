@@ -126,6 +126,11 @@ export interface AcademyVideoPlayerProps {
   endedAction?: { label: string; href: string };
   /** What the ended screen says above the title. A lesson's is «Урок просмотрен»; a film's is not a lesson. */
   endedEyebrow?: string;
+  /**
+   * Set when the file comes from another origin (the CDN, 2026-10-07): the
+   * element then asks with CORS, which is what lets its captions load.
+   */
+  crossOrigin?: "anonymous";
   /** The points of the lesson line. */
   markers?: AcademyVideoMarker[];
   /** Where the learner stopped last time, in seconds; offered as «Продолжить с …». */
@@ -343,6 +348,7 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
       fit = "contain",
       endedAction,
       endedEyebrow = "Урок просмотрен",
+      crossOrigin,
       markers = [],
       resumeFrom = null,
       dockable = false,
@@ -1300,6 +1306,7 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
             poster={poster}
             preload="metadata"
             playsInline
+            crossOrigin={crossOrigin}
             autoPlay={autoPlay}
             controls={false}
             onPlay={handlePlay}
