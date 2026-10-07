@@ -583,11 +583,6 @@ describe("the authenticated route group", () => {
   "src/features/profile-fidelity/profile-sessions.tsx",
   "src/server/proxy/backend-proxy.ts",
   "src/server/proxy/sessions-proxy.ts",
-  /* Public Home's header stays put (DD-357, owner 2026-10-07: «шапка слишком
-     резко меняется»): the page's controller writes how far the page has
-     scrolled over its first 80px, which brings the blur behind the header in
-     gradually. Nothing of the signed-in group moved. */
-  "src/features/public-home/public-home-effects.tsx",
 ];
 
   it("has brought no loading boundary back since the release", () => {

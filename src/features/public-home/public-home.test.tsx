@@ -1178,36 +1178,44 @@ describe("Public Home — the phone composition (DD-342)", () => {
 });
 
 
-/* 2026-10-07, the owner: «шапка слишком резко меняется и привлекает внимание после,
-   выделяется, сделай более органично и менее привлекающей». */
-describe("the header stays put while the page scrolls", () => {
+/* 2026-10-07, the owner, after a blur behind the header was tried and taken back:
+   «на компьютерной версии вообще откати до того как было, а на мобильной убери
+   размытие и оставь так как было просто без перехода из белого в черный пусть
+   она просто висит». */
+describe("the header while the page scrolls", () => {
   const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
     /\/\*[\s\S]*?\*\//g,
     "",
   );
 
-  it("brings the blur behind it in with the first 80px of scroll — never all at once", async () => {
-    const { container } = render(<PublicHomeScreen authenticated={false} />);
-    const header = container.querySelector("[data-header]") as HTMLElement;
-    expect(header.style.getPropertyValue("--ph-shade")).toBe("0.000");
-    const scrollTo = async (y: number) => {
-      Object.defineProperty(window, "scrollY", { configurable: true, value: y });
-      fireEvent.scroll(window);
-      await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
-    };
-    await scrollTo(20);
-    expect(header.style.getPropertyValue("--ph-shade")).toBe("0.250");
-    await scrollTo(60);
-    expect(header.style.getPropertyValue("--ph-shade")).toBe("0.750");
-    await scrollTo(400);
-    expect(header.style.getPropertyValue("--ph-shade")).toBe("1.000");
-    await scrollTo(0);
-    expect(header.style.getPropertyValue("--ph-shade")).toBe("0.000");
+  it("on a computer tightens past the first scroll exactly as it did before the blur", () => {
+    expect(css).toMatch(
+      /\n\.ph \.site-header\.is-compact \.site-header__inner \{\s*min-height: 56px;\s*padding-top: 5px;\s*padding-bottom: 5px;\s*background: rgba\(11, 13, 10, 0\.96\);\s*box-shadow: var\(--shadow-low\);\s*\}/,
+    );
+    expect(css).toMatch(/\n\.ph \.site-header\.is-compact \.wordmark \{\s*width: 62px;\s*\}/);
   });
 
-  it("neither moves nor resizes the pill, and lays no band of its own colour", () => {
-    expect(css).not.toMatch(/\.is-compact/);
-    expect(css).toMatch(/\.ph \.site-header::before \{[^}]*backdrop-filter: blur\(14px\)[^}]*opacity: var\(--ph-shade, 0\)/);
-    expect(css).not.toMatch(/\.ph \.site-header::before \{[^}]*background/);
+  it("on a phone and a tablet keeps the size and the material it has at the top", () => {
+    // The pill at the top of the page: 66px, 9px above and below, 0.91 and the high shadow, a 72px
+    // wordmark; on a phone 56px, 7px and a 56px wordmark. The compact state restates exactly these.
+    expect(css).toMatch(
+      /\n\.ph \.site-header__inner \{[^}]*min-height: 66px;[^}]*padding: 9px 14px 9px 22px;[^}]*background: rgba\(11, 13, 10, 0\.91\);\s*box-shadow: var\(--shadow-high\);/,
+    );
+    expect(css).toMatch(/\n\.ph \.wordmark \{[^}]*width: 72px;/);
+    expect(css).toMatch(
+      /@media \(max-width: 680px\) \{[^@]*\.ph \.site-header__inner \{[^}]*min-height: 56px;\s*padding: 7px 9px 7px 14px;[^}]*\}\s*\.ph \.wordmark \{\s*width: 56px;\s*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 1040px\) \{\s*\.ph \.site-header\.is-compact \.site-header__inner \{\s*min-height: 66px;\s*padding-top: 9px;\s*padding-bottom: 9px;\s*background: rgba\(11, 13, 10, 0\.91\);\s*box-shadow: var\(--shadow-high\);\s*\}\s*\.ph \.site-header\.is-compact \.wordmark \{\s*width: 72px;\s*\}\s*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 680px\) \{\s*\.ph \.site-header\.is-compact \.site-header__inner \{\s*min-height: 56px;\s*padding-top: 7px;\s*padding-bottom: 7px;\s*\}\s*\.ph \.site-header\.is-compact \.wordmark \{\s*width: 56px;\s*\}\s*\}/,
+    );
+  });
+
+  it("never moves the header itself, puts a band of the light ground around it or blurs what is behind it", () => {
+    expect(css).not.toMatch(/\.site-header\.is-compact \{/);
+    expect(css).not.toMatch(/\.site-header::before/);
+    expect(css).not.toMatch(/--ph-shade/);
   });
 });

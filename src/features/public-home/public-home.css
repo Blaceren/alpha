@@ -2136,36 +2136,31 @@ html.ph-smooth-scroll {
   line-height: 1.55;
 }
 
-/* THE HEADER STAYS PUT (2026-10-07, the owner: «шапка слишком резко меняется и
-   привлекает внимание после, выделяется, сделай более органично и менее
-   привлекающей»). It used to change at 32px of scroll: the pill got denser and
-   darker, and on a phone or a tablet it jumped to the top edge inside a band of
-   the page's light ground. Now the pill keeps its place and its size at every
-   scroll. What passes behind and around it is softly blurred instead — no fill
-   of its own, so the band takes the colour of whichever section is under it —
-   coming in over the first 80px of scroll (`--ph-shade`, 0–1, set by the page's
-   controller) and fading out at its lower edge. */
-.ph .site-header::before {
-  position: absolute;
-  z-index: -1;
-  top: -14px;
-  right: 0;
-  left: 0;
-  height: calc(100% + 32px);
-  -webkit-backdrop-filter: blur(14px) saturate(1.1);
-  backdrop-filter: blur(14px) saturate(1.1);
-  -webkit-mask-image: linear-gradient(to bottom, #000 68%, transparent);
-  mask-image: linear-gradient(to bottom, #000 68%, transparent);
-  opacity: var(--ph-shade, 0);
-  pointer-events: none;
-  content: "";
+/* Compact header. The controller has always toggled `is-compact` past 32px
+   of scroll and the frozen sheet never styled it. The pill gets denser and a
+   little shorter; every target keeps 44px. */
+.ph .site-header__inner {
+  transition:
+    min-height 220ms var(--ease),
+    padding 220ms var(--ease),
+    background-color 220ms var(--ease),
+    box-shadow 220ms var(--ease);
 }
 
-@media (max-width: 1040px) {
-  .ph .site-header::before {
-    top: -8px;
-    height: calc(100% + 24px);
-  }
+.ph .wordmark {
+  transition: width 220ms var(--ease);
+}
+
+.ph .site-header.is-compact .site-header__inner {
+  min-height: 56px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  background: rgba(11, 13, 10, 0.96);
+  box-shadow: var(--shadow-low);
+}
+
+.ph .site-header.is-compact .wordmark {
+  width: 62px;
 }
 
 /* =========================================================================
@@ -5063,9 +5058,37 @@ html.ph-smooth-scroll {
   }
 }
 
-/* (The header on a phone and a tablet no longer moves to the top edge inside
-   a band of the light ground once the page scrolls — 2026-10-07, see «THE
-   HEADER STAYS PUT»: what passes behind it is blurred instead.) */
+/* The header on a phone and a tablet just floats where it is at the top of the
+   page, whatever the scroll (2026-10-07, the owner: «на мобильной … без
+   перехода из белого в черный пусть она просто висит»). Until then, once the
+   page scrolled, it jumped to the top edge inside a band of the page's light
+   ground, and its pill grew denser. The compact pill above stays a computer's
+   only: here it keeps the size and the material it has at the top. */
+@media (max-width: 1040px) {
+  .ph .site-header.is-compact .site-header__inner {
+    min-height: 66px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+    background: rgba(11, 13, 10, 0.91);
+    box-shadow: var(--shadow-high);
+  }
+
+  .ph .site-header.is-compact .wordmark {
+    width: 72px;
+  }
+}
+
+@media (max-width: 680px) {
+  .ph .site-header.is-compact .site-header__inner {
+    min-height: 56px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  .ph .site-header.is-compact .wordmark {
+    width: 56px;
+  }
+}
 
 /* Targets and type a phone can use: the route's step titles reach 44px at
    every size (42 at the phone's line height); «Войти» reads at the size of
