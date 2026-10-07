@@ -453,11 +453,9 @@ describe("the authenticated route group", () => {
   "src/features/auth-home-fidelity/home-overview.tsx",
   "src/features/auth-home-fidelity/home-program-line.tsx",
   "src/features/profile-fidelity/local-day.tsx",
-  "src/features/profile-fidelity/profile-exit.tsx",
   "src/features/profile-fidelity/profile-hifi.css",
   "src/features/profile-fidelity/profile-passport.tsx",
   "src/features/profile-fidelity/profile-record.ts",
-  "src/features/profile-fidelity/profile-support-card.tsx",
   "src/features/profile-fidelity/profile-tabs.tsx",
   "src/features/support/components/support-hub.tsx",
   "src/lib/curriculum/program-points.ts",
@@ -569,6 +567,38 @@ describe("the authenticated route group", () => {
   "src/app/film/[name]/route.ts",
   "src/features/public-home/hero-film.tsx",
   "src/server/media/public-film.ts",
+  /* The bell's window (DD-349, owner 2026-10-06): the bell opens a small window
+     in place, and the learner can clear their list — a named proxy operation. */
+  "src/app/api/backend/notifications/clear-all/route.ts",
+  "src/components/shell/notifications-bell.tsx",
+  "src/components/shell/notifications-popover.tsx",
+  "src/components/shell/notifications-popover.css",
+  /* Two sessions per account (DD-354, owner 2026-10-07): the profile lists the
+     account's live sessions and closes the other one — a named proxy pair with
+     one validated id; sign-in operations forward the browser's own description
+     so the list can name the device. «Сеанс» (profile-exit.tsx) became
+     «Сеансы» (profile-sessions.tsx). */
+  "src/app/api/backend/auth/sessions/route.ts",
+  "src/app/api/backend/auth/sessions/[id]/close/route.ts",
+  "src/features/profile-fidelity/profile-sessions.tsx",
+  "src/server/proxy/backend-proxy.ts",
+  "src/server/proxy/sessions-proxy.ts",
+  /* The sign-in and session audit (owner 2026-10-07: «проверь какие
+     потенциально баги могут быть в нашей системе логина/сессий и устрани их»):
+     «Выйти» leaves with a full load, so no page of the account stays in memory;
+     a challenge whose answer was lost is renewed; the proxy refuses an account
+     operation another site's page submitted. */
+  "src/features/auth/session-provider.tsx",
+  "src/lib/auth/login-outcome.ts",
+  "src/lib/navigation/hard-replace.ts",
+  "src/server/proxy/cross-site.ts",
+  /* Media on Amazon CloudFront (owner 2026-10-07: «подготовь продукт к работе с
+     amazon cdn видео уроков и на главной лежат на нем»): where this deployment
+     serves a lesson's files and the film from, and the Academy's own signer for
+     a lesson's CloudFront links. The addresses the rows and the pages use do
+     not change; the routes answer them with a redirect in `cdn` delivery. */
+  "src/server/media/cloudfront-signing.ts",
+  "src/server/media/delivery.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {

@@ -12,7 +12,11 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => searchParams,
 }));
 
-vi.mock("@/lib/api/client", () => ({ register: vi.fn() }));
+vi.mock("@/lib/api/client", () => ({
+  register: vi.fn(),
+  // The form asks once, on arrival, whether someone is already signed in.
+  fetchSession: vi.fn(async () => ({ ok: true, data: { user: null }, requestId: null })),
+}));
 
 import * as api from "@/lib/api/client";
 import { RegisterForm } from "@/features/auth/register-form";
@@ -97,6 +101,28 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   resetTurnstileDouble();
+});
+
+/* 2026-10-07 audit. An invitation opened from a messenger arrives without the
+   SameSite=Strict session cookie, so the server cannot see a learner who is
+   signed in; the page's own request can. */
+describe("RegisterForm — someone already signed in", () => {
+  it("sends a learner the page finds signed in to /home instead of offering a second account", async () => {
+    vi.mocked(api.fetchSession).mockResolvedValueOnce({
+      ok: true,
+      data: { user: { id: 1, name: "A", role: "user" } },
+      requestId: null,
+    } as never);
+    renderForm();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(POST_REGISTRATION_RETURN_TO));
+    expect(registerMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves a visitor the form", async () => {
+    renderForm();
+    await waitFor(() => expect(vi.mocked(api.fetchSession)).toHaveBeenCalled());
+    expect(replace).not.toHaveBeenCalled();
+  });
 });
 
 describe("RegisterForm — DTO mapping", () => {

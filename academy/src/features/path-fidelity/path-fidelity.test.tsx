@@ -28,8 +28,11 @@ import {
   nodeState,
   nodeStateText,
   moduleSegState,
+  moduleFill,
+  levelsWord,
   levelCodeLabel,
-  moduleKicker,
+  nearnessAt,
+  NEAR_REACH,
   PATH_WAITING_REVIEW,
 } from "@/features/path-fidelity/path-state";
 import type {
@@ -259,10 +262,21 @@ describe("Path — state mapping is derived from canonical progression", () => {
     expect(nodeStateText("locked", "current", "Готовится", true)).toBe("готовится");
   });
 
-  it("keeps the frozen code and kicker formats", () => {
+  it("keeps the frozen code format", () => {
     expect(levelCodeLabel(7)).toBe("L07");
     expect(levelCodeLabel(11)).toBe("L11");
-    expect(moduleKicker(3, 20)).toBe("Модуль 03 / 20");
+  });
+
+  it("fills a module's segment from the module's own counters (DD-352)", () => {
+    const m = moduleOf(1, [level({ order: 1 })]);
+    expect(moduleFill({ ...m, progress: { total: 5, completed: 0 } })).toBe(0);
+    expect(moduleFill({ ...m, progress: { total: 5, completed: 3 } })).toBe(60);
+    expect(moduleFill({ ...m, progress: { total: 6, completed: 1 } })).toBe(17);
+    expect(moduleFill({ ...m, progress: { total: 4, completed: 4 } })).toBe(100);
+    // Never past full, and an empty module is not divided by.
+    expect(moduleFill({ ...m, progress: { total: 4, completed: 9 } })).toBe(100);
+    expect(moduleFill({ ...m, progress: { total: 0, completed: 0 } })).toBe(0);
+    expect([1, 4, 5, 11, 21].map(levelsWord)).toEqual(["уровня", "уровней", "уровней", "уровней", "уровня"]);
   });
 });
 
@@ -300,12 +314,25 @@ describe("Path — the frozen composition", () => {
     expect(container.querySelector(".path-header__done")?.textContent).toBe(
       "Пройдено 4 из 10 уровней",
     );
-    expect(container.querySelector(".mod-nav__scale")?.textContent).toContain(
-      "Модуль 2 из 3 — текущий",
-    );
-    expect(container.querySelector(".mod-nav__scale")?.textContent).toContain(
-      "Завершено модулей: 1 · Впереди: 1",
-    );
+    expect(container.querySelector(".mod-nav__scale")?.textContent).toBe("Модуль 2 из 3");
+    const segments = [...container.querySelectorAll(".mod-seg")].map((seg) => seg.textContent);
+    expect(segments).toEqual([
+      "Модуль 1 — пройден",
+      "Модуль 2 — текущий, пройдено 1 из 5 уровней",
+      "Модуль 3 — впереди",
+    ]);
+  });
+
+  it("keeps the scale of modules small, in the module's own head, filled by its walked levels (DD-352)", () => {
+    const { container } = render(<PathFidelityView view={standardView()} userName="Тест" />);
+    // One scale, and it is the module's: nothing runs the page's width above it any more.
+    expect(container.querySelectorAll(".mod-nav")).toHaveLength(1);
+    const nav = container.querySelector(".workspace__head > .mod-nav") as HTMLElement;
+    expect(nav.getAttribute("aria-label")).toBe("Модули программы");
+    // Module 02 has walked one level of five: its segment is a fifth full; no other carries a fill.
+    const current = nav.querySelector(".mod-seg--current") as HTMLElement;
+    expect(current.style.getPropertyValue("--seg-fill")).toBe("20%");
+    expect(nav.querySelectorAll('[style*="--seg-fill"]')).toHaveLength(1);
   });
 
   it("puts the learner's own module on the rail, with the frozen node vocabulary", () => {
@@ -335,11 +362,12 @@ describe("Path — the frozen composition", () => {
     expect(near?.querySelector(".level-node__type")?.textContent).toBe("урок + тест");
   });
 
-  it("keeps the Decision Frame whole — leader, both corners, and the focused heading", () => {
+  it("keeps the detail whole — both corners and the focused heading — and nothing reaches into it from the strip", () => {
     const { container } = render(<PathFidelityView view={standardView()} userName="Тест" />);
     const focus = container.querySelector(".focus");
     expect(focus).not.toBeNull();
-    expect(focus!.querySelector("[data-leader]")).not.toBeNull();
+    // DD-353 (owner 2026-10-07: «она не должна входить в следующую область»): no line joins the panel.
+    expect(container.querySelector("[data-leader], .focus__leader, [data-flow], .focus__flow")).toBeNull();
     expect(focus!.querySelectorAll(".frame-corner")).toHaveLength(2);
     const title = focus!.querySelector("[data-detail-title]") as HTMLElement;
     expect(title.tagName).toBe("H2");
@@ -354,11 +382,12 @@ describe("Path — the frozen composition", () => {
       "[data-pth-root]",
       "[data-scroller]",
       "[data-focus]",
-      "[data-leader]",
       "[data-detail-title]",
       "[data-return]",
       ".rail",
+      ".workspace",
       ".level-node__mark",
+      ".level-node__block",
     ]) {
       expect(container.querySelector(hook), hook).not.toBeNull();
     }
@@ -374,7 +403,8 @@ describe("Path — the frozen composition", () => {
       "Дальше: модуль 03 «Третий модуль» · уровни 9–10",
     );
     expect(container.querySelector(".workspace__range")?.textContent).toBe("уровни 4–8");
-    expect(container.querySelector(".workspace__kicker")?.textContent).toBe("Модуль 02 / 3");
+    // The module's number is the scale's to say (DD-352); the kicker keeps its chapter and levels.
+    expect(container.querySelector(".workspace__kicker")?.textContent).toBe("уровни 4–8");
   });
 
   it("does not claim the previous module is finished when it is not", () => {
@@ -401,8 +431,13 @@ describe("Path — each workflow state reads as itself", () => {
     expect(container.querySelector('[aria-current="step"]')?.className).toContain(
       "level-node--wf-waiting",
     );
-    expect(container.querySelector(".level-node--current .level-node__state")?.textContent).toBe(
+    /* What the level is to the learner is the node's status for a screen
+       reader; the eye gets the way in under the pointer (DD-346). */
+    expect(container.querySelector(".level-node--current .level-node__status")?.textContent).toBe(
       "текущий · на проверке",
+    );
+    expect(container.querySelector(".level-node--current .level-node__go")?.textContent).toBe(
+      "Начать уровень 5",
     );
   });
 
@@ -779,18 +814,27 @@ describe("Path — the 30-level program", () => {
   it("names the chapter above the module, and says nothing about one the program does not have", () => {
     const withChapters = render(<PathFidelityView view={funnelView("v2.l003", 2)} userName="Тест" />);
     expect(withChapters.container.querySelector(".workspace__kicker")?.textContent).toBe(
-      "Глава 1 · Первая глава · Модуль 02 / 3",
+      "Глава 1 · Первая глава · уровни 3–4",
     );
     withChapters.unmount();
     const without = render(<PathFidelityView view={standardView()} userName="Тест" />);
-    expect(without.container.querySelector(".workspace__kicker")?.textContent).toBe("Модуль 02 / 3");
+    expect(without.container.querySelector(".workspace__kicker")?.textContent).toBe("уровни 4–8");
   });
 
   it("calls a level what its author calls it", () => {
     const { container } = render(<PathFidelityView view={funnelView("v2.l003", 2)} userName="Тест" />);
-    const types = [...container.querySelectorAll(".level-node__type")].map((node) => node.textContent);
-    expect(types).toEqual(["Отчёт", "Точка сборки"]);
+    const type = (code: string) =>
+      container.querySelector(`[data-level="${code}"] .level-node__type`)?.textContent;
+    expect(type("v2.l003")).toBe("Отчёт");
+    expect(type("v2.l004")).toBe("Точка сборки");
     expect(container.querySelector(".focus__meta")?.textContent).toContain("Отчёт");
+    // A level of the module before is on that module's strip (DD-352), under its own word.
+    const view = funnelView("v2.l002", 1);
+    Object.assign(view.modules[0]!.levels[1]!, { state: "in_progress", stateLabel: "В процессе", routeAccessible: true });
+    Object.assign(view.modules[1]!.levels[0]!, { state: "locked", stateLabel: "Закрыт", routeAccessible: false });
+    const earlier = render(<PathFidelityView view={view} userName="Тест" />);
+    expect(codes(earlier.container)).toEqual(["v2.l001", "v2.l002"]);
+    expect(earlier.container.querySelector('[data-level="v2.l002"] .level-node__type')?.textContent).toBe("Задание");
   });
 
   it("says how many levels are open while part of the program is in production", () => {
@@ -823,7 +867,11 @@ describe("Path — the 30-level program", () => {
       const { container } = rendered();
       const node = container.querySelector('[aria-current="step"]')!;
       expect(node.classList.contains("level-node--wf-waiting")).toBe(true);
-      expect(node.querySelector(".level-node__state")?.textContent).toBe("готовится");
+      expect(node.querySelector(".level-node__status")?.textContent).toBe("готовится");
+      /* «Начать» on every current level, this one included — the owner's
+         decision of 2026-10-06; the level's page says it is being prepared. */
+      const go = node.querySelector("a.level-node__go");
+      expect(go?.getAttribute("href")).toBe("/lessons/v2.l005");
       expect(container.querySelector(".focus__state")?.classList.contains("focus__state--waiting")).toBe(true);
       expect(container.querySelector(".focus__state")?.textContent).toBe("Готовится");
     });
@@ -836,6 +884,248 @@ describe("Path — the 30-level program", () => {
       // «Открыть путь» is the shared decision's control; on Path it would lead here.
       expect(container.querySelector(".focus__actions a")).toBeNull();
       expect(container.querySelector(".focus__next")).toBeNull();
+    });
+  });
+});
+
+/* ====================================================================== *
+ * THE STRIP IS THE MODULE (DD-352, owner 2026-10-06: «каждое заполнение один
+ * модуль расписанный в этих блоках»): every level of the module in focus and
+ * nothing beyond it. From DD-346: «Завершён» and «Начать» under the pointer;
+ * the branch follows the pointer over opened levels only. From DD-352: the
+ * panel the branch flows into is lit while the pointer holds it.
+ * ====================================================================== */
+
+/** Ten levels in three modules (1–3, 4–8, 9–10), every level before `current` walked. */
+function walkedTo(current: number): Enrolled {
+  const lv = (order: number) =>
+    level({
+      order,
+      ...(order < current
+        ? { state: "completed" as const, stateLabel: "Пройден", routeAccessible: true }
+        : order === current
+          ? { state: "in_progress" as const, stateLabel: "В процессе", routeAccessible: true }
+          : { state: "locked" as const, stateLabel: "Закрыт", lockReason: "sequence" as const }),
+    });
+  const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => lv(a + i));
+  const view = viewOf(
+    [moduleOf(1, range(1, 3), "Первый модуль"), moduleOf(2, range(4, 8), "Второй модуль"), moduleOf(3, range(9, 10), "Третий модуль")],
+    `v2.l${String(current).padStart(3, "0")}`,
+  );
+  return view;
+}
+
+const codes = (container: HTMLElement) =>
+  [...container.querySelectorAll(".level-node")].map((node) => node.getAttribute("data-level"));
+
+describe("Path — the counts on a phone (owner 2026-10-07: «Выровнять строку по левой стороне»)", () => {
+  it("start under «Путь» instead of being pushed right", () => {
+    const css = readFileSync(join(process.cwd(), "src/features/path-fidelity/path-hifi.css"), "utf8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    );
+    expect(css).toMatch(/@media \(max-width: 599px\) \{[^@]*\.pth\.pth--hifi \.path-header__done \{\s*margin-left: 0;/);
+  });
+});
+
+describe("Path — the strip is the module (DD-352)", () => {
+  it("holds every level of the module in focus, wherever in it the learner stands", () => {
+    for (const at of [4, 5, 7, 8]) {
+      const { container, unmount } = render(<PathFidelityView view={walkedTo(at)} userName="Тест" />);
+      expect(codes(container), `at ${at}`).toEqual(["v2.l004", "v2.l005", "v2.l006", "v2.l007", "v2.l008"]);
+      unmount();
+    }
+  });
+
+  it("holds nothing of the module before or after — at the program's ends too", () => {
+    const first = render(<PathFidelityView view={walkedTo(1)} userName="Тест" />);
+    expect(codes(first.container)).toEqual(["v2.l001", "v2.l002", "v2.l003"]);
+    first.unmount();
+    const last = render(<PathFidelityView view={walkedTo(10)} userName="Тест" />);
+    expect(codes(last.container)).toEqual(["v2.l009", "v2.l010"]);
+  });
+
+  it("draws no module edge on its line and names no other module (owner: «нужно убрать серую палку»)", () => {
+    const { container } = render(<PathFidelityView view={walkedTo(4)} userName="Тест" />);
+    expect(container.querySelectorAll(".level-node--edge")).toHaveLength(0);
+    expect(container.querySelectorAll(".level-node__module")).toHaveLength(0);
+    expect([...container.querySelectorAll(".level-node__code")].map((c) => c.textContent)).toEqual([
+      "L04",
+      "L05",
+      "L06",
+      "L07",
+      "L08",
+    ]);
+  });
+
+  it("fills its line through the walked levels to the one in focus — a module is one filling", () => {
+    const states = (at: number) => {
+      const { container, unmount } = render(<PathFidelityView view={walkedTo(at)} userName="Тест" />);
+      const out = [...container.querySelectorAll(".level-node")].map((n) =>
+        ["done", "current", "next", "locked"].find((s) => n.classList.contains(`level-node--${s}`)),
+      );
+      unmount();
+      return out;
+    };
+    expect(states(4)).toEqual(["current", "next", "locked", "locked", "locked"]);
+    expect(states(7)).toEqual(["done", "done", "done", "current", "next"]);
+    // The next module starts a strip of its own, empty again.
+    expect(states(9)).toEqual(["current", "next"]);
+  });
+
+  it("gives every level that is not open the same mark (owner: «эти фигурки должны быть одинаковыми»)", () => {
+    const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+    // L06 is next, L07–L08 locked: all three are closed, and the stylesheet draws one closed mark.
+    expect([...container.querySelectorAll(".level-node--closed")].map((n) => n.getAttribute("data-level"))).toEqual([
+      "v2.l006",
+      "v2.l007",
+      "v2.l008",
+    ]);
+    const css = readFileSync(join(process.cwd(), "src/features/path-fidelity/path-hifi.css"), "utf8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    );
+    expect(css).toMatch(/\.pth\.pth--hifi \.level-node--closed \.level-node__mark \{[^}]*border: 2px dashed/);
+    expect(css).not.toMatch(/level-node--(next|locked) \.level-node__mark/);
+    expect(css).not.toContain("level-node--edge");
+  });
+
+  it("a walked level says «Завершён»; the current one offers «Начать» into its lesson", () => {
+    const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+    expect(container.querySelector('[data-level="v2.l004"] .level-node__state--done')?.textContent).toBe("Завершён");
+    const go = container.querySelector('[data-level="v2.l005"] a.level-node__go') as HTMLAnchorElement;
+    expect(go.getAttribute("href")).toBe("/lessons/v2.l005");
+    expect(go.textContent).toBe("Начать уровень 5");
+    // The words «пройден» / «текущий» are no longer drawn as pills.
+    expect(container.querySelector(".level-node--done .level-node__state")?.textContent).not.toBe("пройден");
+  });
+
+  it("every opened level has its own branch and block; the rest are drawn closed and have neither", () => {
+    const { container } = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+    const open = [...container.querySelectorAll("[data-open]")].map((n) => n.getAttribute("data-level"));
+    expect(open).toEqual(["v2.l004", "v2.l005"]);
+    for (const node of container.querySelectorAll("[data-open]")) {
+      expect(node.querySelector(".level-node__stem")?.getAttribute("aria-hidden")).toBe("true");
+      expect(node.querySelector(".level-node__block")?.getAttribute("aria-hidden")).toBe("true");
+    }
+    const closed = [...container.querySelectorAll(".level-node--closed")].map((n) => n.getAttribute("data-level"));
+    expect(closed).toEqual(["v2.l006", "v2.l007", "v2.l008"]);
+    for (const node of container.querySelectorAll(".level-node--closed")) {
+      expect(node.querySelector(".level-node__stem, .level-node__block")).toBeNull();
+    }
+    // The level in focus is the one lit at rest — where the learner is.
+    const rest = container.querySelector("[data-rest]")!;
+    expect(rest.getAttribute("aria-current")).toBe("step");
+    expect(rest.classList.contains("level-node--rest")).toBe(true);
+    expect(container.querySelectorAll(".level-node--rest")).toHaveLength(1);
+  });
+
+  it("with every level walked, the level in focus is the one lit at rest", () => {
+    const view = walkedTo(10);
+    const last = view.modules[2]!.levels[1]!;
+    Object.assign(last, { state: "completed", stateLabel: "Пройден" });
+    const { container } = render(<PathFidelityView view={view} userName="Тест" />);
+    expect(container.querySelector('[aria-current="step"]')).toBeNull();
+    expect(container.querySelector("[data-rest]")?.getAttribute("data-level")).toBe("v2.l010");
+  });
+
+  /* DD-353, owner 2026-10-07: «она не должна входить в следующую область … она
+     должна в момент того как водишь и приближаешься к блоку становиться ярче и
+     начинать свечение обводки постепенно, блоки пройденные». The controller
+     measures how near the pointer is to each opened level's block (`--near`,
+     0–1); the stylesheet brightens the branch and runs the outline's light. */
+  describe("the rail controller wakes a block as the pointer nears it", () => {
+    const pointer = (type: string, at: { x: number; y: number } = { x: 0, y: 0 }, pointerType = "mouse") => {
+      const event = new MouseEvent(type, { bubbles: type === "pointermove", clientX: at.x, clientY: at.y });
+      Object.defineProperty(event, "pointerType", { value: pointerType });
+      return event;
+    };
+    /* jsdom lays nothing out: each block is given a box. L04's block spans
+       x 0–150, L05's 160–310, both y 100–300. */
+    function laidOut() {
+      const rendered = render(<PathFidelityView view={walkedTo(5)} userName="Тест" />);
+      const boxes: Record<string, [number, number, number, number]> = {
+        "v2.l004": [0, 100, 150, 300],
+        "v2.l005": [160, 100, 310, 300],
+      };
+      for (const [code, [left, top, right, bottom]] of Object.entries(boxes)) {
+        const block = rendered.container.querySelector(`[data-level="${code}"] .level-node__block`) as HTMLElement;
+        block.getBoundingClientRect = () =>
+          ({ left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON() {} }) as DOMRect;
+      }
+      return rendered;
+    }
+    const near = (container: HTMLElement, code: string) =>
+      Number((container.querySelector(`[data-level="${code}"]`) as HTMLElement).style.getPropertyValue("--near") || 0);
+    const field = (container: HTMLElement) => container.querySelector(".workspace") as HTMLElement;
+
+    it("1 inside a block, less and less further away, 0 beyond its reach", () => {
+      const { container } = laidOut();
+      field(container).dispatchEvent(pointer("pointermove", { x: 75, y: 200 }));
+      expect(near(container, "v2.l004")).toBe(1);
+      expect(near(container, "v2.l005")).toBeGreaterThan(0);
+      expect(near(container, "v2.l005")).toBeLessThan(0.5);
+      expect(field(container).hasAttribute("data-pointer")).toBe(true);
+      // 55px above L04's block: on the way, half awake or so.
+      field(container).dispatchEvent(pointer("pointermove", { x: 75, y: 45 }));
+      expect(near(container, "v2.l004")).toBeGreaterThan(0.3);
+      expect(near(container, "v2.l004")).toBeLessThan(0.7);
+      // Far below both: asleep.
+      field(container).dispatchEvent(pointer("pointermove", { x: 75, y: 600 }));
+      expect(near(container, "v2.l004")).toBe(0);
+      expect(near(container, "v2.l005")).toBe(0);
+    });
+
+    it("lets every block go when the pointer leaves the module's field", () => {
+      const { container } = laidOut();
+      field(container).dispatchEvent(pointer("pointermove", { x: 200, y: 200 }));
+      expect(near(container, "v2.l005")).toBe(1);
+      field(container).dispatchEvent(pointer("pointerleave"));
+      expect(near(container, "v2.l005")).toBe(0);
+      expect(field(container).hasAttribute("data-pointer")).toBe(false);
+    });
+
+    it("wakes nothing under a finger", () => {
+      const { container } = laidOut();
+      field(container).dispatchEvent(pointer("pointermove", { x: 75, y: 200 }, "touch"));
+      expect(near(container, "v2.l004")).toBe(0);
+      expect(field(container).hasAttribute("data-pointer")).toBe(false);
+    });
+
+    it("holds the level whose way in has the keyboard, and lets it go after", () => {
+      const { container } = laidOut();
+      const go = container.querySelector("a.level-node__go") as HTMLAnchorElement;
+      go.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      expect(near(container, "v2.l005")).toBe(1);
+      go.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: document.body }));
+      expect(near(container, "v2.l005")).toBe(0);
+    });
+
+    it("eases from nothing to everything over the reach", () => {
+      expect(nearnessAt(0)).toBe(1);
+      expect(nearnessAt(NEAR_REACH)).toBe(0);
+      expect(nearnessAt(NEAR_REACH * 3)).toBe(0);
+      expect(nearnessAt(NEAR_REACH / 2)).toBeCloseTo(0.5, 5);
+      expect(nearnessAt(NEAR_REACH * 0.25)).toBeGreaterThan(nearnessAt(NEAR_REACH * 0.75));
+    });
+
+    it("the stylesheet lights the branch and the outline from where it enters, and lets them go slowly", () => {
+      const css = readFileSync(join(process.cwd(), "src/features/path-fidelity/path-hifi.css"), "utf8").replace(
+        /\/\*[\s\S]*?\*\//g,
+        "",
+      );
+      const fade = Number(/--flow-fade:\s*(\d+)ms/.exec(css)?.[1]);
+      expect(fade).toBeGreaterThanOrEqual(600);
+      // The nearness fades out slowly; while the pointer moves over the field it follows at once.
+      expect(css).toMatch(/\.level-node--open \{[^}]*transition: --near var\(--flow-fade\)/);
+      expect(css).toMatch(/\.workspace\[data-pointer\] \.level-node--open \{\s*transition: --near 140ms/);
+      // The outline is lit from the branch's entry (22px in, on the top edge) and grows with nearness.
+      expect(css).toMatch(/\.level-node__block::after \{[^}]*radial-gradient\(\s*calc\(var\(--near\) \* 140%\) calc\(var\(--near\) \* 110%\) at 22px 0/);
+      // The branch ends at the block's top edge: 23px (the mark's foot) + 17px = 40px, where the block starts.
+      expect(css).toMatch(/\.level-node__stem \{[^}]*top: 23px;[^}]*height: 17px;/);
+      expect(css).toMatch(/\.level-node__block \{[^}]*inset: 40px 8px 0 0;/);
+      // Nothing of the old line into the panel is left.
+      expect(css).not.toMatch(/focus__leader|focus__flow|data-lit|data-glide/);
     });
   });
 });

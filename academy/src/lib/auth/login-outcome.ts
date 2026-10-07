@@ -96,17 +96,16 @@ export function mapLoginFailure(error: NormalizedError): LoginFailure {
  * validation, where the token is provably still unspent:
  *
  *   - VALIDATION_ERROR — the body was rejected by the schema, which runs first;
- *   - RATE_LIMITED — refused ahead of verification, so the token was untouched;
- *   - BACKEND_UNAVAILABLE and TIMEOUT — the request may never have arrived.
+ *   - RATE_LIMITED — refused ahead of verification, so the token was untouched.
  *
- * Renewing on those too would be harmless but wasteful; NOT renewing on any of
- * the others would guarantee the next attempt fails as a replay.
+ * BACKEND_UNAVAILABLE and TIMEOUT renew too (2026-10-07 audit): the request may
+ * never have arrived — or it arrived, the challenge was verified and spent, and
+ * the answer was what got lost. Keeping the token then made the next press fail
+ * as a replay («Проверка не пройдена»). A new challenge costs nothing visible.
  */
 const KEEPS_TOKEN: ReadonlySet<LoginFailure> = new Set<LoginFailure>([
   "VALIDATION_ERROR",
   "RATE_LIMITED",
-  "BACKEND_UNAVAILABLE",
-  "TIMEOUT",
 ]);
 
 export function shouldRenewCaptcha(failure: LoginFailure): boolean {

@@ -346,8 +346,10 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
         <div className="ax ld ld--hifi">
           <article data-level={summary.levelCode} data-state={summary.state} data-posture="waiting" data-production="true">
             <header className="ax-lvlhead">
-              <LevelCoordinate summary={summary} module={levelModule} />
-              <h1 className="ax-lvlhead__title">{summary.title}</h1>
+              <div className="ld-plate">
+                <LevelCoordinate summary={summary} module={levelModule} />
+                <h1 className="ax-lvlhead__title">{summary.title}</h1>
+              </div>
               <p className="ax-lvlhead__row ld-facts">
                 <span className="ax-mark" data-state={summary.state}>
                   {summary.stateLabel}
@@ -412,9 +414,16 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
     <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
       <div className="ax ld ld--hifi">
         <article data-level={summary.levelCode} data-state={summary.state} data-posture={posture}>
+          {/* THE TITLE PLATE AND THE FACTS RAIL (DD-348, owner 2026-10-06: «сделать
+              выделение для название урока и отдельное выделение области [фактов]
+              что бы она тоже немного отделялась … и сделать подсвечивание +xp»).
+              Two objects: the lesson's name on its own plate, and under it, a
+              little apart, the line of what the level is — with its XP lit. */}
           <header className="ax-lvlhead">
-            <LevelCoordinate summary={summary} module={levelModule} />
-            <h1 className="ax-lvlhead__title">{summary.title}</h1>
+            <div className="ld-plate">
+              <LevelCoordinate summary={summary} module={levelModule} />
+              <h1 className="ax-lvlhead__title">{summary.title}</h1>
+            </div>
             <p className="ax-lvlhead__row ld-facts">
               <span className="ax-mark" data-state={summary.state}>
                 {/* When the line below explains the state, the mark says the
@@ -424,7 +433,16 @@ export async function ExperienceLevelDetail({ levelCode }: { levelCode: string }
                 {explainState && summary.state === "locked" ? summary.stateLabel.split(":")[0] : summary.stateLabel}
               </span>
               {facts.map((fact) => (
-                <span key={fact} className="ld-fact">
+                <span
+                  key={fact}
+                  className={
+                    fact.endsWith(" XP")
+                      ? "ld-fact ld-fact--xp"
+                      : fact.startsWith("видео ")
+                        ? "ld-fact ld-fact--video"
+                        : "ld-fact"
+                  }
+                >
                   {fact}
                 </span>
               ))}

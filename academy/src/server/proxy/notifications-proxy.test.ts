@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   proxyBackendJson,
+  proxyClearAllNotifications,
   proxyMarkNotificationRead,
   proxyMarkAllNotificationsRead,
 } from "@/server/proxy/notifications-proxy";
@@ -168,6 +169,29 @@ describe("notifications proxy — configuration is fail-closed", () => {
     resetAcademyConfigCache();
     const response = await proxyMarkAllNotificationsRead(post());
     expect(response.status).toBe(500);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("notifications proxy — clear-all (DD-349, 2026-10-06)", () => {
+  it("forwards to the one constant Backend path, as PATCH, with the write headers", async () => {
+    const request = new Request("http://academy.test/api/backend/notifications/clear-all", {
+      method: "POST",
+      headers: { "x-csrf-token": "t", cookie: "s=1", "x-forwarded-host": "evil.test" },
+    });
+    const response = await proxyClearAllNotifications(request);
+    expect(response.status).toBe(200);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${ORIGIN}/api/notifications/clear-all`);
+    expect(init.method).toBe("PATCH");
+    const headers = init.headers as Headers;
+    expect(headers.get("x-csrf-token")).toBe("t");
+    expect(headers.get("x-forwarded-host")).toBeNull();
+  });
+
+  it("refuses anything but POST, before any Backend request", async () => {
+    const response = await proxyClearAllNotifications(new Request("http://academy.test/api/backend/notifications/clear-all"));
+    expect(response.status).toBe(405);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

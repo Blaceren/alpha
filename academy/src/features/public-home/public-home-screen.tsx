@@ -361,11 +361,14 @@ export function PublicHomeScreen({
           </div>
         </section>
 
-        {/* --------------------------------------- 11 · faq + final cta */}
-        <section className="faq surface surface--paper" id="faq">
+        {/* ------------------------------------------------- 11 · faq */}
+        {/* On Ink since DD-360 (owner 2026-10-07: «избавиться от эффекта блоков
+            на белом фоне»): the page is a dark showcase, and its fine print
+            reads on the same ground as everything else. */}
+        <section className="faq surface surface--ink" id="faq">
           <div className="shell faq__grid">
             <div className="faq__heading" data-reveal>
-              <p className="eyebrow eyebrow--dark">Частые вопросы · подтверждённые ответы</p>
+              <p className="eyebrow">Частые вопросы · подтверждённые ответы</p>
               <h2 className="display display--section">
                 До начала пути не должно оставаться скрытых условий.
               </h2>
@@ -381,11 +384,17 @@ export function PublicHomeScreen({
               ))}
             </div>
           </div>
+        </section>
 
+        {/* ------------------------------------------ 12 · first step */}
+        {/* The page's last word is the action, on Signal — the colour every
+            «next step» of the product wears (DD-360). Its own sheet, laid
+            over the dark fine print; the footer's dark sheet closes it. */}
+        <section className="first-step surface surface--signal" id="first-step">
           {/* Alias: `#start` addressed the final call to action. */}
           <span className="anchor-alias" id="start" aria-hidden="true" />
           <div className="shell final-step" data-reveal>
-            <p className="eyebrow eyebrow--dark">Первый шаг</p>
+            <p className="eyebrow">Первый шаг</p>
             <h2 className="display display--section final-step__title">
               Если вы хотите учиться принимать собственные решения — начните с первого уровня.
             </h2>

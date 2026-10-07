@@ -160,14 +160,15 @@ export function JournalRow({
 
 /* ------------------------------------------------------------ entry notes */
 
-/** ПЛАН · ИСПОЛНЕНИЕ · ВЫВОД, and the rules broken, as the presentation lays them out. */
+/** ОСНОВАНИЕ · ИСПОЛНЕНИЕ · ВЫВОД, and the rules broken, as the presentation lays them out.
+    (The first was «План» until 2026-10-06 — owner: «план нужно заменить на основание».) */
 export function JournalNotes({ entry, reference }: { entry: JournalEntry; reference: JournalReference }) {
   const rules = entry.violations.map(
     (code) => reference.violations.find((violation) => violation.code === code)?.label ?? code,
   );
   return (
     <dl className="jr-notes">
-      <JournalNote term="План" text={entry.plan} empty="Причина входа не записана" />
+      <JournalNote term="Основание" text={entry.plan} empty="Основание не записано" />
       <JournalNote term="Исполнение" text={entry.execution} empty="Не записано" />
       <JournalNote term="Вывод" text={entry.conclusion} empty="Вывода пока нет" />
       {rules.length > 0 ? (
@@ -598,14 +599,14 @@ export function ManualPlanField({
   return (
     <div className="tc-field">
       <label className="tc-label" htmlFor="jr-new-plan">
-        План до входа
+        Основание входа в сделку
       </label>
       <textarea
         id="jr-new-plan"
         className="tc-input tc-textarea"
         rows={3}
         maxLength={JOURNAL_LIMITS.maxPlanLength}
-        placeholder="Если причина входа была записана до сделки — перенесите её сюда"
+        placeholder="Если основание входа было записано до сделки — перенесите его сюда"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}

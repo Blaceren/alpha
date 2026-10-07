@@ -22,7 +22,8 @@ import { PROGRAM_TOOL_LEVEL } from "@/features/public-home/product-route-data";
  * losing the label that says it is synthetic.
  */
 
-/** The ten sections of `<main>`; with the header that is eleven responsibilities. */
+/** The eleven sections of `<main>`; with the header that is twelve responsibilities.
+    The first step has been its own sheet since DD-360 (2026-10-07). */
 const SECTION_IDS = [
   "top",
   "decide",
@@ -34,6 +35,7 @@ const SECTION_IDS = [
   "fit",
   "boundaries",
   "faq",
+  "first-step",
 ] as const;
 
 /** Addresses the page published before this phase. They must keep resolving. */
@@ -76,7 +78,7 @@ function words(container: HTMLElement): string {
 }
 
 describe("Public Home — architecture", () => {
-  it("renders eleven responsibilities: a header and ten sections, in order", () => {
+  it("renders twelve responsibilities: a header and eleven sections, in order", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     expect(container.querySelectorAll("header").length).toBe(1);
     expect(sections(container)).toEqual([...SECTION_IDS]);
@@ -293,6 +295,27 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
     expect(video.getAttribute("src")).toBe("/film/hero.mp4?v=abc");
   });
 
+  it("while the film plays, the stage is as tall as the player — picture and bar — so no control is cut off (2026-10-07)", async () => {
+    const film = { src: "/film/hero.webm?v=abc", poster: null, captions: null };
+    const { container } = render(<PublicHomeScreen authenticated={false} film={film} />);
+    const stage = container.querySelector("#top .hfilm__stage") as HTMLElement;
+    expect(stage.getAttribute("data-watching")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /Смотреть фильм/ }));
+    expect(stage.getAttribute("data-watching")).toBe("true");
+    // The player's bar — pause, sound, full screen — is in the stage, not below its edge.
+    expect(stage.querySelector(".avp__bar")).not.toBeNull();
+    expect(within(stage).getByRole("button", { name: "На весь экран" })).toBeTruthy();
+    const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css).toMatch(/\.ph \.hfilm__stage\[data-watching="true"\] \{\s*aspect-ratio: auto;\s*\}/);
+    expect(css).toMatch(/\.ph \.hfilm__stage\[data-watching="true"\] \.hfilm__player \{\s*height: auto;\s*\}/);
+    // At its end the film is a film, not a lesson.
+    fireEvent.ended(stage.querySelector("video") as HTMLVideoElement);
+    expect(within(stage).getByRole("status")).toHaveTextContent("Фильм просмотрен");
+    expect(within(stage).queryByText("Урок просмотрен")).toBeNull();
+    // The bar's icons read the dark surface's text, not the page's Ink (Ink on Ink was invisible).
+    expect(css).toMatch(/\.ph \.hfilm__stage \.hfilm__player \{[^}]*--text-primary: var\(--text-on-dark\);\s*--text-secondary: var\(--text-on-dark-muted\);/);
+  });
+
   it("resolves that same object in #decide", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     // Since 2026-09-22 the object sits in the product's own frame: the Trade
@@ -300,7 +323,7 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
     const decided = container.querySelector("#decide .decision") as HTMLElement;
     expect(decided).not.toBeNull();
     expect(text(decided)).toContain("Trade Card");
-    expect(text(decided)).toContain("Причина входа до сделки");
+    expect(text(decided)).toContain("Основание входа в сделку");
     expect(text(decided)).toContain("До сделки зафиксировал условие");
     expect(text(decided)).toContain("Зафиксировано");
   });
@@ -328,7 +351,7 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
     const body = words(container);
     expect(body).not.toMatch(/@[a-z0-9.-]+\.[a-z]{2,}/i);
     expect(body).not.toMatch(/\+7\s?\(?\d{3}/);
-    // A sum of money, not a clock: the windows show «14:32 EUR/USD OTC» and
+    // A sum of money, not a clock: the windows show «14:32 EUR/USD» and
     // «20:00 USD» (a trade's time and its pair, a release's time and its
     // currency), and those are not amounts.
     expect(body).not.toMatch(/(?<!:)\b\d+\s?(₽|\$|USD|EUR)\b/);
@@ -348,7 +371,7 @@ describe("Public Home — signature evidence", () => {
   it("names one rubric criterion, one return reason and one corrective action", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const track = text(container.querySelector(".evidence-track") as HTMLElement);
-    expect(track).toContain("Критерий · Причина до сделки");
+    expect(track).toContain("Критерий · Основание до сделки");
     expect(track).toContain("Требуется доработка");
     expect(track).toContain("Опишите условие, которое вы определили заранее");
   });
@@ -358,7 +381,7 @@ describe("Public Home — signature evidence", () => {
     const track = container.querySelector(".evidence-track") as HTMLElement;
     const v1 = track.querySelector('[data-frame-stage="v1"]') as HTMLElement;
     const v2 = track.querySelector('[data-frame-stage="v2"]') as HTMLElement;
-    const field = "Причина входа до сделки";
+    const field = "Основание входа в сделку";
     expect(text(v1)).toContain(field);
     expect(text(v2)).toContain(field);
     expect(text(v1)).not.toEqual(text(v2));
@@ -490,7 +513,7 @@ describe("Public Home — signature evidence", () => {
 
   it("stops the Decision Frame after the evidence", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    for (const id of ["path", "tools", "fit", "boundaries", "faq"]) {
+    for (const id of ["path", "tools", "fit", "boundaries", "faq", "first-step"]) {
       const section = container.querySelector(`#${id}`) as HTMLElement;
       expect(section.querySelector(".dframe"), `frame leaked into #${id}`).toBeNull();
       expect(section.querySelector("[data-frame-stage]")).toBeNull();
@@ -532,6 +555,41 @@ describe("Public Home — session-aware calls to action", () => {
     anon.unmount();
     const auth = render(<PublicHomeScreen authenticated />);
     expect(sections(auth.container)).toEqual(anonSections);
+  });
+
+  /* 2026-10-07, the owner: «на мобильной версии в шапке сделай кнопку как на десктопе в случае
+     того что залогинен кнопка перейти в академию а не вход». */
+  it("signed in, the phone header offers the way into the Academy where «Войти» stands for a visitor", () => {
+    const auth = render(<PublicHomeScreen authenticated />);
+    const actions = auth.container.querySelector(".header-mobile-actions") as HTMLElement;
+    expect(actions.querySelector(".mobile-login")).toBeNull();
+    const academy = actions.querySelector("a.mobile-academy") as HTMLAnchorElement;
+    expect(academy.getAttribute("href")).toBe("/home");
+    expect(academy.getAttribute("aria-label")).toBe("Перейти в Академию");
+    // The desktop's own button, not a look-alike.
+    expect(academy.className).toContain("button--signal");
+    // The menu toggle still follows it.
+    expect(academy.nextElementSibling?.classList.contains("menu-toggle")).toBe(true);
+    auth.unmount();
+
+    const anon = render(<PublicHomeScreen authenticated={false} />);
+    const anonActions = anon.container.querySelector(".header-mobile-actions") as HTMLElement;
+    expect(anonActions.querySelector(".mobile-academy")).toBeNull();
+    expect(anonActions.querySelector("a.mobile-login")?.getAttribute("href")).toBe("/login");
+  });
+
+  it("the phone header's academy button shortens only on the narrowest phones, and the menu's single action fills its row", () => {
+    const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    );
+    expect(css).toMatch(/\n\.ph \.mobile-academy__short \{\s*display: none;\s*\}/);
+    expect(css).toMatch(
+      /@media \(max-width: 359px\) \{\s*\.ph \.mobile-academy__full \{\s*display: none;\s*\}\s*\.ph \.mobile-academy__short \{\s*display: inline;\s*\}\s*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 1040px\) \{\s*\.ph \.primary-nav \.nav-actions > \.button:only-child \{\s*grid-column: 1 \/ -1;\s*\}\s*\}/,
+    );
   });
 });
 
@@ -1067,6 +1125,65 @@ describe("Public Home — the phone composition (DD-342)", () => {
     expect(deck.querySelector(":scope > .is-shown")?.id).toBe(buttons[2]!.getAttribute("aria-controls"));
   });
 
+  /* 2026-10-07, the owner: «Баг во время переключения название инструмента
+     пропадает и появляется … кружки с номером уровня нужно подсветить … было
+     понятно … что можно выбрать уровень и посмотреть превью». */
+  it("says what the rail is for, above it", () => {
+    const { rail } = mountDeck();
+    const hint = rail.querySelector(".trail__hint");
+    expect(hint?.textContent).toBe("Нажмите на уровень, чтобы посмотреть превью инструмента");
+    expect(rail.firstElementChild).toBe(hint);
+  });
+
+  it("names a tool once — at the press, and when the deck comes to rest — never every card it slides past", () => {
+    vi.useFakeTimers();
+    try {
+      const { buttons, rail, deck } = mountDeck();
+      const cards = Array.from(deck.children) as HTMLElement[];
+      // Lay the deck out with the card `at` at its start.
+      const layOut = (at: number) =>
+        cards.forEach((card, index) => {
+          card.getBoundingClientRect = () => ({ left: (index - at) * 300, top: 0, right: (index - at) * 300 + 280, bottom: 500, width: 280, height: 500, x: (index - at) * 300, y: 0, toJSON() {} }) as DOMRect;
+        });
+      const note = () => rail.querySelector(".trail__note strong")?.textContent;
+      // The tool each rail button names, in rail order.
+      const TOOL_STEPS_NAMES = () => buttons.map((b) => (b.getAttribute("aria-label") ?? "").split(",")[0]);
+
+      layOut(0);
+      fireEvent.click(buttons[4]!);
+      expect(note()).toBe(TOOL_STEPS_NAMES()[4]);
+      // The glide passes the cards between: the rail keeps the pressed tool.
+      for (const at of [1, 2, 3]) {
+        layOut(at);
+        fireEvent.scroll(deck);
+        vi.advanceTimersByTime(16);
+        expect(note()).toBe(TOOL_STEPS_NAMES()[4]);
+      }
+      layOut(4);
+      fireEvent.scroll(deck);
+      vi.advanceTimersByTime(200);
+      expect(note()).toBe(TOOL_STEPS_NAMES()[4]);
+
+      // A swipe back to the second card: named when the deck comes to rest.
+      layOut(2);
+      fireEvent.scroll(deck);
+      vi.advanceTimersByTime(60);
+      expect(note()).toBe(TOOL_STEPS_NAMES()[4]);
+      layOut(1);
+      fireEvent(deck, new Event("scrollend"));
+      expect(note()).toBe(TOOL_STEPS_NAMES()[1]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("draws every level as a button: a lit ring, a glow, and a press that pushes it in", () => {
+    const narrow = media("max-width: 920px");
+    expect(narrow).toMatch(/\.ph \.trail__num \{[^}]*border: 1\.5px solid rgba\(199, 247, 109, 0\.5\)[^}]*box-shadow: 0 0 14px/);
+    expect(narrow).toMatch(/\.ph \.trail__button:active \.trail__num \{\s*transform: scale\(0\.93\);/);
+    expect(narrow).toMatch(/\.ph \.trail__hint \{[^}]*display: flex/);
+  });
+
   it("a tool's title in the deck brings its card sideways and leaves the page where it is", () => {
     const { deck, buttons, scrollTo } = mountDeck();
     const scrollIntoView = vi.fn();
@@ -1118,3 +1235,162 @@ describe("Public Home — the phone composition (DD-342)", () => {
   });
 });
 
+
+/* 2026-10-07, the owner, after a blur behind the header was tried and taken back:
+   «на компьютерной версии вообще откати до того как было, а на мобильной убери
+   размытие и оставь так как было просто без перехода из белого в черный пусть
+   она просто висит». */
+describe("the header while the page scrolls", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("on a computer tightens past the first scroll exactly as it did before the blur", () => {
+    expect(css).toMatch(
+      /\n\.ph \.site-header\.is-compact \.site-header__inner \{\s*min-height: 56px;\s*padding-top: 5px;\s*padding-bottom: 5px;\s*background: rgba\(11, 13, 10, 0\.96\);\s*box-shadow: var\(--shadow-low\);\s*\}/,
+    );
+    expect(css).toMatch(/\n\.ph \.site-header\.is-compact \.wordmark \{\s*width: 62px;\s*\}/);
+  });
+
+  it("on a phone and a tablet keeps the size and the material it has at the top", () => {
+    // The pill at the top of the page: 66px, 9px above and below, 0.91 and the high shadow, a 72px
+    // wordmark; on a phone 56px, 7px and a 56px wordmark. The compact state restates exactly these.
+    expect(css).toMatch(
+      /\n\.ph \.site-header__inner \{[^}]*min-height: 66px;[^}]*padding: 9px 14px 9px 22px;[^}]*background: rgba\(11, 13, 10, 0\.91\);\s*box-shadow: var\(--shadow-high\);/,
+    );
+    expect(css).toMatch(/\n\.ph \.wordmark \{[^}]*width: 72px;/);
+    expect(css).toMatch(
+      /@media \(max-width: 680px\) \{[^@]*\.ph \.site-header__inner \{[^}]*min-height: 56px;\s*padding: 7px 9px 7px 14px;[^}]*\}\s*\.ph \.wordmark \{\s*width: 56px;\s*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 1040px\) \{\s*\.ph \.site-header\.is-compact \.site-header__inner \{\s*min-height: 66px;\s*padding-top: 9px;\s*padding-bottom: 9px;\s*background: rgba\(11, 13, 10, 0\.91\);\s*box-shadow: var\(--shadow-high\);\s*\}\s*\.ph \.site-header\.is-compact \.wordmark \{\s*width: 72px;\s*\}\s*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 680px\) \{\s*\.ph \.site-header\.is-compact \.site-header__inner \{\s*min-height: 56px;\s*padding-top: 7px;\s*padding-bottom: 7px;\s*\}\s*\.ph \.site-header\.is-compact \.wordmark \{\s*width: 56px;\s*\}\s*\}/,
+    );
+  });
+
+  it("never moves the header itself, puts a band of the light ground around it or blurs what is behind it", () => {
+    expect(css).not.toMatch(/\.site-header\.is-compact \{/);
+    expect(css).not.toMatch(/\.site-header::before/);
+    expect(css).not.toMatch(/--ph-shade/);
+  });
+});
+
+/* DD-360 (2026-10-07), the owner: «на внешней главной нужно избавиться от эффекта блоков на
+   белом фоне, возможно заменить на наш салатовый, вообщем нужен финальный хай фай в этой
+   области». The page is one sheet laid over another: no light ground, no gaps. */
+describe("Public Home — one sheet over another (DD-360)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("has no light ground: the root and the document behind it are Ink", () => {
+    expect(css).toMatch(/\n\.ph\[data-ph-root\] \{[^}]*background: var\(--ink-950\);/);
+    expect(css).toMatch(/\nhtml\.ph-smooth-scroll \{\s*background: #0b0d0a;\s*\}/);
+    // The old ground is not painted by the smooth-scroll rule any more.
+    expect(css).not.toMatch(/html\.ph-smooth-scroll \{[^}]*mist-200/);
+  });
+
+  it("lays every sheet over the one before it, edge to edge, with a rounded lip the width of the page", () => {
+    expect(css).toMatch(/\n\.ph\[data-ph-root\] \.surface \{\s*margin: 0;\s*border-bottom: var\(--sheet-lip\) solid transparent;\s*border-radius: 0;\s*\}/);
+    expect(css).toMatch(
+      /\n\.ph\[data-ph-root\] \.surface \+ \.surface,\s*\.ph\[data-ph-root\] \.site-footer \{\s*margin-top: calc\(-1 \* var\(--sheet-lip\)\);\s*border-radius: var\(--sheet-lip\) var\(--sheet-lip\) 0 0;\s*\}/,
+    );
+    // The lip is the page's largest radius; on a phone the surfaces' 22px.
+    expect(css).toMatch(/\n\.ph\[data-ph-root\] \{\s*--sheet-lip: var\(--radius-xl\);/);
+    expect(css).toMatch(/@media \(max-width: 680px\) \{\s*\.ph\[data-ph-root\] \{\s*--sheet-lip: 22px;\s*\}\s*\}/);
+    // The footer is a sheet too: no margin of its own around it.
+    expect(css).toMatch(/\n\.ph\[data-ph-root\] \.site-footer \{\s*position: relative;\s*margin-right: 0;\s*margin-bottom: 0;\s*margin-left: 0;\s*\}/);
+  });
+
+  it("leaves the news pages, which are paper on purpose, exactly as they are", () => {
+    // Every sheet rule is scoped to the Public Home root; the shared `.ph .surface` keeps its margin.
+    expect(css).toMatch(/\n\.ph \.surface \{\s*position: relative;\s*margin: 10px;/);
+    expect(css).toMatch(/\n\.ph \.surface--paper \{\s*background: var\(--paper-100\);/);
+    const sheetRules = css.match(/^[^@{}\n]*--sheet-lip[^{}]*\{|^[^{}\n]*\.surface \+ \.surface[^{]*\{/gm) ?? [];
+    for (const rule of sheetRules) expect(rule, rule).toContain("[data-ph-root]");
+  });
+
+  it("puts the fine print on Ink and the first step on Signal, the page's last word before the footer", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const faq = container.querySelector("#faq") as HTMLElement;
+    expect(faq.classList.contains("surface--ink")).toBe(true);
+    expect(faq.classList.contains("surface--paper")).toBe(false);
+    expect(container.querySelector(".surface--paper")).toBeNull();
+    const first = container.querySelector("#first-step") as HTMLElement;
+    expect(first.classList.contains("surface--signal")).toBe(true);
+    expect(first.previousElementSibling).toBe(faq);
+    expect(first.nextElementSibling).toBeNull();
+    // The legacy #start alias lives in the new sheet, right before the step.
+    expect(container.querySelector("#start")?.closest("section")?.id).toBe("first-step");
+    expect(first.querySelector(".final-step .button--dark")).toBeTruthy();
+    // The FAQ's text is the dark surface's: no light-surface eyebrow left in it.
+    expect(faq.querySelector(".eyebrow--dark")).toBeNull();
+  });
+
+  it("colours the FAQ list and the first step for the surfaces they stand on", () => {
+    expect(css).toMatch(/\n\.ph \.faq-list \{\s*border-top: 1px solid var\(--line-dark\);/);
+    expect(css).toMatch(/\n\.ph \.faq-list details \{\s*border-bottom: 1px solid var\(--line-dark\);/);
+    expect(css).toMatch(/\.ph \.faq-list summary::after \{[^}]*background: var\(--text-on-dark\);/);
+    expect(css).not.toMatch(/\.ph \.faq-list details p \{[^}]*color: var\(--text-primary\)/);
+    expect(css).toMatch(/\n\.ph \.first-step \{\s*padding: var\(--section-pad\) 0;\s*\}/);
+    expect(css).not.toMatch(/\.ph \.final-step \{[^}]*border-top/);
+    expect(css).toMatch(/\.ph \.surface--signal \.client-entry \{[^}]*color: rgba\(11, 13, 10, 0\.66\);/);
+    expect(css).toMatch(/\n\.ph \.final-step__support \{[^}]*color: rgba\(11, 13, 10, 0\.66\);/);
+  });
+});
+
+/* The owner, 2026-10-07 (a screenshot of the journal's example): «в этом блоке и в целом в примерах
+   активы должны быть обычные а не OTC». The examples name the ordinary assets. */
+describe("Public Home — the examples name ordinary assets, not OTC", () => {
+  it("shows no OTC asset in any window of the page", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    expect(text(container)).not.toMatch(/\bOTC\b/);
+    expect(text(container)).toContain("EUR/USD");
+    expect(text(container)).toContain("GBP/USD");
+  });
+
+  it("keeps no OTC asset in the windows' data either", () => {
+    for (const file of ["review-window.tsx", "product-window-states.tsx", "decision-window.tsx"]) {
+      const source = readFileSync(join(process.cwd(), "src/features/public-home", file), "utf8");
+      expect(source, file).not.toMatch(/\bOTC\b/);
+    }
+  });
+});
+
+/* The owner, 2026-10-07: «в инструменте Entry Checklist нужно не 9 а 7 условий … и так же не
+   забудь поменять его на внешней главной примере». */
+describe("Public Home — the Entry Checklist example is the tool's own seven conditions", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("names the seven, in three groups, with no stop factor, and counts 7 / 7", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query }));
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", { value: vi.fn(), configurable: true, writable: true });
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const rail = container.querySelector("#tools") as HTMLElement;
+    expect(text(rail)).toContain("Семь условий до входа.");
+    expect(text(rail)).not.toContain("Девять");
+    expect(text(rail)).not.toMatch(/стоп-фактор/i);
+    // The checklist window is the state the rail shows for L13.
+    await userEvent.click(within(rail).getByRole("button", { name: /^Entry Checklist, открывается на уровне/ }));
+    const window = rail.querySelector(".pw-check") as HTMLElement;
+    expect(window).not.toBeNull();
+    const items = Array.from(window.querySelectorAll(".pw-check__item span")).map((el) => el.textContent);
+    expect(items).toEqual([
+      "Актив из моего списка",
+      "Время — подходящий период",
+      "Payout посмотрел, планку посчитал — 85 %",
+      "Состояние определено: тренд, боковик или неясно",
+      "Область названа",
+      "Размер по плану",
+      "Основание сформулировано словами",
+    ]);
+    expect(Array.from(window.querySelectorAll(".pw-check__group > .pw-mono")).map((el) => el.textContent)).toEqual(["Среда", "График", "Сделка"]);
+    expect(text(window)).toContain("7 / 7");
+    expect(text(window)).toContain("среда, график и сделка");
+    expect(window.querySelector(".pw-check__item em")).toBeNull();
+  });
+});

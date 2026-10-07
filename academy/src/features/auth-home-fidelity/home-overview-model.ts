@@ -1,4 +1,4 @@
-import type { ProgramModule, ProgramPosition } from "@/lib/curriculum/program-points";
+import type { ProgramModule, ProgramPoint, ProgramPosition } from "@/lib/curriculum/program-points";
 import type { ToolWindowView } from "@/features/tool-windows/model/access";
 import type { NotificationRow } from "@/features/notifications-fidelity/notifications-state";
 
@@ -79,6 +79,68 @@ export function nextModule(position: ProgramPosition): ProgramModule | null {
   if (!focus) return null;
   const index = position.modules.findIndex((module) => module.moduleCode === focus.moduleCode);
   return index >= 0 ? position.modules[index + 1] ?? null : null;
+}
+
+/**
+ * THE LIST'S FIVE ROWS (DD-348, owner 2026-10-06: «показываем 3 уровня которые
+ * пройдены ранее, 1 актуальный и 1 следующий»).
+ *
+ * Three walked levels behind the level the learner stands on, that level, and
+ * the next — across module edges, as the path runs. The level the learner
+ * stands on is the current one, or, with every open level done, the first one
+ * not done (the level Path calls «Дальше»). At the ends of the program the five
+ * shift inward. Each row carries its module, so the list can mark an edge and
+ * name a module other than the one the block is about.
+ */
+export type HomeListRole = "walked" | "here" | "next" | "ahead";
+export type HomeListRow = {
+  readonly point: ProgramPoint;
+  readonly module: ProgramModule;
+  readonly role: HomeListRole;
+  /** The row starts another module than the row above it. */
+  readonly edge: boolean;
+  /** The row's module is not the block's, and the row above is not of it: name it here. */
+  readonly foreign: boolean;
+};
+
+export const HOME_LIST_SIZE = 5;
+export const HOME_LIST_BEHIND = 3;
+
+export function homeListRows(position: ProgramPosition): HomeListRow[] {
+  const all = position.modules.flatMap((module) => module.points.map((point) => ({ point, module })));
+  if (all.length === 0) return [];
+  const anchor =
+    position.current?.point ??
+    all.find((entry) => entry.point.state !== "done")?.point ??
+    all[all.length - 1]!.point;
+  const at = all.findIndex((entry) => entry.point.levelCode === anchor.levelCode);
+  const end = Math.min(all.length, Math.max(0, at - HOME_LIST_BEHIND) + HOME_LIST_SIZE);
+  const window = all.slice(Math.max(0, end - HOME_LIST_SIZE), end);
+  const focus = position.focusModule?.moduleCode ?? null;
+  return window.map(({ point, module }, index) => {
+    const above = index > 0 ? window[index - 1]!.module : null;
+    const role: HomeListRole =
+      point.levelCode === anchor.levelCode && point.state !== "done"
+        ? "here"
+        : point.state === "done"
+          ? "walked"
+          : point.order === anchor.order + 1
+            ? "next"
+            : "ahead";
+    return {
+      point,
+      module,
+      role,
+      edge: above !== null && above.moduleCode !== module.moduleCode,
+      foreign: module.moduleCode !== focus && (above === null || above.moduleCode !== module.moduleCode),
+    };
+  });
+}
+
+/** What a closed row says in place of a button. */
+export function closedRowWord(row: Pick<HomeListRow, "point" | "role">): string {
+  if (row.point.state === "preparing") return POINT_WORD.preparing;
+  return row.role === "next" ? "откроется следующим" : POINT_WORD.ahead;
 }
 
 /** The words for a level's place on the module list. */

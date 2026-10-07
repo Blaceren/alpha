@@ -282,3 +282,101 @@ describe("the stylesheet is scoped and canonical", () => {
     expect(rule(".hm .hm-level--done .hm-level__mark")).not.toContain("signal");
   });
 });
+
+/* ====================================================================== *
+ * THE FIVE ROWS (DD-348, owner 2026-10-06): «показываем 3 уровня которые
+ * пройдены ранее, 1 актуальный и 1 следующий, вместо готовиться кнопки
+ * открытия урока и подсветка по мере завершения»; the next level dimmed,
+ * without a button (the owner's answer).
+ * ====================================================================== */
+describe("the Home list: three walked, the learner's level, the next", () => {
+  const rowsOf = (container: HTMLElement) =>
+    [...container.querySelectorAll(".hm-module .hm-level")].map((li) => ({
+      code: li.querySelector(".hm-level__code")!.textContent,
+      link: li.querySelector("a")?.getAttribute("href") ?? null,
+      go: li.querySelector(".hm-level__go")?.textContent ?? null,
+      word: li.querySelector(".hm-level__state")?.textContent ?? null,
+      module: li.querySelector(".hm-level__module")?.textContent ?? null,
+      edge: li.classList.contains("hm-level--edge"),
+      here: li.getAttribute("aria-current") === "step",
+    }));
+  const show = (view: ReturnType<typeof program>) =>
+    render(<HomeOverview name="Вера" position={programPosition(view)} tools={null} news={null} priority={<p>p</p>} />).container;
+
+  it("with every open level done, stands on the first one being prepared — «Начать» there, as on Path", async () => {
+    const { homeListRows } = await import("@/features/auth-home-fidelity/home-overview-model");
+    const view = program([{ levels: "ddd" }, { levels: "ddd" }, { levels: "ppp" }]);
+    expect(homeListRows(programPosition(view)).map((r) => `${r.point.order}:${r.role}`)).toEqual([
+      "4:walked", "5:walked", "6:walked", "7:here", "8:next",
+    ]);
+    const rows = rowsOf(show(view));
+    expect(rows.map((r) => r.code)).toEqual(["L04", "L05", "L06", "L07", "L08"]);
+    expect(rows.slice(0, 3).map((r) => r.go)).toEqual(["Открыть урок", "Открыть урок", "Открыть урок"]);
+    expect(rows[3]).toMatchObject({ go: "Начать", here: true, edge: true, link: "/lessons/v5.l007" });
+    expect(rows[4]).toMatchObject({ go: null, link: null, word: "готовится" });
+    // The walked levels of another module say which, once, on the first row of the run.
+    expect(rows.map((r) => r.module)).toEqual([" · модуль 2", null, null, null, null]);
+  });
+
+  it("in the middle of an open module: walked, current, and the next level closed and dim", () => {
+    const rows = rowsOf(show(levelFourProgram()));
+    expect(rows.map((r) => [r.code, r.go ?? r.word])).toEqual([
+      ["L01", "Открыть урок"], ["L02", "Открыть урок"], ["L03", "Открыть урок"], ["L04", "Начать"], ["L05", "откроется следующим"],
+    ]);
+    expect(rows.map((r) => r.link !== null)).toEqual([true, true, true, true, false]);
+  });
+
+  it("at the start of the program the five shift ahead, and what is further says «впереди»", () => {
+    const rows = rowsOf(show(program([{ levels: "caaaa" }, { levels: "aaa" }])));
+    expect(rows.map((r) => [r.code, r.go ?? r.word])).toEqual([
+      ["L01", "Начать"], ["L02", "откроется следующим"], ["L03", "впереди"], ["L04", "впереди"], ["L05", "впереди"],
+    ]);
+  });
+
+  it("runs into the next module where the next level is there", () => {
+    const rows = rowsOf(show(program([{ levels: "ddddc" }, { levels: "ppp" }])));
+    expect(rows.map((r) => r.code)).toEqual(["L02", "L03", "L04", "L05", "L06"]);
+    expect(rows[4]).toMatchObject({ edge: true, module: " · модуль 2", word: "готовится", link: null });
+  });
+
+  it("keeps the spine's light on walked rows and Signal on the learner's row only", () => {
+    const css = SRC("home-hifi.css");
+    const rule = (sel: string) => css.slice(css.indexOf(sel + " {"), css.indexOf("}", css.indexOf(sel + " {")));
+    expect(rule(".hm .hm-level--done:not(:last-child)::before")).toContain("var(--hm-axis-done)");
+    expect(rule(".hm .hm-level__go--start")).toContain("var(--signal-active)");
+    expect(rule(".hm .hm-level__go")).not.toContain("signal");
+  });
+});
+
+describe("Home's head is one block: the greeting leads, the figures follow smaller (DD-351)", () => {
+  const css = SRC("home-hifi.css");
+  const rule = (selector: string) => {
+    const at = css.indexOf(`${selector} {`);
+    expect(at, selector).toBeGreaterThan(-1);
+    return css.slice(at, css.indexOf("}", at));
+  };
+
+  it("one raised plate holds both; the figures carry no surface of their own", () => {
+    expect(rule(".hm .hm-head")).toContain("background: var(--hf-light), var(--hf-surface-raised)");
+    expect(rule(".hm .hm-head")).toContain("border-radius: var(--hf-radius-window)");
+    expect(rule(".hm .hm-head__who")).not.toContain("background");
+    expect(rule(".hm .hm-facts")).not.toContain("background");
+    expect(rule(".hm .hm-facts")).not.toContain("border:");
+  });
+
+  it("the figures are smaller than the greeting's statement", () => {
+    expect(rule(".hm .hm-fact dd")).toContain("17px");
+    expect(rule(".hm .hm-greeting")).toContain("var(--hf-title-xl)");
+  });
+
+  it("the XP is still the one lit figure", () => {
+    expect(rule('.hm .hm-fact[data-fact="xp"] dd')).toContain("var(--signal-active)");
+    expect(rule('.hm .hm-fact[data-fact="xp"]')).toContain("border-radius: 8px");
+    const { container } = render(
+      <HomeOverview name="Вера" position={programPosition(levelFourProgram({ xp: 300 }))} tools={null} news={null} priority={<p>p</p>} />,
+    );
+    const head = container.querySelector(".hm-head")!;
+    expect(head.querySelector(".hm-head__who .hm-greeting")).not.toBeNull();
+    expect(head.querySelector('.hm-facts .hm-fact[data-fact="xp"] dd')!.textContent).toBe("300 XP");
+  });
+});

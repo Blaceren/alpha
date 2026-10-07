@@ -31,8 +31,10 @@ const FAILURE_MESSAGE: Record<ResetRequestFailure, string> = {
   FAILED: "Не удалось отправить запрос. Повторите попытку.",
 };
 
-/** Failures decided before the Backend verified the challenge: the token is unspent. */
-const KEEPS_TOKEN: ReadonlySet<ResetRequestFailure> = new Set(["RATE_LIMITED", "VALIDATION_ERROR", "FAILED", "UNAVAILABLE"]);
+/** Failures decided before the Backend verified the challenge: the token is unspent.
+    Only those keep it (2026-10-07 audit): a failure after the challenge may have
+    spent the token, and keeping it made the next press fail as a replay. */
+const KEEPS_TOKEN: ReadonlySet<ResetRequestFailure> = new Set(["RATE_LIMITED", "VALIDATION_ERROR"]);
 
 export function ForgotPasswordForm({ turnstileSiteKey }: { turnstileSiteKey: string | null }) {
   const emailId = useId();

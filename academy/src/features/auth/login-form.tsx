@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as api from "@/lib/api/client";
 import {
@@ -97,6 +97,22 @@ export function LoginForm({ turnstileSiteKey, passwordRecovery = false }: LoginF
     setCaptchaResetSignal((value) => value + 1);
   }, []);
 
+  /* SIGNED IN ALREADY, SEEN FROM THIS PAGE (2026-10-07 audit). The server
+     sends a signed-in learner on before this form renders — when it can see
+     the session. A link opened from a messenger or a mail arrives without the
+     session cookie (it is SameSite=Strict), so the form was shown to someone
+     who was signed in, and signing in again cost them a session. This page's
+     own request does carry the cookie: a learner it finds goes on to where they
+     were heading. Nothing is shown or said if it finds nobody. */
+  useEffect(() => {
+    const controller = new AbortController();
+    void api.fetchSession(controller.signal).then((result) => {
+      if (controller.signal.aborted || inFlight.current) return;
+      if (result.ok && result.data.user) router.replace(returnTo);
+    });
+    return () => controller.abort();
+  }, [router, returnTo]);
+
   function fail(failure: LoginFailure, requestId: string | null) {
     if (shouldClearPassword(failure)) setPassword("");
     if (shouldRenewCaptcha(failure)) renewCaptcha();
@@ -137,10 +153,14 @@ export function LoginForm({ turnstileSiteKey, passwordRecovery = false }: LoginF
       return;
     }
 
-    // Confirm the session was established before navigating.
+    // Confirm the session was established before navigating. A confirmation
+    // that could not be READ (the network, the Backend) does not undo a sign-in
+    // that succeeded (2026-10-07 audit): the learner goes on, and a retry here
+    // would only have issued another session. Only an answer that says «nobody
+    // is signed in» — the cookie was not kept — stops here.
     const session = await api.fetchSession();
-    if (!session.ok || !session.data.user) {
-      fail(session.ok ? "UNKNOWN" : mapLoginFailure(session.error), session.ok ? null : session.error.requestId);
+    if (session.ok && !session.data.user) {
+      fail("UNKNOWN", null);
       return;
     }
 

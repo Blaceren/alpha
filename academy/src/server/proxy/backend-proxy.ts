@@ -16,6 +16,7 @@ import { makeError, REQUEST_ID_HEADER, type NormalizedError } from "@/lib/api/er
 import { getProxyRoute, type ProxyOperation, type ProxyRoute } from "@/server/proxy/allow-list";
 import { BACKEND_AUTH_SURFACE_HEADER } from "@/server/proxy/auth-surface";
 import { deriveTrustedClientIp, FORWARDED_CLIENT_IP_HEADERS } from "@/server/proxy/client-ip";
+import { isCrossSiteRequest } from "./cross-site";
 
 /** 64 KiB is far more than any auth payload needs. */
 export const MAX_BODY_BYTES = 64 * 1024;
@@ -69,6 +70,14 @@ function buildForwardHeaders(request: Request, route: ProxyRoute): Headers {
     }
   }
 
+  // Where a session is issued, the browser's own description goes along, so the
+  // learner's list of sessions can name the device (owner 2026-10-07). Kept
+  // short here as well; it authorises nothing.
+  if (route.forwardUserAgent) {
+    const userAgent = request.headers.get("user-agent");
+    if (userAgent) headers.set("user-agent", userAgent.slice(0, 400));
+  }
+
   // AFD-3A3: name the authentication surface, from the allow-list constant and
   // from nowhere else. `set` after the loop above, so even if the forwarded
   // allow-list ever grew this name by mistake, the browser's value is overwritten
@@ -106,6 +115,11 @@ export async function proxyToBackend(
   // 1. Method allow-list.
   if (request.method !== route.method) {
     return errorResponse(makeError("VALIDATION_ERROR", { status: 405 }), 405);
+  }
+
+  // 1b. Not from another site's page (2026-10-07 audit) — see `cross-site.ts`.
+  if (route.method === "POST" && isCrossSiteRequest(request)) {
+    return errorResponse(makeError("FORBIDDEN", { status: 403 }), 403);
   }
 
   // 2. Configuration (fail-closed).

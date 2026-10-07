@@ -33,6 +33,13 @@ import Link from "next/link";
  * omitted and the primary call to action becomes «Перейти в Академию» → /home.
  * Nothing else about the header changes: the same element order, the same
  * classes, the same geometry.
+ *
+ * On a phone and a tablet (2026-10-07, the owner: «на мобильной версии в шапке
+ * сделай кнопку как на десктопе в случае того что залогинен кнопка перейти в
+ * академию а не вход»), the place of «Войти» beside «Меню» is taken, signed in,
+ * by the desktop's own call to action — the same signal button to /home — so
+ * the way into the Academy is not hidden inside the menu. On the narrowest
+ * phones it reads «В Академию».
  */
 export function PublicHomeHeader({ authenticated }: { authenticated: boolean }) {
   const [open, setOpen] = useState(false);
@@ -76,7 +83,16 @@ export function PublicHomeHeader({ authenticated }: { authenticated: boolean }) 
         </a>
 
         <div className="header-mobile-actions">
-          {authenticated ? null : (
+          {authenticated ? (
+            <Link
+              className="button button--small button--signal mobile-academy"
+              href="/home"
+              aria-label="Перейти в Академию"
+            >
+              <span className="mobile-academy__full">Перейти в Академию</span>
+              <span className="mobile-academy__short">В Академию</span>
+            </Link>
+          ) : (
             <Link className="mobile-login" href="/login" aria-label="Войти в личный кабинет ATA">
               Войти
             </Link>

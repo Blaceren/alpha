@@ -29,7 +29,7 @@ const REFERENCE: JournalReference = {
   assets: [{ code: "EURUSD_OTC", label: "EUR/USD OTC", group: "currency_otc" }],
   expiries: [{ code: "M3", label: "3 мин", seconds: 180 }],
   violations: [
-    { code: "no_reason", label: "Вход без записанной причины" },
+    { code: "no_reason", label: "Вход без записанного основания" },
     { code: "revenge", label: "Хотел отыграться после убытка" },
   ],
 };

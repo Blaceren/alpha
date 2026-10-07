@@ -245,9 +245,9 @@ type Allowed = {
  * with an empty reason and an entry naming the wrong side are all failures.
  */
 const ALLOWLIST: Allowed[] = [
-  { value: 359, side: "max-width", files: ["src/features/home/home.css", "src/features/tool-windows/tool-windows.css"], role: "phone-trim",
-    surfaces: ["authenticated"], disposition: "CONTENT_DRIVEN_KEEP",
-    why: "The narrowest phones (320): the phone top bar's section label no longer fits beside the bell, the avatar and «Выйти» and was cut to «ИНСТР…»; a tool's three-way choice gives each word 55px and «Прибыль» ran out of it. Both measured at 320, both fine at 360." },
+  { value: 359, side: "max-width", files: ["src/features/home/home.css", "src/features/public-home/public-home.css", "src/features/tool-windows/tool-windows.css"], role: "phone-trim",
+    surfaces: ["authenticated", "public-home"], disposition: "CONTENT_DRIVEN_KEEP",
+    why: "The narrowest phones (320): the phone top bar's section label no longer fits beside the bell, the avatar and «Выйти» and was cut to «ИНСТР…»; a tool's three-way choice gives each word 55px and «Прибыль» ran out of it. Both measured at 320, both fine at 360. Public Home's header, signed in, says «В Академию» instead of «Перейти в Академию» beside «Меню»: the pill's content is 269px at 320 and the full words need 299 (measured 2026-10-07), from 360 they fit." },
   { value: 380, side: "max-width", files: ["src/features/lesson/lesson.css"], role: "phone-trim",
     surfaces: ["authenticated"], disposition: "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
     why: "Within 20px of 360 and 400 doing similar padding work on different components; consolidation needs a visual pass on routes that require a session." },

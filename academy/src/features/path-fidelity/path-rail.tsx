@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { nearnessAt } from "@/features/path-fidelity/path-state";
 
 /**
  * Path rail controller — the frozen surface's geometry behaviour.
@@ -14,15 +15,21 @@ import { useEffect } from "react";
  *   * `positionCurrent` — bring the current node to 42% of the rail width, the
  *     frozen landing position. Instant on load, and instant under reduced
  *     motion.
- *   * `layoutFocusJoin` — the leader line that visually joins the current node's
- *     mark to the focus panel, including the merged case when the node sits at
- *     the panel's left edge and the hidden case when it is past the right edge.
  *   * `updateRailFades` — the more-left / more-right edge fades, the per-node
  *     `--peek` class for nodes clipped by the window, and the return-to-current
  *     utility whose visibility threshold is the current node's CENTRE leaving
  *     the window, with a directional arrow.
  *   * the return utility hands focus to the detail heading after use, so a
  *     keyboard user is never dropped to body.
+ *   * `nearness` (DD-353) — how near the pointer is to each opened level's
+ *     block, so the stylesheet can brighten that level's branch and run the
+ *     light along its block's outline.
+ *
+ * The frozen leader that joined the current mark to the detail panel is gone
+ * (DD-353, owner 2026-10-07: «она не должна входить в следующую область»), and
+ * with it DD-346's single branch that moved to the pointed level and DD-352's
+ * light along the panel's edge: each opened level has its own branch now, and
+ * it ends in its own block.
  *
  * The frozen script's transition engine (workflow / advance / module swaps) is
  * deliberately NOT reproduced. Those are driven by its synthetic transition
@@ -30,12 +37,13 @@ import { useEffect } from "react";
  * the new state. Reproducing them would mean simulating progression on the
  * client, which is exactly the authority inversion the contracts forbid.
  */
+
 export function PathRail() {
   useEffect(() => {
     const root = document.querySelector<HTMLElement>("[data-pth-root]");
     const scroller = root?.querySelector<HTMLElement>("[data-scroller]");
     const rail = root?.querySelector<HTMLElement>(".rail");
-    const leader = root?.querySelector<HTMLElement>("[data-leader]");
+    const workspace = root?.querySelector<HTMLElement>(".workspace");
     const returnBtn = root?.querySelector<HTMLButtonElement>("[data-return]");
     if (!root || !scroller || !rail) return;
 
@@ -49,45 +57,80 @@ export function PathRail() {
         : null;
     const prefersReduced = () => reducedQuery?.matches ?? false;
     const currentNode = () => root.querySelector<HTMLElement>('[aria-current="step"]');
+    const strip = root.querySelector<HTMLElement>(".level-strip");
+
+    /*
+     * THE BLOCKS WAKE AS THE POINTER NEARS (DD-353, owner 2026-10-07: «она
+     * должна в момент того как водишь и приближаешься к блоку становиться ярче
+     * и начинать свечение обводки постепенно, блоки пройденные»). While a mouse
+     * or a pen is over the module's field (`data-pointer` on it), every opened
+     * level — walked, or the one in focus — gets `--near`: 1 inside its block,
+     * fading to 0 at `NEAR_REACH` away. All reads come before all writes. When
+     * the pointer leaves the field every block goes back to 0, and the
+     * stylesheet lets the light out slowly. Keyboard focus on a level's way in
+     * holds that level at 1. Touch has no hover, so a finger wakes nothing.
+     */
+    let pointer: { x: number; y: number } | null = null;
+    let held: HTMLElement | null = null;
+
+    function nearness() {
+      const nodes = Array.from(root!.querySelectorAll<HTMLElement>(".level-node[data-open]"));
+      const values = nodes.map((node) => {
+        if (node === held) return 1;
+        const block = node.querySelector<HTMLElement>(".level-node__block");
+        if (!pointer || !block) return 0;
+        const r = block.getBoundingClientRect();
+        const dx = Math.max(r.left - pointer.x, 0, pointer.x - r.right);
+        const dy = Math.max(r.top - pointer.y, 0, pointer.y - r.bottom);
+        return nearnessAt(Math.hypot(dx, dy));
+      });
+      nodes.forEach((node, i) => node.style.setProperty("--near", values[i]!.toFixed(3)));
+    }
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      pointer = { x: event.clientX, y: event.clientY };
+      if (workspace) workspace.dataset.pointer = "";
+      nearness();
+    };
+    const onPointerLeave = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      pointer = null;
+      if (workspace) delete workspace.dataset.pointer;
+      nearness();
+    };
+    const openNodeAt = (target: EventTarget | null) => {
+      const node = target instanceof Element ? target.closest<HTMLElement>(".level-node") : null;
+      return node && node.hasAttribute("data-open") ? node : null;
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      held = openNodeAt(event.target);
+      nearness();
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      if (held && held.contains(event.relatedTarget as Node | null)) return;
+      held = null;
+      nearness();
+    };
 
     function positionCurrent(smooth = false) {
       const cur = currentNode();
       if (!cur || !scroller) return;
       if (scroller.scrollWidth <= scroller.clientWidth) return;
-      const left = cur.offsetLeft + cur.offsetWidth / 2 - scroller.clientWidth * 0.42;
+      /* The level behind the current one is part of the view (DD-346): where
+         the two fit side by side the strip opens on both; where they do not —
+         a phone — the frozen landing, the current level at 42%. */
+      const behind = cur.previousElementSibling as HTMLElement | null;
+      const pairFits =
+        behind !== null &&
+        cur.offsetLeft + cur.offsetWidth - behind.offsetLeft <= scroller.clientWidth - 36;
+      const left = pairFits
+        ? behind.offsetLeft
+        : cur.offsetLeft + cur.offsetWidth / 2 - scroller.clientWidth * 0.42;
       scroller.scrollTo({
         left,
         behavior: smooth && !prefersReduced() ? "smooth" : "instant",
       });
-    }
-
-    /*
-     * THE BRANCH (2026-10-04, owner: «задумка хорошая, но реализация ужасная»).
-     * The leader used to fill only the gap above the panel — or, for a level at
-     * the left edge, fuse into the panel's corner — so it hung half a screen
-     * below the node it belonged to. It is now one line from the current mark's
-     * lower edge straight down to the panel, at the mark's own centre, and it
-     * hides when the mark is panned out of the panel's width.
-     */
-    function layoutFocusJoin() {
-      const cur = currentNode();
-      const focus = root?.querySelector<HTMLElement>("[data-focus]");
-      if (!cur || !focus || !leader) return;
-      const mark = cur.querySelector<HTMLElement>(".level-node__mark");
-      if (!mark) return;
-      const markRect = mark.getBoundingClientRect();
-      const focusRect = focus.getBoundingClientRect();
-      const x = markRect.left + markRect.width / 2 - focusRect.left;
-      const top = markRect.bottom - focusRect.top;
-      leader.classList.remove("focus__leader--merged");
-      if (x < 18 || x > focusRect.width - 18 || top >= 0) {
-        leader.hidden = true;
-        return;
-      }
-      leader.style.left = `${Math.round(x - 1)}px`;
-      leader.style.top = `${Math.round(top)}px`;
-      leader.style.height = `${Math.round(-top)}px`;
-      leader.hidden = false;
     }
 
     function updateRailFades() {
@@ -97,9 +140,13 @@ export function PathRail() {
       rail.classList.toggle("rail--more-right", scroller.scrollLeft < max - 4);
 
       let currentVisible = true;
-      if (max > 0) {
+      const nodes = Array.from(root!.querySelectorAll<HTMLElement>(".level-node"));
+      if (max <= 0) {
+        /* Nothing pans (a desktop, or a window made wider): no level is cut. */
+        for (const node of nodes) node.classList.remove("level-node--peek");
+      } else {
         const s = scroller.getBoundingClientRect();
-        for (const node of Array.from(root!.querySelectorAll<HTMLElement>(".level-node"))) {
+        for (const node of nodes) {
           const r = node.getBoundingClientRect();
           node.classList.toggle("level-node--peek", r.left < s.left + 10 || r.right > s.right - 10);
         }
@@ -134,28 +181,41 @@ export function PathRail() {
       );
     };
 
+    /* A scroll moves the blocks under a still pointer; a resize moves them too. */
     const onResize = () => {
       positionCurrent();
-      layoutFocusJoin();
       updateRailFades();
+      if (pointer) nearness();
     };
     const onScroll = () => {
-      layoutFocusJoin();
       updateRailFades();
+      if (pointer) nearness();
+    };
+    const onPageScroll = () => {
+      if (pointer) nearness();
     };
 
     positionCurrent();
-    layoutFocusJoin();
     updateRailFades();
 
     returnBtn?.addEventListener("click", onReturn);
     window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onPageScroll, { passive: true });
     scroller.addEventListener("scroll", onScroll, { passive: true });
+    workspace?.addEventListener("pointermove", onPointerMove);
+    workspace?.addEventListener("pointerleave", onPointerLeave);
+    strip?.addEventListener("focusin", onFocusIn);
+    strip?.addEventListener("focusout", onFocusOut);
 
     return () => {
       returnBtn?.removeEventListener("click", onReturn);
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onPageScroll);
       scroller.removeEventListener("scroll", onScroll);
+      workspace?.removeEventListener("pointermove", onPointerMove);
+      workspace?.removeEventListener("pointerleave", onPointerLeave);
+      strip?.removeEventListener("focusin", onFocusIn);
+      strip?.removeEventListener("focusout", onFocusOut);
     };
   }, []);
 

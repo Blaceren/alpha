@@ -9,7 +9,7 @@
  * profile. Signing out is where a person looks for it.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -26,9 +26,21 @@ vi.mock("@/lib/support/support-client", () => ({ listSupportCases: () => listSup
 const logout = vi.fn(async () => {});
 let session: unknown = null;
 vi.mock("@/features/auth/use-session", () => ({ useOptionalSession: () => session }));
+const listSessions = vi.fn();
+const closeSession = vi.fn();
+vi.mock("@/lib/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/client")>()),
+  listAccountSessions: () => listSessions(),
+  closeAccountSession: (id: string) => closeSession(id),
+}));
 
-import { ProfileSupportCard, SUPPORT_CARD_COPY } from "@/features/profile-fidelity/profile-support-card";
-import { ProfileExit, EXIT_COPY } from "@/features/profile-fidelity/profile-exit";
+import {
+  ProfileSessions,
+  SESSIONS_COPY,
+  deviceName,
+  lastUsedLine,
+  signedInLine,
+} from "@/features/profile-fidelity/profile-sessions";
 
 const ROOT = process.cwd();
 const SRC = (f: string) => readFileSync(join(ROOT, "src/features/profile-fidelity", f), "utf8");
@@ -39,9 +51,31 @@ const TOOLS = { total: 6, unlockedCount: 2, tools: [
   { code: "tool.trading_journal", unlocked: true, unlockLevel: 9 },
 ] };
 
+const TWO_SESSIONS = {
+  limit: 2,
+  sessions: [
+    {
+      id: "cmthisbrowser00000000000001",
+      current: true,
+      signedInAt: "2026-10-07T06:12:00.000Z",
+      lastSeenAt: new Date().toISOString(),
+      device: { browser: "Chrome", os: "Windows", kind: "computer" },
+    },
+    {
+      id: "cmotherdevice00000000000002",
+      current: false,
+      signedInAt: "2026-10-06T18:40:00.000Z",
+      lastSeenAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+      device: { browser: "Safari", os: "iPhone", kind: "phone" },
+    },
+  ],
+};
+
 beforeEach(() => {
   listSupportCases.mockReset();
   logout.mockClear();
+  listSessions.mockReset().mockResolvedValue({ ok: true, data: TWO_SESSIONS });
+  closeSession.mockReset().mockResolvedValue({ ok: true, data: { revoked: true } });
   session = null;
 });
 
@@ -161,60 +195,139 @@ describe("the parts", () => {
   });
 });
 
-describe("the support card", () => {
-  const row = (id: string, status: string, lastActivityAt: string) => ({
-    id, reference: `LO-${id}`, subject: `Вопрос ${id}`, status, lastActivityAt, createdAt: lastActivityAt,
-  });
-
-  it("shows the latest two requests with their state, and the way in", async () => {
-    listSupportCases.mockResolvedValue({ ok: true, data: [
-      row("1", "resolved", "2026-10-01T10:00:00Z"),
-      row("2", "waiting_learner", "2026-10-03T10:00:00Z"),
-      row("3", "in_progress", "2026-10-02T10:00:00Z"),
-    ] });
-    const { container } = render(<ProfileSupportCard />);
-    await waitFor(() => expect(container.querySelectorAll(".p-aside__case")).toHaveLength(2));
-    const cases = [...container.querySelectorAll(".p-aside__case")];
-    expect(cases[0]!.textContent).toContain("Вопрос 2");
-    expect(cases[0]!.textContent).toContain("Ждём вашего ответа");
-    expect(cases[1]!.textContent).toContain("В работе");
-    expect(container.querySelector(".p-aside__cases")!.getAttribute("aria-label")).toBe("Открытых обращений: 2");
-    expect(screen.getByRole("link", { name: SUPPORT_CARD_COPY.action })).toHaveAttribute("href", "/profile/support");
-    // Each row opens its own case (2026-10-04).
-    expect(cases[0]!.querySelector("a")!.getAttribute("href")).toBe("/profile/support?case=2");
-  });
-
-  it("says there are none, and a failed read leaves only the way in", async () => {
-    listSupportCases.mockResolvedValue({ ok: true, data: [] });
-    const none = render(<ProfileSupportCard />);
-    await waitFor(() => expect(none.container.textContent).toContain(SUPPORT_CARD_COPY.none));
-    none.unmount();
-
-    listSupportCases.mockResolvedValue({ ok: false, error: { category: "NETWORK_ERROR" } });
-    const failed = render(<ProfileSupportCard />);
-    await waitFor(() => expect(listSupportCases).toHaveBeenCalledTimes(2));
-    expect(failed.container.querySelector(".p-aside__cases")).toBeNull();
-    expect(failed.container.querySelector('[role="alert"]')).toBeNull();
-    expect(screen.getByRole("link", { name: SUPPORT_CARD_COPY.action })).toBeTruthy();
+describe("the account tab has no support card beside its rows (owner, 2026-10-06, DD-349)", () => {
+  it("is not rendered, and the component is gone", () => {
+    const page = readFileSync(join(process.cwd(), "src/app/(app)/profile/page.tsx"), "utf8");
+    expect(page).not.toContain("ProfileSupportCard");
+    expect(page).not.toMatch(/aside=\{/);
+    expect(existsSync(join(process.cwd(), "src/features/profile-fidelity/profile-support-card.tsx"))).toBe(false);
+    // The way into support stays: the «Поддержка» tab, and the email row's own link.
+    expect(page).toContain('<ProfileTabs current="account" />');
   });
 });
 
-describe("signing out", () => {
-  it("is drawn only for a real session, and runs the session's own logout", async () => {
-    const nobody = render(<ProfileExit />);
+/* «Сеансы» (DD-354, owner 2026-10-07: «Сделай что бы можно было иметь 2 активных
+   сеанса в 1 аккаунте и в профиле снизу есть сеансы они должны быть там показаны
+   и возможность закрыть сеанс с другого сеанса»). */
+describe("the sessions at the bottom of the profile", () => {
+  const real = () => {
+    session = { viewer: { synthetic: false, name: "Вера" }, logout };
+  };
+
+  it("is drawn only for a real session", () => {
+    const nobody = render(<ProfileSessions />);
     expect(nobody.container.innerHTML).toBe("");
     nobody.unmount();
-
     session = { viewer: { synthetic: true }, logout };
-    const fixture = render(<ProfileExit />);
+    const fixture = render(<ProfileSessions />);
     expect(fixture.container.innerHTML).toBe("");
-    fixture.unmount();
+    expect(listSessions).not.toHaveBeenCalled();
+  });
 
-    session = { viewer: { synthetic: false, name: "Вера" }, logout };
-    render(<ProfileExit />);
-    expect(screen.getByRole("heading", { level: 2, name: EXIT_COPY.section })).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: EXIT_COPY.action }));
+  it("lists both: this browser with signing out, the other by its device with «Завершить сеанс»", async () => {
+    real();
+    render(<ProfileSessions />);
+    expect(screen.getByRole("heading", { level: 2, name: SESSIONS_COPY.section })).toBeTruthy();
+    expect(screen.getByText(SESSIONS_COPY.intro)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("Safari на iPhone")).toBeTruthy());
+    const rows = screen.getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.textContent).toContain("Chrome на Windows");
+    expect(rows[0]!.textContent).toContain(SESSIONS_COPY.thisBrowser);
+    expect(rows[0]!.querySelector('[data-role="session-exit"]')?.textContent).toBe(SESSIONS_COPY.exit);
+    expect(rows[1]!.textContent).toContain("был активен 2 ч назад");
+    expect(screen.getByRole("button", { name: `${SESSIONS_COPY.close}: Safari на iPhone` })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: SESSIONS_COPY.exit }));
     expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("closing the other asks once more, can be taken back, then closes it and says so", async () => {
+    real();
+    render(<ProfileSessions />);
+    const close = await screen.findByRole("button", { name: `${SESSIONS_COPY.close}: Safari на iPhone` });
+    await userEvent.click(close);
+    const ask = screen.getByRole("group", { name: SESSIONS_COPY.confirm });
+    // The safe answer has the keyboard.
+    expect(document.activeElement?.textContent).toBe(SESSIONS_COPY.confirmNo);
+    await userEvent.click(screen.getByRole("button", { name: SESSIONS_COPY.confirmNo }));
+    expect(screen.queryByRole("group", { name: SESSIONS_COPY.confirm })).toBeNull();
+    expect(closeSession).not.toHaveBeenCalled();
+    expect(ask).toBeTruthy();
+
+    listSessions.mockResolvedValue({ ok: true, data: { limit: 2, sessions: [TWO_SESSIONS.sessions[0]] } });
+    await userEvent.click(screen.getByRole("button", { name: `${SESSIONS_COPY.close}: Safari на iPhone` }));
+    await userEvent.click(screen.getByRole("button", { name: SESSIONS_COPY.confirmYes }));
+    expect(closeSession).toHaveBeenCalledWith("cmotherdevice00000000000002");
+    await waitFor(() => expect(screen.queryByText("Safari на iPhone")).toBeNull());
+    expect(screen.getByRole("status").textContent).toBe(SESSIONS_COPY.closed);
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  it("a failed close keeps the row and says so", async () => {
+    real();
+    closeSession.mockResolvedValue({ ok: false, error: { category: "NETWORK_ERROR" } });
+    render(<ProfileSessions />);
+    await userEvent.click(await screen.findByRole("button", { name: `${SESSIONS_COPY.close}: Safari на iPhone` }));
+    await userEvent.click(screen.getByRole("button", { name: SESSIONS_COPY.confirmYes }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(SESSIONS_COPY.closeFailed));
+    expect(screen.getByText("Safari на iPhone")).toBeTruthy();
+  });
+
+  /* 2026-10-07 audit: a session that is already gone answered «not found», and
+     «Завершить сеанс» failed again and again while the list stayed stale. */
+  it("a session that is already gone is said to be closed, and the list is read again", async () => {
+    real();
+    closeSession.mockResolvedValue({ ok: false, error: { category: "UNKNOWN_ERROR", status: 404 } });
+    render(<ProfileSessions />);
+    await userEvent.click(await screen.findByRole("button", { name: `${SESSIONS_COPY.close}: Safari на iPhone` }));
+    const readsBefore = listSessions.mock.calls.length;
+    listSessions.mockResolvedValue({ ok: true, data: { limit: 2, sessions: [TWO_SESSIONS.sessions[0]] } });
+    await userEvent.click(screen.getByRole("button", { name: SESSIONS_COPY.confirmYes }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(SESSIONS_COPY.alreadyClosed));
+    expect(screen.queryByText("Safari на iPhone")).toBeNull();
+    await waitFor(() => expect(listSessions.mock.calls.length).toBeGreaterThan(readsBefore));
+  });
+
+  it("a failed close reads the list again, so it shows what is live now", async () => {
+    real();
+    closeSession.mockResolvedValue({ ok: false, error: { category: "NETWORK_ERROR", status: null } });
+    render(<ProfileSessions />);
+    await userEvent.click(await screen.findByRole("button", { name: `${SESSIONS_COPY.close}: Safari на iPhone` }));
+    const readsBefore = listSessions.mock.calls.length;
+    await userEvent.click(screen.getByRole("button", { name: SESSIONS_COPY.confirmYes }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(SESSIONS_COPY.closeFailed));
+    await waitFor(() => expect(listSessions.mock.calls.length).toBeGreaterThan(readsBefore));
+  });
+
+  it("signing out never waits for the list: without it this browser's row and its action stay", async () => {
+    real();
+    listSessions.mockResolvedValue({ ok: false, error: { category: "NETWORK_ERROR" } });
+    render(<ProfileSessions />);
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(SESSIONS_COPY.failed));
+    await userEvent.click(screen.getByRole("button", { name: SESSIONS_COPY.exit }));
+    expect(logout).toHaveBeenCalledTimes(1);
+    listSessions.mockResolvedValue({ ok: true, data: TWO_SESSIONS });
+    await userEvent.click(screen.getByRole("button", { name: SESSIONS_COPY.retry }));
+    await waitFor(() => expect(screen.getByText("Safari на iPhone")).toBeTruthy());
+  });
+
+  it("names a device by what is known of it, and says when — in words without plurals", () => {
+    expect(deviceName({ browser: "Chrome", os: "Windows", kind: "computer" })).toBe("Chrome на Windows");
+    expect(deviceName({ browser: null, os: "Android", kind: "phone" })).toBe("Android");
+    expect(deviceName({ browser: "Firefox", os: null, kind: null })).toBe("Firefox");
+    expect(deviceName({ browser: null, os: null, kind: null })).toBe(SESSIONS_COPY.unknownDevice);
+    const now = Date.parse("2026-10-07T12:00:00.000Z");
+    expect(lastUsedLine("2026-10-07T11:55:00.000Z", now)).toBe("активен недавно");
+    expect(lastUsedLine("2026-10-07T11:20:00.000Z", now)).toBe("был активен 40 мин назад");
+    expect(lastUsedLine("2026-10-07T07:00:00.000Z", now)).toBe("был активен 5 ч назад");
+    expect(lastUsedLine("2026-10-04T12:00:00.000Z", now)).toMatch(/^был активен 4 окт\.?$/);
+    expect(signedInLine("2026-10-07T06:12:00.000Z")).toMatch(/^вход 7 окт\.?, \d{2}:\d{2}$/);
+  });
+
+  it("is the page's last section, where «Сеанс» used to be", () => {
+    const page = readFileSync(join(process.cwd(), "src/app/(app)/profile/page.tsx"), "utf8");
+    expect(page).toContain("closing={<ProfileSessions />}");
+    expect(existsSync(join(process.cwd(), "src/features/profile-fidelity/profile-exit.tsx"))).toBe(false);
   });
 });
 
@@ -230,7 +343,7 @@ describe("the day the account was made", () => {
 });
 
 describe("what the profile never shows", () => {
-  const code = ["profile-passport.tsx", "profile-record.ts", "profile-tabs.tsx", "profile-exit.tsx", "profile-support-card.tsx"]
+  const code = ["profile-passport.tsx", "profile-record.ts", "profile-tabs.tsx"]
     .map((f) => codeOnly(SRC(f)))
     .join("\n");
 
@@ -239,6 +352,27 @@ describe("what the profile never shows", () => {
       expect(code, word).not.toContain(word);
     }
     expect(code).not.toMatch(/\$\s?\d/);
+  });
+
+  it("the sessions neither — and no address, no token: a device is a kind and a name", () => {
+    /* «Телефон» / `phone` there is the KIND of a device («Safari на iPhone» is a
+       phone), not a number; the Backend sends no address and keeps none. */
+    const sessions = codeOnly(SRC("profile-sessions.tsx"));
+    for (const word of ["balance", "баланс", "deposit", "депозит", "Pocket", "affiliate", "партнёр", "token", "ip", "userAgent"]) {
+      expect(sessions, word).not.toMatch(new RegExp(`\\b${word}\\b`));
+    }
+    expect(sessions).not.toMatch(/\$\s?\d/);
+  });
+});
+
+describe("on a phone every action sits at its row's bottom right (owner 2026-10-07)", () => {
+  it("the rows' actions, a form's buttons and the answers to closing a session go right", () => {
+    const css = SRC("profile-hifi.css").replace(/\/\*[\s\S]*?\*\//g, "");
+    const at = css.lastIndexOf("@media (max-width: 599px)");
+    const block = css.slice(at, css.indexOf("\n}\n", at));
+    expect(block).toMatch(/\.pf\.pf--hifi \.p-edit,\s*\.pf\.pf--hifi \.p-edit--link \{[^}]*align-self: flex-end;[^}]*margin-left: auto;/);
+    expect(block).toMatch(/\.pf\.pf--hifi \.p-actions \{\s*justify-content: flex-end;/);
+    expect(block).toMatch(/\.pf\.pf--hifi \.p-session__ask \{\s*justify-content: flex-end;/);
   });
 });
 

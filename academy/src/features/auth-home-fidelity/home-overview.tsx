@@ -5,9 +5,11 @@ import type { ToolWindowView } from "@/features/tool-windows/model/access";
 import type { NotificationRow } from "@/features/notifications-fidelity/notifications-state";
 import {
   POINT_WORD,
+  closedRowWord,
   currentShare,
   greetingLine,
   homeFacts,
+  homeListRows,
   isPreparing,
   levelRange,
   nextModule,
@@ -182,25 +184,51 @@ function HomeModule({ position }: { position: ProgramPosition }) {
           {isPreparing(focus) ? "готовится" : `пройдено ${focus.completed} из ${focus.points.length}`}
         </p>
       </header>
+      {/* THE FIVE ROWS (DD-348, owner 2026-10-06): three walked levels, the one
+          the learner stands on, the next — across module edges. A walked row
+          opens its lesson («Открыть урок»), the learner's row starts it
+          («Начать», also while it is being prepared — that page says so), and
+          a closed row is dim and says why, with nothing to press. The spine is
+          lit as far as the learner has walked. */}
       <ol className="hm-levels">
-        {focus.points.map((point) => {
+        {homeListRows(position).map((row) => {
+          const { point, module, role } = row;
+          const href = role === "walked" ? point.href : role === "here" ? point.href ?? point.pageHref : null;
           const body = (
             <>
               <span className="hm-level__mark" aria-hidden="true" />
               <span className="hm-level__code">L{String(point.order).padStart(2, "0")}</span>
               <span className="hm-level__title">{point.title}</span>
-              <span className="hm-level__kind">{point.kindLabel}</span>
-              <span className="hm-level__state">{POINT_WORD[point.state]}</span>
+              <span className="hm-level__kind">
+                {point.kindLabel}
+                {row.foreign ? <span className="hm-level__module"> · модуль {module.order}</span> : null}
+              </span>
+              {href && role === "walked" ? (
+                <span className="hm-level__go hm-level__go--open">Открыть урок</span>
+              ) : href && role === "here" ? (
+                <span className="hm-level__go hm-level__go--start">Начать</span>
+              ) : (
+                <span className="hm-level__state">
+                  {role === "walked" ? POINT_WORD.done : closedRowWord(row)}
+                </span>
+              )}
             </>
           );
           return (
             <li
               key={point.levelCode}
-              className={`hm-level hm-level--${point.state}`}
-              {...(point.state === "current" ? { "aria-current": "step" as const } : {})}
+              className={[
+                "hm-level",
+                `hm-level--${point.state}`,
+                `hm-level--${role}`,
+                row.edge ? "hm-level--edge" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              {...(role === "here" ? { "aria-current": "step" as const } : {})}
             >
-              {point.href ? (
-                <Link className="hm-level__row" href={point.href}>
+              {href ? (
+                <Link className="hm-level__row" href={href}>
                   {body}
                 </Link>
               ) : (

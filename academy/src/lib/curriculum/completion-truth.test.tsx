@@ -247,9 +247,10 @@ describe("one dictionary, three surfaces", () => {
 });
 
 describe("XP is a secondary metric", () => {
-  /* Lesson hi-fi (DD-336): the table of parameters is gone. XP is one quiet
-     fact in the line under the title — after the video's length and the
-     method, never leading, never lit. */
+  /* Lesson hi-fi (DD-336): the table of parameters is gone. XP is one fact in
+     the line under the title — after the video's length and the method, never
+     leading. Since 2026-10-06 (DD-348, owner: «сделать подсвечивание +xp») it
+     is the one lit chip of that line; the line's other facts stay quiet. */
   const detail = src(DETAIL);
   const factsAt = detail.indexOf("export function levelFacts");
   const facts = detail.slice(factsAt, detail.indexOf("\n}\n", factsAt));
@@ -272,12 +273,50 @@ describe("XP is a secondary metric", () => {
     expect(detail).not.toMatch(/xpReward\s*=\s*\d/);
   });
 
-  it("carries no Signal, frame, icon or animation", () => {
+  it("leaves the line's other facts without Signal, frame, icon or animation", () => {
     const css = src("src/features/level-detail-fidelity/level-hifi.css");
     const at = css.indexOf(".ld.ld--hifi .ld-fact {");
     expect(at).toBeGreaterThan(-1);
     const rule = css.slice(at, css.indexOf("}", at));
     expect(rule).not.toMatch(/signal|border|anim|icon/i);
   });
+
+  it("is lit — the owner's request of 2026-10-06 (DD-348): a Signal chip, no animation", () => {
+    const css = src("src/features/level-detail-fidelity/level-hifi.css");
+    const at = css.indexOf(".ld.ld--hifi .ld-fact--xp {");
+    expect(at).toBeGreaterThan(-1);
+    const rule = css.slice(at, css.indexOf("}", at));
+    expect(rule).toMatch(/var\(--signal\)/);
+    expect(rule).not.toMatch(/anim/i);
+    // The markup marks exactly the XP fact (and, since 2026-10-07, the video's length, which a phone hides).
+    expect(detail).toMatch(/fact\.endsWith\(" XP"\)\s*\?\s*"ld-fact ld-fact--xp"/);
+  });
+
+  it("the video's length is not said in the header on a phone or a tablet — the player shows it (owner 2026-10-07)", () => {
+    expect(detail).toMatch(/fact\.startsWith\("видео "\)\s*\?\s*"ld-fact ld-fact--video"/);
+    const css = src("src/features/level-detail-fidelity/level-hifi.css");
+    expect(css).toMatch(/@media \(max-width: 899px\) \{\s*\.ld\.ld--hifi \.ld-fact--video \{\s*display: none;/);
+    // The desktop keeps it: no rule outside that block hides it.
+    expect(css.match(/\.ld-fact--video/g)?.length).toBe(1);
+  });
 });
 
+
+describe("the lesson header shares one corner (DD-350, owner 2026-10-06: «одинаковые углы закругления»)", () => {
+  const css = src("src/features/level-detail-fidelity/level-hifi.css");
+  const rule = (selector: string) => {
+    const at = css.indexOf(`${selector} {`);
+    expect(at, selector).toBeGreaterThan(-1);
+    return css.slice(at, css.indexOf("}", at));
+  };
+
+  it("the plate and the rail: the same radius", () => {
+    expect(rule(".ld.ld--hifi .ld-plate")).toContain("border-radius: var(--hf-radius-window)");
+    expect(rule(".ld.ld--hifi .ax-lvlhead > .ld-facts")).toContain("border-radius: var(--hf-radius-window)");
+  });
+
+  it("the state mark and the XP chip inside it: one smaller radius", () => {
+    expect(rule(".ld.ld--hifi .ld-fact--xp")).toContain("border-radius: 8px");
+    expect(rule(".ld.ld--hifi .ax-lvlhead > .ld-facts .ax-mark")).toContain("border-radius: 8px");
+  });
+});

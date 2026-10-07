@@ -86,7 +86,7 @@ export const NODE_STATE_WORD: Record<PathNodeState, string> = {
   locked: "закрыт",
 };
 
-/** Module ribbon segment state, derived only from that module's own levels. */
+/** Module scale segment state, derived only from that module's own levels. */
 export type ModuleSegState = "done" | "current" | "future";
 
 export function moduleSegState(
@@ -184,12 +184,39 @@ export function chapterKicker(module: AcademyModuleSummary): string | null {
   return module.chapter ? `Глава ${module.chapter.number} · ${module.chapter.title}` : null;
 }
 
+/**
+ * THE MODULE'S SHARE OF ITS SEGMENT (DD-352, owner 2026-10-06: «делаем видимый
+ * прогресс по модулям … общее кол-во модулей видно тоже небольшое»).
+ *
+ * The strip holds the module in focus and nothing else; the small scale of
+ * modules beside its name fills that module's segment by the levels walked in
+ * it — 0 to 100, from the module's own counters, never from the strip's DOM.
+ */
+export function moduleFill(module: AcademyModuleSummary): number {
+  const { completed, total } = module.progress;
+  return total > 0 ? Math.round((Math.min(completed, total) / total) * 100) : 0;
+}
+
+/** «уровня» / «уровней» — the word after «из N». */
+export function levelsWord(n: number): string {
+  return n % 10 === 1 && n % 100 !== 11 ? "уровня" : "уровней";
+}
+
+/**
+ * HOW NEAR THE POINTER IS TO A LEVEL'S BLOCK (DD-353, owner 2026-10-07:
+ * «приближаешься к блоку — становиться ярче и начинать свечение обводки
+ * постепенно»). 1 inside the block, 0 from `NEAR_REACH` CSS pixels away, eased
+ * between, so the light wakes gradually as the pointer comes and settles as it
+ * arrives.
+ */
+export const NEAR_REACH = 110;
+
+export function nearnessAt(distance: number, reach = NEAR_REACH): number {
+  const t = Math.min(1, Math.max(0, 1 - distance / reach));
+  return t * t * (3 - 2 * t);
+}
+
 /** `L07` — the frozen code format. */
 export function levelCodeLabel(order: number): string {
   return `L${String(order).padStart(2, "0")}`;
-}
-
-/** `Модуль 03 / 20` — the frozen kicker format. */
-export function moduleKicker(order: number, total: number): string {
-  return `Модуль ${String(order).padStart(2, "0")} / ${total}`;
 }

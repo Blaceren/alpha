@@ -7,6 +7,8 @@ import {
   resolveMediaRoot,
 } from "@/server/media/lesson-media-file";
 import { resolveLessonMediaAccess } from "@/server/media/lesson-media-access";
+import { quantisedExpiry, signedLessonFileUrl } from "@/server/media/cloudfront-signing";
+import { mediaDelivery } from "@/server/media/delivery";
 
 /**
  * `/media/lessons/<level>/<file>` — a lesson's video, poster or captions.
@@ -17,6 +19,13 @@ import { resolveLessonMediaAccess } from "@/server/media/lesson-media-access";
  * the name, the permission, and only then the disk. A request that fails any of
  * them gets the same answer — not found — so the route says nothing about which
  * lessons have video to someone who may not watch them.
+ *
+ * ON THE CDN (2026-10-07, `ATA_MEDIA_DELIVERY=cdn`) the same address, after
+ * the same two checks, answers a redirect to the file's SIGNED CloudFront
+ * address instead of streaming it: the lesson row keeps its address, the
+ * Backend keeps the one rule, and the bytes come from the edge. A player
+ * follows the redirect for every range it asks for, so the signature is for the
+ * lesson's folder and expires on a grid — one playback, one address.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,15 +41,41 @@ async function serve(
   params: Promise<{ path?: string[] }>,
   headOnly: boolean,
 ): Promise<Response> {
-  const root = resolveMediaRoot();
-  if (!root) return NOT_FOUND();
+  const delivery = mediaDelivery();
+  const root = delivery.mode === "local" ? resolveMediaRoot() : null;
+  if (delivery.mode === "local" && !root) return NOT_FOUND();
 
   const target = parseLessonMediaPath((await params).path);
   if (!target) return NOT_FOUND();
 
   if ((await resolveLessonMediaAccess(target.levelStableCode)) !== "allowed") return NOT_FOUND();
 
-  const located = await locateLessonMediaFile(root, target);
+  if (delivery.mode === "cdn") {
+    if (delivery.lessons.kind === "unconfigured") return NOT_FOUND();
+    const folder = `lessons/${target.levelStableCode}`;
+    const file = target.storageKey.slice(folder.length + 1);
+    const location =
+      delivery.lessons.kind === "signed"
+        ? signedLessonFileUrl(
+            delivery.lessons.signer,
+            delivery.origin,
+            folder,
+            file,
+            quantisedExpiry(Date.now(), delivery.lessons.ttlSeconds),
+          )
+        : `${delivery.origin}/${target.storageKey}`;
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location,
+        /* Decided for this learner, for this moment: never kept by anyone. */
+        "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  }
+
+  const located = await locateLessonMediaFile(root as string, target);
   if (!located) return NOT_FOUND();
 
   const headers = new Headers({

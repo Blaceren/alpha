@@ -77,7 +77,6 @@
 
 html.ph-smooth-scroll {
   scroll-behavior: smooth;
-  background: var(--mist-200);
 }
 
 .ph {
@@ -1046,15 +1045,16 @@ html.ph-smooth-scroll {
 .ph .faq__heading > p:last-child {
   max-width: 500px;
   margin-top: 32px;
-  color: var(--text-secondary);
+  color: var(--text-on-dark-muted);
 }
 
+/* The list on Ink (DD-360): the page's own hairline, the page's own text. */
 .ph .faq-list {
-  border-top: 1px solid var(--line-300);
+  border-top: 1px solid var(--line-dark);
 }
 
 .ph .faq-list details {
-  border-bottom: 1px solid var(--line-300);
+  border-bottom: 1px solid var(--line-dark);
 }
 
 .ph .faq-list summary {
@@ -1077,7 +1077,7 @@ html.ph-smooth-scroll {
   right: 2px;
   width: 15px;
   height: 1px;
-  background: var(--ink-950);
+  background: var(--text-on-dark);
   content: "";
   transition: transform 180ms var(--ease);
 }
@@ -1093,7 +1093,7 @@ html.ph-smooth-scroll {
 .ph .faq-list details p {
   max-width: 690px;
   margin: -4px 48px 24px 0;
-  color: var(--text-secondary);
+  color: var(--text-on-dark-muted);
   font-size: 14px;
 }
 
@@ -1964,12 +1964,15 @@ html.ph-smooth-scroll {
 
 /* --- final step --------------------------------------------------------- */
 
+/* Its own sheet since DD-360: it used to be the tail of the FAQ, behind a
+   hairline; now the section carries the padding and the step stands alone. */
+.ph .first-step {
+  padding: var(--section-pad) 0;
+}
+
 .ph .final-step {
   position: relative;
   z-index: 1;
-  margin-top: clamp(64px, 7vw, 104px);
-  padding-top: clamp(48px, 5vw, 72px);
-  border-top: 1px solid var(--line-300);
 }
 
 .ph .final-step__title {
@@ -1979,7 +1982,7 @@ html.ph-smooth-scroll {
 .ph .final-step__support {
   max-width: 46ch;
   margin: 20px 0 26px;
-  color: var(--text-secondary);
+  color: rgba(11, 13, 10, 0.66);
 }
 
 .ph .final-step__actions {
@@ -2089,11 +2092,13 @@ html.ph-smooth-scroll {
  * Every rule stays inside `.ph`; no token is redefined.
  * ====================================================================== */
 
-/* K2. «Уже клиент? Войти» sits on the paper surface but was coloured for ink:
+/* K2. «Уже клиент? Войти» sat on a light surface but was coloured for ink:
    the strong word was #f3f4ef on #f1f3ec — invisible — and the rest 11px at
-   2.3:1. Paper gets the paper text colours, at a readable size. */
-.ph .surface--paper .client-entry {
-  color: var(--text-secondary);
+   2.3:1. A light surface gets the light surface's text colours, at a readable
+   size. Since DD-360 that surface is the Signal sheet of the first step. */
+.ph .surface--paper .client-entry,
+.ph .surface--signal .client-entry {
+  color: rgba(11, 13, 10, 0.66);
   font-size: 14px;
 }
 
@@ -2103,12 +2108,15 @@ html.ph-smooth-scroll {
   gap: 0.35em;
 }
 
-.ph .surface--paper .client-entry strong {
-  color: var(--text-primary);
+.ph .surface--paper .client-entry strong,
+.ph .surface--signal .client-entry strong {
+  color: var(--ink-950);
 }
 
 .ph .surface--paper .client-entry:hover,
-.ph .surface--paper .client-entry:hover strong {
+.ph .surface--paper .client-entry:hover strong,
+.ph .surface--signal .client-entry:hover,
+.ph .surface--signal .client-entry:hover strong {
   color: var(--olive-800);
 }
 
@@ -2131,7 +2139,7 @@ html.ph-smooth-scroll {
 
 /* M2. An answer the visitor opened was smaller and paler than its question. */
 .ph .faq-list details p {
-  color: var(--text-primary);
+  color: var(--text-on-dark);
   font-size: 15.5px;
   line-height: 1.55;
 }
@@ -5058,21 +5066,35 @@ html.ph-smooth-scroll {
   }
 }
 
-/* The header on a phone and a tablet: once the page scrolls, the gutter around
-   the floating pill fills with the page's own ground, so nothing that scrolls
-   under the header shows above it or at its corners. At the top of the page
-   the pill floats over the hero as before. */
+/* The header on a phone and a tablet just floats where it is at the top of the
+   page, whatever the scroll (2026-10-07, the owner: «на мобильной … без
+   перехода из белого в черный пусть она просто висит»). Until then, once the
+   page scrolled, it jumped to the top edge inside a band of the page's light
+   ground, and its pill grew denser. The compact pill above stays a computer's
+   only: here it keeps the size and the material it has at the top. */
 @media (max-width: 1040px) {
-  .ph .site-header.is-compact {
-    top: 0;
-    padding: 14px 0 8px;
-    background: var(--mist-200);
+  .ph .site-header.is-compact .site-header__inner {
+    min-height: 66px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+    background: rgba(11, 13, 10, 0.91);
+    box-shadow: var(--shadow-high);
+  }
+
+  .ph .site-header.is-compact .wordmark {
+    width: 72px;
   }
 }
 
 @media (max-width: 680px) {
-  .ph .site-header.is-compact {
-    padding: 8px 0 6px;
+  .ph .site-header.is-compact .site-header__inner {
+    min-height: 56px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  .ph .site-header.is-compact .wordmark {
+    width: 56px;
   }
 }
 
@@ -5393,6 +5415,28 @@ html.ph-smooth-scroll {
     container-type: inline-size;
   }
 
+  /* What the rail is for, said above it (2026-10-07, the owner: «было понятно
+     … что можно выбрать уровень и посмотреть превью»). */
+  .ph .trail__hint {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0 0 14px;
+    color: var(--text-on-dark);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .ph .trail__hint::before {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--signal-400);
+    box-shadow: 0 0 10px rgba(199, 247, 109, 0.6);
+    content: "";
+  }
+
   .ph .trail {
     position: relative;
     display: grid;
@@ -5429,23 +5473,35 @@ html.ph-smooth-scroll {
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Every level is a button and looks like one (2026-10-07, the owner:
+     «кружки с номером уровня нужно подсветить что бы интуитивно было понятно
+     что можно по ним нажимать»): a lit Signal ring with a soft glow, a faint
+     light inside, the number in full white; a press pushes it in. */
   .ph .trail__num {
     position: relative;
     z-index: 1;
     display: grid;
     width: 44px;
     height: 44px;
-    border: 1px solid rgba(243, 244, 239, 0.22);
+    border: 1.5px solid rgba(199, 247, 109, 0.5);
     border-radius: 50%;
-    background: var(--ink-950);
-    color: var(--text-on-dark-muted);
+    background:
+      radial-gradient(circle at 50% 35%, rgba(199, 247, 109, 0.14), rgba(199, 247, 109, 0.03) 70%),
+      var(--ink-950);
+    box-shadow: 0 0 14px rgba(199, 247, 109, 0.16);
+    color: var(--text-on-dark);
     font-size: 12px;
     letter-spacing: 0.02em;
     place-items: center;
     transition:
       background-color 240ms var(--ease),
       border-color 240ms var(--ease),
-      color 240ms var(--ease);
+      color 240ms var(--ease),
+      transform 120ms var(--ease);
+  }
+
+  .ph .trail__button:active .trail__num {
+    transform: scale(0.93);
   }
 
   .ph .trail__step.is-reached .trail__num {
@@ -5482,6 +5538,11 @@ html.ph-smooth-scroll {
 
   .ph .trail__note strong {
     color: var(--text-on-dark);
+    font-weight: 600;
+  }
+
+  .ph .trail__lvl {
+    color: var(--signal-400);
     font-weight: 600;
   }
 
@@ -5740,11 +5801,6 @@ html.ph-smooth-scroll {
   .ph .faq__grid {
     gap: 36px;
   }
-
-  .ph .final-step {
-    margin-top: 48px;
-    padding-top: 40px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5829,6 +5885,25 @@ html.ph-smooth-scroll {
 .ph .hfilm__stage .hfilm__player {
   width: 100%;
   height: 100%;
+  /* The player reads the product's text tokens, and this page redefines
+     `--text-primary` and `--text-secondary` for its light surfaces — so the
+     bar's icons came out Ink on Ink, all but invisible (found 2026-10-07 with
+     the first film file in place). On this stage the player gets the dark
+     surface's text, as in the lessons. */
+  --text-primary: var(--text-on-dark);
+  --text-secondary: var(--text-on-dark-muted);
+}
+
+/* Playing, the stage takes the player's own height: the picture at 16:9 and
+   the bar under it. At a fixed 16:9 the bar was below the stage's edge and
+   clipped — no pause, no sound, no full screen for a visitor who pressed play
+   (found 2026-10-07 with the first film file in place). */
+.ph .hfilm__stage[data-watching="true"] {
+  aspect-ratio: auto;
+}
+
+.ph .hfilm__stage[data-watching="true"] .hfilm__player {
+  height: auto;
 }
 
 .ph .hfilm__cover {
@@ -6039,5 +6114,108 @@ html.ph-smooth-scroll {
 
   .ph .hfilm__play:hover {
     transform: translateY(-50%);
+  }
+}
+
+/* =========================================================================
+ * SIGNED IN, ON A PHONE AND A TABLET (2026-10-07) — the header's own action.
+ *
+ * The owner: «на мобильной версии в шапке сделай кнопку как на десктопе в
+ * случае того что залогинен кнопка перейти в академию а не вход». Beside «Меню»
+ * a signed-in visitor gets the desktop's call to action, the signal button to
+ * /home, where a visitor gets «Войти». It is 153px at 14px sides: the pill's
+ * content is 309px at 360, and the wordmark (56), the button, the actions' gap
+ * (6) and «Меню» (72) need 299 once the pill's minimum gap is 12px — the
+ * pill spreads its two ends apart anyway, so the smaller minimum changes
+ * nothing a visitor sees. Below 360 the words would not fit (269px at 320) and
+ * the button reads «В Академию» (102px); its name stays «Перейти в Академию».
+ * ====================================================================== */
+.ph .mobile-academy {
+  padding-inline: 14px;
+  white-space: nowrap;
+}
+
+.ph .mobile-academy__short {
+  display: none;
+}
+
+/* The menu's own actions are a two-column row (login, then the call to
+   action). Signed in there is one action, and it takes the whole row. */
+@media (max-width: 1040px) {
+  .ph .primary-nav .nav-actions > .button:only-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  .ph .site-header__inner {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 359px) {
+  .ph .mobile-academy__full {
+    display: none;
+  }
+
+  .ph .mobile-academy__short {
+    display: inline;
+  }
+}
+
+/* =========================================================================
+ * ONE SHEET OVER ANOTHER (DD-360, owner 2026-10-07: «избавиться от эффекта
+ * блоков на белом фоне … нужен финальный хай фай в этой области»).
+ *
+ * Every section was a rounded block with a 10px (5px on a phone) margin, and
+ * the page's near-white ground showed between the blocks and in their
+ * corners: a dark showcase cut into tiles on white. Now the ground is Ink and
+ * the sections lie edge to edge, each laid OVER the one before it with a
+ * rounded top edge — a sheet on a sheet. Where the colour changes (Ink to
+ * Signal, Signal to Ink) the lip is seen; where it does not, nothing is.
+ *
+ * How the lip works: each sheet grows a transparent bottom border as deep as
+ * the lip, which its own background still paints; the next sheet rises by
+ * that much and rounds its top corners. So no content is ever covered, and
+ * what the corners reveal is the sheet below. Scoped to the Public Home root
+ * (`data-ph-root`): the news pages are built on this stylesheet too, and they
+ * are paper on purpose.
+ * ====================================================================== */
+.ph[data-ph-root] {
+  --sheet-lip: var(--radius-xl);
+  background: var(--ink-950);
+}
+
+/* The root's class is added by the page's own controller, so this is the
+   Public Home's document and no other. The ground past the page's end — an
+   overscroll, a short page — is the page's own. The literal, not the token:
+   the tokens live on `.ph`, and `html` is above it (the old rule's
+   `var(--mist-200)` never resolved here either). */
+html.ph-smooth-scroll {
+  background: #0b0d0a;
+}
+
+.ph[data-ph-root] .surface {
+  margin: 0;
+  border-bottom: var(--sheet-lip) solid transparent;
+  border-radius: 0;
+}
+
+.ph[data-ph-root] .surface + .surface,
+.ph[data-ph-root] .site-footer {
+  margin-top: calc(-1 * var(--sheet-lip));
+  border-radius: var(--sheet-lip) var(--sheet-lip) 0 0;
+}
+
+.ph[data-ph-root] .site-footer {
+  position: relative;
+  margin-right: 0;
+  margin-bottom: 0;
+  margin-left: 0;
+}
+
+@media (max-width: 680px) {
+  .ph[data-ph-root] {
+    --sheet-lip: 22px;
   }
 }

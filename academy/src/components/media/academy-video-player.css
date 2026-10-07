@@ -692,6 +692,42 @@
   height: var(--avp-control-size);
 }
 
+/* THE LEVEL'S WINDOW on a narrow bar (owner 2026-10-07): just above the bar,
+   at its right, over the picture's lower edge — the speaker's own mute beside
+   the level, and the level in figures. Anchored to the bar (the positioned
+   ancestor), not to the speaker: on the narrowest players the row takes two
+   lines and the speaker is on the second. Never wider than the bar. */
+.avp__volume-pop {
+  position: absolute;
+  z-index: 8;
+  right: 6px;
+  bottom: calc(100% + 4px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 214px;
+  max-width: calc(100% - 12px);
+  padding: 6px 10px 6px 6px;
+  background: var(--avp-surface);
+  border: 1px solid var(--avp-border-strong);
+  border-radius: var(--avp-radius);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+}
+
+.avp__volume-slider--pop {
+  flex: 1 1 90px;
+  min-width: 60px;
+  width: auto;
+}
+
+.avp__volume-value {
+  min-width: 3.2ch;
+  color: var(--avp-text-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .avp input[type="range"] {
   width: 100%;
   height: 4px;
@@ -994,15 +1030,24 @@
   }
 }
 
-/* The bar keeps what a thumb needs: play, the two skips, the clock, speed and
-   full screen. Volume is the device's own buttons on a phone. */
+/* The bar keeps what a thumb needs: play, the two skips, the clock, speed, the
+   sound and full screen. The speaker stays (owner 2026-10-07: «в плеере на
+   моб нельзя регулировать громкость»); the level opens from it in a window
+   (the component decides, by this same width). Where the row has no room for
+   all of it — a 320px phone, the film's stage on a phone — the right group
+   takes a second line rather than running off the edge. */
 @media (max-width: 620px) {
   .avp__bar {
     padding: 0 6px 6px;
   }
 
-  .avp__volume {
-    display: none;
+  .avp__control-row {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+
+  .avp__control-group--right {
+    margin-left: auto;
   }
 
   .avp__time {

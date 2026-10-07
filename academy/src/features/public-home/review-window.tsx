@@ -63,11 +63,11 @@ const REDUCED = "(prefers-reduced-motion: reduce)";
 
 /** The five entries of the real assignment, the third the one under review. */
 const ENTRIES = [
-  { n: "01", asset: "EUR/USD OTC", dir: "▲ Выше" },
-  { n: "02", asset: "EUR/USD OTC", dir: "▼ Ниже" },
-  { n: "03", asset: "GBP/USD OTC", dir: "▲ Выше" },
-  { n: "04", asset: "EUR/USD OTC", dir: "▼ Ниже" },
-  { n: "05", asset: "BTC/USD OTC", dir: "▲ Выше" },
+  { n: "01", asset: "EUR/USD", dir: "▲ Выше" },
+  { n: "02", asset: "EUR/USD", dir: "▼ Ниже" },
+  { n: "03", asset: "GBP/USD", dir: "▲ Выше" },
+  { n: "04", asset: "EUR/USD", dir: "▼ Ниже" },
+  { n: "05", asset: "BTC/USD", dir: "▲ Выше" },
 ] as const;
 
 export function ReviewWindow() {

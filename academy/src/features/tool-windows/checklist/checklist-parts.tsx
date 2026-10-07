@@ -76,7 +76,7 @@ export function ChecklistSubject({
 }
 
 /**
- * «EUR/USD OTC · перед входом» and the nine segments, one per item: how far the
+ * «EUR/USD · перед входом» and one segment per item: how far the
  * check has come, never a score.
  */
 export function ChecklistProgress({

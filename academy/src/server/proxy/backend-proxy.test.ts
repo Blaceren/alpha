@@ -69,6 +69,41 @@ describe("proxyToBackend — allow-list", () => {
   });
 });
 
+/* 2026-10-07 audit: another site's page could submit a hidden form to the
+   sign-in with its own account's credentials; the browser kept the session. */
+describe("proxyToBackend — another site's page", () => {
+  it("refuses a sign-in another site submitted, before the Backend hears of it", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const req = new Request("http://academy.test/api/backend/auth/login", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "sec-fetch-site": "cross-site" },
+      body: JSON.stringify({ email: "attacker@example.test", password: "x", captchaToken: "t" }),
+    });
+    const res = await proxyToBackend(req, "login");
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("forwards the Academy's own sign-in as before", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(backendJson({ user: { id: 1 } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const req = new Request("http://academy.test/api/backend/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" },
+      body: JSON.stringify({ email: "a@b.co", password: "x" }),
+    });
+    expect((await proxyToBackend(req, "login")).status).toBe(200);
+  });
+
+  it("does not judge reads", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(backendJson({ user: null }));
+    vi.stubGlobal("fetch", fetchMock);
+    const req = new Request("http://academy.test/api/backend/auth/me", { headers: { "sec-fetch-site": "cross-site" } });
+    expect((await proxyToBackend(req, "session")).status).toBe(200);
+  });
+});
+
 describe("proxyToBackend — SSRF resistance", () => {
   it("ignores the request URL/host and always targets the configured origin", async () => {
     const fetchMock = vi.fn().mockResolvedValue(backendJson({ user: null }));

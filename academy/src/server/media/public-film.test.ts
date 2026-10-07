@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { locatePublicFilmFile, readPublicFilm, PUBLIC_FILM_DIR } from "@/server/media/public-film";
+import { forgetCdnFilmPresence, locatePublicFilmFile, readPublicFilm, readPublicFilmFromCdn, PUBLIC_FILM_DIR } from "@/server/media/public-film";
 
 let root: string;
 beforeEach(() => {
@@ -65,5 +65,61 @@ describe("the public film", () => {
   it("refuses an empty file", async () => {
     put("hero.mp4", "");
     expect(await locatePublicFilmFile("hero.mp4", root)).toBeNull();
+  });
+});
+
+/* 2026-10-07: on the CDN the page asks CloudFront whether the film is there — a
+   HEAD per name, remembered for a minute, fail-closed — and links it directly. */
+describe("the public film on the CDN", () => {
+  const ORIGIN = "https://d1abc.cloudfront.net";
+  const head = (present: Record<string, string>) =>
+    (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const name = url.slice(url.lastIndexOf("/") + 1);
+      if (init?.method !== "HEAD") throw new Error("not a HEAD");
+      if (name in present) return new Response(null, { status: 200, headers: { etag: present[name]! } });
+      return new Response(null, { status: 403 });
+    }) as typeof fetch;
+
+  beforeEach(() => forgetCdnFilmPresence());
+
+  it("names the film, its poster and its captions on the CDN, versioned by their ETags, with CORS", async () => {
+    const film = await readPublicFilmFromCdn(ORIGIN, head({ "hero.mp4": '"abc123"', "hero.jpg": '"p1"', "hero.vtt": 'W/"c9"' }));
+    expect(film).toEqual({
+      src: `${ORIGIN}/public/film/hero.mp4?v=abc123`,
+      poster: `${ORIGIN}/public/film/hero.jpg?v=p1`,
+      captions: `${ORIGIN}/public/film/hero.vtt?v=Wc9`,
+      crossOrigin: "anonymous",
+    });
+  });
+
+  it("takes the webm when there is no mp4, and says «no film» when there is neither", async () => {
+    const webm = await readPublicFilmFromCdn(ORIGIN, head({ "hero.webm": '"w"' }));
+    expect(webm?.src).toBe(`${ORIGIN}/public/film/hero.webm?v=w`);
+    forgetCdnFilmPresence();
+    expect(await readPublicFilmFromCdn(ORIGIN, head({ "hero.jpg": '"p"' }))).toBeNull();
+  });
+
+  it("is fail-closed: a CDN that errors or does not answer means no film, remembered for a minute", async () => {
+    let calls = 0;
+    const failing = (async () => {
+      calls += 1;
+      throw new Error("ECONNREFUSED");
+    }) as unknown as typeof fetch;
+    expect(await readPublicFilmFromCdn(ORIGIN, failing)).toBeNull();
+    expect(calls).toBe(6);
+    expect(await readPublicFilmFromCdn(ORIGIN, failing)).toBeNull();
+    expect(calls).toBe(6);
+  });
+
+  it("is what readPublicFilm answers in cdn delivery, whatever the media root holds", async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = head({ "hero.mp4": '"m"' });
+    try {
+      const film = await readPublicFilm("/nowhere", { mode: "cdn", origin: ORIGIN, lessons: { kind: "public" } });
+      expect(film?.src).toBe(`${ORIGIN}/public/film/hero.mp4?v=m`);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });
