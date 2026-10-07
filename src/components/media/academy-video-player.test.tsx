@@ -3,7 +3,12 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { AcademyVideoPlayer, printableMarkerLabels, type AcademyVideoPlayerHandle } from "./academy-video-player";
+import {
+  AcademyVideoPlayer,
+  printableMarkerLabels,
+  resetVolumeAdjustableForTests,
+  type AcademyVideoPlayerHandle,
+} from "./academy-video-player";
 
 function setMedia(
   video: HTMLVideoElement,
@@ -919,6 +924,124 @@ describe("AcademyVideoPlayer — the lesson hi-fi", () => {
 
 /* Where the docked player goes (2026-10-03, the responsive pass). Measured in a
    browser at 19 sizes; the rules that hold it are pinned here. */
+/* THE SOUND ON A PHONE (owner 2026-10-07: «в плеере на моб нельзя регулировать
+   громкость нужно это исправить и проверить на проблемы»). */
+describe("the sound on every width", () => {
+  const css = readFileSync(join(process.cwd(), "src/components/media/academy-video-player.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const narrow = (matches: boolean) => {
+    const listeners = new Set<() => void>();
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("620px") ? matches : false,
+      media: query,
+      addEventListener: (_: string, cb: () => void) => listeners.add(cb),
+      removeEventListener: (_: string, cb: () => void) => listeners.delete(cb),
+    }));
+  };
+  let volumeDescriptor: PropertyDescriptor | undefined;
+  const iphone = () => {
+    volumeDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "volume");
+    // An iPhone: whatever is written, the level reads 1.
+    Object.defineProperty(HTMLMediaElement.prototype, "volume", { configurable: true, get: () => 1, set: () => undefined });
+    resetVolumeAdjustableForTests();
+  };
+
+  beforeEach(() => resetVolumeAdjustableForTests());
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (volumeDescriptor) {
+      Object.defineProperty(HTMLMediaElement.prototype, "volume", volumeDescriptor);
+      volumeDescriptor = undefined;
+      resetVolumeAdjustableForTests();
+    }
+  });
+
+  it("keeps the speaker in the bar on a phone; only the inline level leaves it, and the row may take two lines", () => {
+    const phone = /@media \(max-width: 620px\) \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+    expect(phone).not.toMatch(/\.avp__volume \{[^}]*display: none/);
+    expect(phone).toMatch(/\.avp__control-row \{[^}]*flex-wrap: wrap/);
+    expect(phone).toMatch(/\.avp__control-group--right \{[^}]*margin-left: auto/);
+    expect(css).toMatch(/\.avp__volume-pop \{[^}]*bottom: calc\(100% \+ 4px\)/);
+    expect(css).toMatch(/\.avp__volume-pop \{[^}]*max-width: calc\(100% - 12px\)/);
+  });
+
+  it("on a wide bar the speaker mutes and the level sits beside it", () => {
+    narrow(false);
+    render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" initialVolume={0.7} />);
+    expect(screen.getByRole("slider", { name: "Громкость" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Выключить звук" }));
+    expect(getVideo().muted).toBe(true);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("on a narrow bar the speaker opens the level in a window above the bar, with its own mute", () => {
+    narrow(true);
+    render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" initialVolume={0.7} />);
+    expect(screen.queryByRole("slider", { name: "Громкость" })).toBeNull();
+    const speaker = screen.getByRole("button", { name: "Громкость" });
+    expect(speaker).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(speaker);
+    const dialog = screen.getByRole("dialog", { name: "Громкость" });
+    expect(speaker).toHaveAttribute("aria-expanded", "true");
+    fireEvent.change(screen.getByRole("slider", { name: "Уровень громкости" }), { target: { value: "0.35" } });
+    expect(getVideo().volume).toBe(0.35);
+    expect(dialog).toHaveTextContent("35%");
+    fireEvent.click(screen.getByRole("button", { name: "Выключить звук" }));
+    expect(getVideo().muted).toBe(true);
+    // A press elsewhere closes it; so does Escape.
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(speaker);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.keyDown(getRegion(), { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("on an iPhone, where a page cannot set the level, the speaker only mutes and no slider is drawn", () => {
+    iphone();
+    narrow(true);
+    render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" />);
+    expect(screen.queryByRole("button", { name: "Громкость" })).toBeNull();
+    expect(screen.queryByRole("slider", { name: /громкост/i })).toBeNull();
+    const speaker = screen.getByRole("button", { name: "Выключить звук" });
+    expect(speaker.closest(".avp__volume")).toHaveAttribute("data-volume-adjustable", "false");
+    fireEvent.click(speaker);
+    expect(getVideo().muted).toBe(true);
+    expect(screen.getByRole("button", { name: "Включить звук" })).toBeInTheDocument();
+  });
+
+  it("in full screen on a phone, a tap while the controls have stepped aside only brings them back", () => {
+    vi.useFakeTimers();
+    render(<AcademyVideoPlayer src="/lesson.mp4" title="Урок" />);
+    const video = getVideo();
+    const region = getRegion();
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    Object.defineProperty(video, "paused", { configurable: true, get: () => false });
+    Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => region });
+    fireEvent(document, new Event("fullscreenchange"));
+    fireEvent.play(video);
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(region.classList.contains("avp--controls-visible")).toBe(false);
+    fireEvent.pointerDown(region, { pointerType: "touch" });
+    fireEvent.click(region);
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(region.classList.contains("avp--controls-visible")).toBe(true);
+    expect(pause).not.toHaveBeenCalled();
+    // With the controls back, the next tap is a press on the picture: pause.
+    fireEvent.pointerDown(region, { pointerType: "touch" });
+    fireEvent.click(region);
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(pause).toHaveBeenCalled();
+    Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => null });
+  });
+});
+
 describe("the docked player's place", () => {
   const css = readFileSync(join(process.cwd(), "src/components/media/academy-video-player.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const block = (prelude: string) => {

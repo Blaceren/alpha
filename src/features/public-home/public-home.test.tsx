@@ -295,6 +295,27 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
     expect(video.getAttribute("src")).toBe("/film/hero.mp4?v=abc");
   });
 
+  it("while the film plays, the stage is as tall as the player — picture and bar — so no control is cut off (2026-10-07)", async () => {
+    const film = { src: "/film/hero.webm?v=abc", poster: null, captions: null };
+    const { container } = render(<PublicHomeScreen authenticated={false} film={film} />);
+    const stage = container.querySelector("#top .hfilm__stage") as HTMLElement;
+    expect(stage.getAttribute("data-watching")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /Смотреть фильм/ }));
+    expect(stage.getAttribute("data-watching")).toBe("true");
+    // The player's bar — pause, sound, full screen — is in the stage, not below its edge.
+    expect(stage.querySelector(".avp__bar")).not.toBeNull();
+    expect(within(stage).getByRole("button", { name: "На весь экран" })).toBeTruthy();
+    const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css).toMatch(/\.ph \.hfilm__stage\[data-watching="true"\] \{\s*aspect-ratio: auto;\s*\}/);
+    expect(css).toMatch(/\.ph \.hfilm__stage\[data-watching="true"\] \.hfilm__player \{\s*height: auto;\s*\}/);
+    // At its end the film is a film, not a lesson.
+    fireEvent.ended(stage.querySelector("video") as HTMLVideoElement);
+    expect(within(stage).getByRole("status")).toHaveTextContent("Фильм просмотрен");
+    expect(within(stage).queryByText("Урок просмотрен")).toBeNull();
+    // The bar's icons read the dark surface's text, not the page's Ink (Ink on Ink was invisible).
+    expect(css).toMatch(/\.ph \.hfilm__stage \.hfilm__player \{[^}]*--text-primary: var\(--text-on-dark\);\s*--text-secondary: var\(--text-on-dark-muted\);/);
+  });
+
   it("resolves that same object in #decide", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     // Since 2026-09-22 the object sits in the product's own frame: the Trade

@@ -124,6 +124,8 @@ export interface AcademyVideoPlayerProps {
    * screen only offers the replay, as before.
    */
   endedAction?: { label: string; href: string };
+  /** What the ended screen says above the title. A lesson's is «Урок просмотрен»; a film's is not a lesson. */
+  endedEyebrow?: string;
   /** The points of the lesson line. */
   markers?: AcademyVideoMarker[];
   /** Where the learner stopped last time, in seconds; offered as «Продолжить с …». */
@@ -217,6 +219,65 @@ function prefersReducedMotion() {
   return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+/* THE NARROW BAR (owner 2026-10-07: «в плеере на моб нельзя регулировать
+   громкость»). Up to this width the bar has no room for a slider beside the
+   speaker, so the speaker opens the level in a small window above the bar —
+   where the level can be set at all (see `probeVolumeAdjustable`). The same
+   width the stylesheet folds the bar at. */
+const NARROW_BAR_QUERY = "(max-width: 620px)";
+
+function subscribeNarrowBar(callback: () => void) {
+  if (typeof window.matchMedia !== "function") return () => undefined;
+  const query = window.matchMedia(NARROW_BAR_QUERY);
+  query.addEventListener("change", callback);
+  return () => query.removeEventListener("change", callback);
+}
+
+function readNarrowBar() {
+  return typeof window.matchMedia === "function" && window.matchMedia(NARROW_BAR_QUERY).matches;
+}
+
+const serverNarrowBar = () => false;
+
+/**
+ * Whether this browser lets a page set the level at all. An iPhone (and an
+ * iPad) does not: the level is the device's own buttons, `volume` reads 1
+ * whatever is written to it, and a slider there would move nothing. Asked
+ * once of a media element of this document, by writing a level and reading it
+ * back; the restriction is the platform's, the same for every element. Read
+ * through `useSyncExternalStore`, so the server's answer (yes) stands until
+ * the page is hydrated and the browser's own replaces it without a mismatch.
+ */
+export function probeVolumeAdjustable(video: HTMLMediaElement): boolean {
+  const before = video.volume;
+  const trial = before === 0.5 ? 0.25 : 0.5;
+  try {
+    video.volume = trial;
+    const adjustable = Math.abs(video.volume - trial) < 0.001;
+    video.volume = before;
+    return adjustable;
+  } catch {
+    return false;
+  }
+}
+
+let volumeAdjustableCache: boolean | null = null;
+
+function readVolumeAdjustable() {
+  if (volumeAdjustableCache === null) {
+    volumeAdjustableCache = probeVolumeAdjustable(document.createElement("video"));
+  }
+  return volumeAdjustableCache;
+}
+
+/** Test-only: forget the browser's answer, so a test can give another. */
+export function resetVolumeAdjustableForTests() {
+  volumeAdjustableCache = null;
+}
+
+const subscribeNever = () => () => undefined;
+const serverVolumeAdjustable = () => true;
+
 /**
  * Self-contained "skip 10 seconds" glyph. The rotate arc reuses the exact
  * lucide RotateCcw/RotateCw geometry the rest of Academy uses; the "10" is drawn
@@ -281,6 +342,7 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
       aspectRatio = "source",
       fit = "contain",
       endedAction,
+      endedEyebrow = "Урок просмотрен",
       markers = [],
       resumeFrom = null,
       dockable = false,
@@ -332,6 +394,15 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
   const [videoRatio, setVideoRatio] = useState<number | null>(null);
   const [volume, setVolume] = useState(() => clamp(initialVolume, 0, 1));
   const [muted, setMuted] = useState(false);
+  /** Whether a slider would move anything here (not on an iPhone). */
+  const volumeAdjustable = useSyncExternalStore(subscribeNever, readVolumeAdjustable, serverVolumeAdjustable);
+  /** The level's window on a narrow bar. */
+  const [volumeOpen, setVolumeOpen] = useState(false);
+  const narrowBar = useSyncExternalStore(subscribeNarrowBar, readNarrowBar, serverNarrowBar);
+  const volumeRef = useRef<HTMLDivElement>(null);
+  /** A tap that only brought the controls back in full screen is not a press on the picture. */
+  const swallowClickRef = useRef(false);
+  const controlsVisibleRef = useRef(true);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   const [scrubbing, setScrubbing] = useState(false);
@@ -474,6 +545,21 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
     video.volume = volume;
     video.muted = muted;
   }, [muted, volume]);
+
+  useEffect(() => {
+    controlsVisibleRef.current = controlsVisible;
+  }, [controlsVisible]);
+
+  // The level's window closes on a press elsewhere, and goes with a wide bar.
+  useEffect(() => {
+    if (!volumeOpen) return;
+    const handlePointer = (event: PointerEvent) => {
+      if (volumeRef.current?.contains(event.target as Node | null)) return;
+      setVolumeOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointer);
+    return () => document.removeEventListener("pointerdown", handlePointer);
+  }, [volumeOpen]);
 
   // --- playback rate: remembered per viewer, applied to every file ---------
   useEffect(() => {
@@ -883,6 +969,10 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
 
   const handleSurfaceClick = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (scrubbingRef.current) return;
+    if (swallowClickRef.current) {
+      swallowClickRef.current = false;
+      return;
+    }
     // The second click of a double-click arrives before the dblclick event, so
     // use it (not just onDoubleClick) to cancel the pending single-click action.
     if (event.detail > 1) {
@@ -914,6 +1004,12 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
       event.preventDefault();
       setRateMenuOpen(false);
       rateButtonRef.current?.focus();
+      return;
+    }
+    if (event.key === "Escape" && volumeOpen) {
+      event.preventDefault();
+      setVolumeOpen(false);
+      volumeRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
       return;
     }
     if (event.target !== event.currentTarget || isEditableTarget(event.target)) {
@@ -954,8 +1050,20 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
     revealControls();
   };
 
-  const handlePointerActivity = () => {
+  const handlePointerActivity = (event: ReactPointerEvent<HTMLDivElement>) => {
     keyboardFocusRef.current = false;
+    /* In full screen on a phone, a tap while the controls have stepped aside
+       brings them back and does nothing else — it does not pause the video
+       (2026-10-07). A mouse moving does not get here as a press. */
+    if (
+      event.type === "pointerdown" &&
+      event.pointerType === "touch" &&
+      fullscreen &&
+      playing &&
+      !controlsVisibleRef.current
+    ) {
+      swallowClickRef.current = true;
+    }
     revealControls();
   };
 
@@ -1349,7 +1457,7 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
               onClick={stopSurface}
               onDoubleClick={stopSurface}
             >
-              <span className="avp__eyebrow">Урок просмотрен</span>
+              <span className="avp__eyebrow">{endedEyebrow}</span>
               <strong>{title}</strong>
               <div className="avp__ended-actions">
                 {endedAction ? (
@@ -1536,13 +1644,40 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
                   </button>
                 )}
 
-                <div className="avp__volume">
+                {/* THE SOUND, ON EVERY WIDTH (owner 2026-10-07: «в плеере на
+                    моб нельзя регулировать громкость»). The speaker is always
+                    in the bar. Beside it, where the bar is wide, the level; on
+                    a narrow bar the speaker opens the level in a window above
+                    the bar — where the level can be set at all. On an iPhone it
+                    cannot (the device's own buttons set it), so there the
+                    speaker only mutes and unmutes, and no slider that would
+                    move nothing is drawn. */}
+                <div
+                  ref={volumeRef}
+                  className={cn("avp__volume", volumeOpen && "avp__volume--open")}
+                  data-volume-adjustable={volumeAdjustable ? "true" : "false"}
+                >
                   <button
                     type="button"
-                    className="avp__icon-button"
-                    onClick={toggleMute}
-                    aria-label={muted || volume === 0 ? "Включить звук" : "Выключить звук"}
-                    aria-pressed={muted || volume === 0}
+                    className="avp__icon-button avp__icon-button--sound"
+                    onClick={
+                      narrowBar && volumeAdjustable
+                        ? () => setVolumeOpen((open) => !open)
+                        : () => {
+                            setVolumeOpen(false);
+                            toggleMute();
+                          }
+                    }
+                    aria-label={
+                      narrowBar && volumeAdjustable
+                        ? "Громкость"
+                        : muted || volume === 0
+                          ? "Включить звук"
+                          : "Выключить звук"
+                    }
+                    aria-pressed={narrowBar && volumeAdjustable ? undefined : muted || volume === 0}
+                    aria-haspopup={narrowBar && volumeAdjustable ? "dialog" : undefined}
+                    aria-expanded={narrowBar && volumeAdjustable ? volumeOpen : undefined}
                   >
                     {muted || volume === 0 ? (
                       <VolumeX aria-hidden="true" />
@@ -1550,18 +1685,52 @@ export const AcademyVideoPlayer = forwardRef<AcademyVideoPlayerHandle, AcademyVi
                       <Volume2 aria-hidden="true" />
                     )}
                   </button>
-                  <label className="avp__volume-slider">
-                    <span className="avp__sr-only">Громкость</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={muted ? 0 : volume}
-                      onChange={(event) => changeVolume(Number(event.target.value))}
-                      aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)} процентов`}
-                    />
-                  </label>
+                  {volumeAdjustable && !narrowBar ? (
+                    <label className="avp__volume-slider">
+                      <span className="avp__sr-only">Громкость</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={muted ? 0 : volume}
+                        onChange={(event) => changeVolume(Number(event.target.value))}
+                        aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)} процентов`}
+                      />
+                    </label>
+                  ) : null}
+                  {volumeAdjustable && narrowBar && volumeOpen ? (
+                    <div className="avp__volume-pop" role="dialog" aria-label="Громкость">
+                      <button
+                        type="button"
+                        className="avp__icon-button"
+                        onClick={toggleMute}
+                        aria-label={muted || volume === 0 ? "Включить звук" : "Выключить звук"}
+                        aria-pressed={muted || volume === 0}
+                      >
+                        {muted || volume === 0 ? (
+                          <VolumeX aria-hidden="true" />
+                        ) : (
+                          <Volume2 aria-hidden="true" />
+                        )}
+                      </button>
+                      <label className="avp__volume-slider avp__volume-slider--pop">
+                        <span className="avp__sr-only">Уровень громкости</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={muted ? 0 : volume}
+                          onChange={(event) => changeVolume(Number(event.target.value))}
+                          aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)} процентов`}
+                        />
+                      </label>
+                      <span className="avp__volume-value" aria-hidden="true">
+                        {Math.round((muted ? 0 : volume) * 100)}%
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
 
                 <button

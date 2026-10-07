@@ -31,7 +31,10 @@ export function HeroFilm({ film }: { film: PublicFilm | null }) {
         {ready ? null : <span className="hfilm__soon">Скоро</span>}
       </figcaption>
 
-      <div className="hfilm__stage">
+      {/* While the film plays the stage is as tall as the player — its picture
+          AND the bar under it (2026-10-07: at 16:9 the bar was cut off, so a
+          visitor who pressed play had no pause, no sound, no full screen). */}
+      <div className="hfilm__stage" data-watching={ready && watching ? "true" : undefined}>
         {ready && watching ? (
           <AcademyVideoPlayer
             src={film.src}
@@ -40,6 +43,7 @@ export function HeroFilm({ film }: { film: PublicFilm | null }) {
             captions={film.captions ? [{ src: film.captions, srcLang: "ru", label: "Русские", default: true }] : undefined}
             aspectRatio="16 / 9"
             autoPlay
+            endedEyebrow="Фильм просмотрен"
             className="hfilm__player"
           />
         ) : (

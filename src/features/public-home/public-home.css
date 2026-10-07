@@ -5885,6 +5885,25 @@ html.ph-smooth-scroll {
 .ph .hfilm__stage .hfilm__player {
   width: 100%;
   height: 100%;
+  /* The player reads the product's text tokens, and this page redefines
+     `--text-primary` and `--text-secondary` for its light surfaces — so the
+     bar's icons came out Ink on Ink, all but invisible (found 2026-10-07 with
+     the first film file in place). On this stage the player gets the dark
+     surface's text, as in the lessons. */
+  --text-primary: var(--text-on-dark);
+  --text-secondary: var(--text-on-dark-muted);
+}
+
+/* Playing, the stage takes the player's own height: the picture at 16:9 and
+   the bar under it. At a fixed 16:9 the bar was below the stage's edge and
+   clipped — no pause, no sound, no full screen for a visitor who pressed play
+   (found 2026-10-07 with the first film file in place). */
+.ph .hfilm__stage[data-watching="true"] {
+  aspect-ratio: auto;
+}
+
+.ph .hfilm__stage[data-watching="true"] .hfilm__player {
+  height: auto;
 }
 
 .ph .hfilm__cover {
