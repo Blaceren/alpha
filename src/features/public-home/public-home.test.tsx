@@ -351,7 +351,7 @@ describe("Public Home — nothing empty, nothing unlabelled", () => {
     const body = words(container);
     expect(body).not.toMatch(/@[a-z0-9.-]+\.[a-z]{2,}/i);
     expect(body).not.toMatch(/\+7\s?\(?\d{3}/);
-    // A sum of money, not a clock: the windows show «14:32 EUR/USD OTC» and
+    // A sum of money, not a clock: the windows show «14:32 EUR/USD» and
     // «20:00 USD» (a trade's time and its pair, a release's time and its
     // currency), and those are not amounts.
     expect(body).not.toMatch(/(?<!:)\b\d+\s?(₽|\$|USD|EUR)\b/);
@@ -1340,5 +1340,23 @@ describe("Public Home — one sheet over another (DD-360)", () => {
     expect(css).not.toMatch(/\.ph \.final-step \{[^}]*border-top/);
     expect(css).toMatch(/\.ph \.surface--signal \.client-entry \{[^}]*color: rgba\(11, 13, 10, 0\.66\);/);
     expect(css).toMatch(/\n\.ph \.final-step__support \{[^}]*color: rgba\(11, 13, 10, 0\.66\);/);
+  });
+});
+
+/* The owner, 2026-10-07 (a screenshot of the journal's example): «в этом блоке и в целом в примерах
+   активы должны быть обычные а не OTC». The examples name the ordinary assets. */
+describe("Public Home — the examples name ordinary assets, not OTC", () => {
+  it("shows no OTC asset in any window of the page", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    expect(text(container)).not.toMatch(/\bOTC\b/);
+    expect(text(container)).toContain("EUR/USD");
+    expect(text(container)).toContain("GBP/USD");
+  });
+
+  it("keeps no OTC asset in the windows' data either", () => {
+    for (const file of ["review-window.tsx", "product-window-states.tsx", "decision-window.tsx"]) {
+      const source = readFileSync(join(process.cwd(), "src/features/public-home", file), "utf8");
+      expect(source, file).not.toMatch(/\bOTC\b/);
+    }
   });
 });

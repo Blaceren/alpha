@@ -38,7 +38,7 @@ export function DecisionWindow() {
             <p className="pw-tool__sub">План сделки до входа: актив, направление, экспирация и основание.</p>
           </div>
           <div className="dc__params">
-            <span>Актив <b>EUR/USD OTC</b></span>
+            <span>Актив <b>EUR/USD</b></span>
             <span>Направление <b>▲ Выше</b></span>
             <span>Экспирация <b>3 мин</b></span>
             <span>Payout <b>90 %</b></span>

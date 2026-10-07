@@ -107,7 +107,7 @@ function TradeCardState() {
       <div className="pw-trade__grid">
         <div className="pw-field">
           <span>Актив</span>
-          <strong>EUR/USD OTC</strong>
+          <strong>EUR/USD</strong>
         </div>
         <div className="pw-field pw-field--seg">
           <span>Направление</span>
@@ -140,10 +140,10 @@ function TradeCardState() {
 }
 
 const JOURNAL_ROWS = [
-  { time: "14:32", asset: "EUR/USD OTC", dir: "▲ Выше", forecast: "прогноз верен", mark: "не отмечено", kind: "none" },
-  { time: "14:02", asset: "EUR/USD OTC", dir: "▼ Ниже", forecast: "прогноз неверен", mark: "нарушен", kind: "broken" },
-  { time: "13:40", asset: "EUR/USD OTC", dir: "▼ Ниже", forecast: "прогноз неверен", mark: "по плану", kind: "plan" },
-  { time: "18:15", asset: "BTC/USD OTC", dir: "▲ Выше", forecast: "прогноз верен", mark: "по плану", kind: "plan" },
+  { time: "14:32", asset: "EUR/USD", dir: "▲ Выше", forecast: "прогноз верен", mark: "не отмечено", kind: "none" },
+  { time: "14:02", asset: "EUR/USD", dir: "▼ Ниже", forecast: "прогноз неверен", mark: "нарушен", kind: "broken" },
+  { time: "13:40", asset: "EUR/USD", dir: "▼ Ниже", forecast: "прогноз неверен", mark: "по плану", kind: "plan" },
+  { time: "18:15", asset: "BTC/USD", dir: "▲ Выше", forecast: "прогноз верен", mark: "по плану", kind: "plan" },
 ] as const;
 
 function JournalState() {
@@ -229,7 +229,7 @@ function ChecklistState() {
       </div>
       <div className="pw-check__grid">
         <div className="pw-check__list">
-          <p className="pw-mono pw-check__count">EUR/USD OTC · перед входом <b>9 / 9</b></p>
+          <p className="pw-mono pw-check__count">EUR/USD · перед входом <b>9 / 9</b></p>
           {CHECKS.map((group) => (
             <div key={group.group} className="pw-check__group">
               <p className="pw-mono">{group.group}</p>
