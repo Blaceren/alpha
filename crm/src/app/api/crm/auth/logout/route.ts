@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { CSRF_HEADER_NAME } from "@/data/contracts/api/auth";
 import { BACKEND_PATHS, callBackend } from "@/server/backend-client";
 import { applyBridgedCookies, noStoreJson } from "@/server/auth-response";
+import { deriveTrustedClientIp } from "@/server/client-ip";
 import {
   CSRF_COOKIE_NAME,
   LEGACY_SESSION_COOKIE_NAME,
@@ -48,6 +49,10 @@ export async function POST(request: Request) {
     cookie: cookieHeader,
     csrfToken,
     json: {},
+    // The ingress-measured address (2026-10-07 audit): without it every
+    // employee's logout arrived from this server's own address and shared one
+    // backend bucket. `null` when no trustworthy value exists.
+    clientIp: deriveTrustedClientIp(request),
   });
 
   // Whatever happened upstream, this browser leaves without CRM cookies.
