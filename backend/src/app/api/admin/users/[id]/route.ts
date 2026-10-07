@@ -3,6 +3,7 @@ import { apiAuthErrorResponse, requireAdmin } from "@/lib/apiAuth";
 import { createAuditLog } from "@/lib/audit";
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
 import { prisma } from "@/lib/prisma";
+import { revokeAllSessionsForUser } from "@/lib/session";
 import { getTrainingLevelFromProgress } from "@/lib/trainingLevel";
 import {
   adminUserUpdateSchema,
@@ -214,6 +215,11 @@ export async function PATCH(request: Request, { params }: AdminUserRouteProps) {
     parsed.data.status === "blocked" &&
     existingUser.status !== "blocked"
   ) {
+    /* A block ends every session the account has (2026-10-07 audit). A blocked
+       account's sessions were only refused while the block lasted, so lifting
+       it — without a password change — brought every one of them back, an
+       intruder's included. */
+    await revokeAllSessionsForUser(user.id);
     await createAuditLog({
       userId: adminUser.id,
       action: "ADMIN_USER_BLOCKED",

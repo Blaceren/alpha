@@ -219,6 +219,7 @@
     "test:regression:tool-risk-plan": "tsx scripts/regression/toolRiskPlanRegression.ts",
     "test:regression:tool-entry-checklist": "tsx scripts/regression/toolEntryChecklistRegression.ts",
     "test:regression:tool-personal-stats": "tsx scripts/regression/toolPersonalStatsRegression.ts",
+    "test:regression:notifications-clear": "tsx scripts/regression/notificationsClearRegression.ts",
     "test:regression:news-calendar": "tsx scripts/regression/newsCalendarRegression.ts"
   },
   "dependencies": {

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { confirmPasswordReset } from "@/lib/account/passwordReset";
 import { rateLimitedResponse } from "@/lib/apiAuth";
 import { getRequestIp, rateLimit } from "@/lib/rateLimit";
-import { passwordSchema, validateJsonBody } from "@/lib/validation";
+import { newPasswordSchema, validateJsonBody } from "@/lib/validation";
 
 /**
  * SET A NEW PASSWORD WITH A LINK'S TOKEN.
@@ -19,7 +19,7 @@ export const revalidate = 0;
 
 const confirmSchema = z.object({
   token: z.string().min(1).max(200),
-  newPassword: passwordSchema,
+  newPassword: newPasswordSchema,
 });
 
 export async function POST(request: Request) {

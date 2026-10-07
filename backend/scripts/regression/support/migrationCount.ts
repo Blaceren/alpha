@@ -19,6 +19,28 @@
  *
  * UPDATE IT when a phase adds a migration, in the same commit as the migration.
  *
+ * ENTRY CHECKLIST, THE SECOND LIST: 63 -> 64. One migration,
+ * `20261007180000_entry_checklist_seven`: the ToolEntryCheck table rebuilt
+ * with constraints that know both lists — listVersion 1 with nine answers and
+ * listVersion 2 with seven — every row copied as it was, the index recreated.
+ * A Backend built before it writes version 1, which the new constraints allow.
+ * Bumped in the same commit.
+ *
+ * TWO LIVE SESSIONS: 62 -> 63. One migration,
+ * `20261007120000_two_live_sessions`: three columns on UserSession (slot with
+ * a default and a CHECK, userAgent and lastSeenAt nullable) and the partial
+ * unique index for one live session replaced by one for (userId, slot) — two at
+ * most. It rewrites no existing row, and a Backend built before it inserts the
+ * default slot after revoking every live row, which the new index allows, so
+ * rollback keeps working. Bumped in the same commit.
+ *
+ * NOTIFICATIONS CLEARED: 61 -> 62. One additive migration,
+ * `20261006120000_notification_cleared_at`: one nullable column on
+ * Notification (clearedAt, the learner's «Очистить всё», DD-349) and one index.
+ * It rewrites no existing row, so a Backend built before it never reads the
+ * column and rollback is inert. Bumped in the same commit, and every
+ * regression that reads this constant is run for the release.
+ *
  * PROGRAM STRUCTURE: 60 -> 61. One additive migration,
  * `20261002120000_program_structure`: four nullable columns (a module's chapter
  * number and title, a level's learner-facing kind, a question's rewatch
@@ -166,7 +188,7 @@
  * decay this file was created to stop. Correcting the drift here is what makes
  * them start guarding again.
  */
-export const EXPECTED_MIGRATION_COUNT = 61;
+export const EXPECTED_MIGRATION_COUNT = 64;
 
 /** Directory entries under prisma/migrations that are not migrations. */
 export const NON_MIGRATION_ENTRIES = ["migration_lock.toml"] as const;

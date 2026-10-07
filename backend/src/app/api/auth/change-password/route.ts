@@ -15,7 +15,7 @@ import {
   SESSION_COOKIE_NAME,
   sessionCookieOptions,
 } from "@/lib/session";
-import { passwordSchema, validateJsonBody } from "@/lib/validation";
+import { newPasswordSchema, validateJsonBody } from "@/lib/validation";
 
 /**
  * CHANGE YOUR OWN PASSWORD.
@@ -55,7 +55,7 @@ const changePasswordSchema = z.object({
      hash, never against a policy. Applying today's minimum to it would lock out
      anyone whose password predates the rule. */
   currentPassword: z.string().min(1, "Введите текущий пароль"),
-  newPassword: passwordSchema,
+  newPassword: newPasswordSchema,
 });
 
 export async function POST(request: Request) {
@@ -115,10 +115,17 @@ export async function POST(request: Request) {
 
     const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
 
-    const token = await issueSessionWithin(user.id, async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
-      await retireLinksOnPasswordChange(tx, user.id);
-    });
+    /* Every other session ends with the old password — the account's second
+       one included (two may be live since 2026-10-07) — and this browser gets
+       a fresh one. */
+    const token = await issueSessionWithin(
+      user.id,
+      async (tx) => {
+        await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
+        await retireLinksOnPasswordChange(tx, user.id);
+      },
+      { userAgent: request.headers.get("user-agent") },
+    );
 
     await createAuditLog({
       userId: user.id,

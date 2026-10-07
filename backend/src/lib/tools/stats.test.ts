@@ -77,7 +77,7 @@ describe("computeStats — the presentation's figures", () => {
   it("counts the rules broken, most frequent first: 3 + 2 + 2", () => {
     expect(stats.violations.total).toBe(7);
     expect(stats.violations.items).toEqual([
-      { code: "no_reason", label: "Вход без записанной причины", count: 3 },
+      { code: "no_reason", label: "Вход без записанного основания", count: 3 },
       { code: "news_nearby", label: "Рядом важная новость", count: 2 },
       { code: "after_daily_limit", label: "Сделка после дневного лимита", count: 2 },
     ]);

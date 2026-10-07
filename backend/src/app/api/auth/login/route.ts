@@ -5,26 +5,68 @@ import { createAuditLog } from "@/lib/audit";
 import { rateLimitedResponse } from "@/lib/apiAuth";
 import { verifyCaptcha } from "@/lib/captcha";
 import { resolveAuthSurface } from "@/lib/captcha/surface";
+import { isCrmStaffRole } from "@/lib/crm/roles";
 import { isEmailVerificationRequired } from "@/lib/emailVerification";
 import { prisma } from "@/lib/prisma";
-import { getRequestIp, rateLimit } from "@/lib/rateLimit";
+import { clearRateLimit, getRequestIp, peekRateLimit, rateLimit } from "@/lib/rateLimit";
 import {
   issueSession,
   LEGACY_SESSION_COOKIE_NAME,
   SESSION_COOKIE_NAME,
+  SessionIssueRefusedError,
   clearedLegacySessionCookieOptions,
+  readSessionToken,
   sessionCookieOptions,
 } from "@/lib/session";
 import { loginSchema, validateJsonBody } from "@/lib/validation";
 
+/* WRONG PASSWORDS ARE WHAT IS COUNTED (2026-10-07 audit). The limit used to
+   count every request for an address and email, sign-ins that succeeded
+   included and requests that never passed the challenge, so a learner who
+   signed in five times in ten minutes was refused the sixth with the right
+   password, and anyone behind the same address could spend the five without
+   solving anything. Now: a key at its limit is refused BEFORE the challenge
+   (the token stays unspent); only a wrong password, which needed a solved
+   challenge to be tried, adds to it; the right password clears it. nginx keeps
+   its own per-address limit on the auth routes. */
+const LOGIN_FAILURE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
+
+/* AN ANSWER THAT TAKES THE SAME TIME (2026-10-07 audit). bcrypt ran only when
+   the address existed, so an unknown address answered measurably faster than a
+   known one. Without an account the password is compared with this hash —
+   same cost as the stored ones (10) — and the result is ignored. */
+let timingEqualizer: string | null = null;
+async function spendComparisonTime(password: string) {
+  timingEqualizer ??= await bcrypt.hash("ata-timing-equalizer", 10);
+  await bcrypt.compare(password, timingEqualizer);
+}
+
+function invalidCredentials() {
+  return NextResponse.json(
+    { error: "Неверный email или пароль" },
+    { status: 401 },
+  );
+}
+
 export async function POST(request: Request) {
   const parsed = await validateJsonBody(request, loginSchema);
-  const email = parsed.success ? parsed.data.email : "invalid-email";
+
+  if (!parsed.success) {
+    await createAuditLog({
+      action: "VALIDATION_ERROR",
+      entityType: "API_ROUTE",
+      entityId: "/api/auth/login",
+      metadata: { email: "invalid-email", details: parsed.details },
+      request,
+    });
+
+    return parsed.response;
+  }
+
+  const email = parsed.data.email;
   const ip = getRequestIp(request);
-  const limit = rateLimit(`auth:login:${ip}:${email}`, {
-    limit: 5,
-    windowMs: 10 * 60 * 1000,
-  });
+  const failureKey = `auth:login:${ip}:${email}`;
+  const limit = peekRateLimit(failureKey, LOGIN_FAILURE_LIMIT);
 
   if (!limit.allowed) {
     await createAuditLog({
@@ -36,18 +78,6 @@ export async function POST(request: Request) {
     });
 
     return rateLimitedResponse();
-  }
-
-  if (!parsed.success) {
-    await createAuditLog({
-      action: "VALIDATION_ERROR",
-      entityType: "API_ROUTE",
-      entityId: "/api/auth/login",
-      metadata: { email, details: parsed.details },
-      request,
-    });
-
-    return parsed.response;
   }
 
   // AFD-3A3: which login form is this? The Academy proxy and the CRM login
@@ -99,7 +129,10 @@ export async function POST(request: Request) {
     where: { email: parsed.data.email },
   });
 
+  if (!user) await spendComparisonTime(parsed.data.password);
+
   if (!user || !(await bcrypt.compare(parsed.data.password, user.passwordHash))) {
+    rateLimit(failureKey, LOGIN_FAILURE_LIMIT);
     await createAuditLog({
       userId: user?.id,
       action: "AUTH_LOGIN_FAILED",
@@ -107,11 +140,10 @@ export async function POST(request: Request) {
       request,
     });
 
-    return NextResponse.json(
-      { error: "Неверный email или пароль" },
-      { status: 401 },
-    );
+    return invalidCredentials();
   }
+
+  clearRateLimit(failureKey);
 
   if (user.status === "blocked") {
     await createAuditLog({
@@ -141,6 +173,63 @@ export async function POST(request: Request) {
     );
   }
 
+  /* THE CRM'S FORM SIGNS IN STAFF ONLY (2026-10-07 audit). The CRM used to
+     learn that an account was not staff only after this route had issued it a
+     session, and then dropped the cookie: a session nobody held, taking one of
+     the account's two places — closing the learner's other device to make room
+     — and listed in «Сеансы» as an unknown device for a week. The decision is
+     taken here now, before anything is issued, by the same rule the CRM session
+     applies (a StaffProfile with a known staff role). */
+  if (surface?.name === "crm_login") {
+    const profile = await prisma.staffProfile.findUnique({
+      where: { userId: user.id },
+      select: { staffRole: true },
+    });
+    if (!profile || !isCrmStaffRole(profile.staffRole)) {
+      await createAuditLog({
+        userId: user.id,
+        action: "AUTH_LOGIN_FAILED",
+        metadata: { email: parsed.data.email, reason: "not_staff" },
+        request,
+      });
+
+      return NextResponse.json(
+        { error: "NOT_STAFF", message: "У этого аккаунта нет доступа к CRM" },
+        { status: 403 },
+      );
+    }
+  }
+
+  /* A sign-in takes one of the account's two places (owner 2026-10-07); with
+     both taken it closes the session unused the longest, in the same
+     transaction, and that is recorded. The session this browser still presents
+     is closed first, so signing in again on one device never closes the other
+     (2026-10-07 audit); and the password is re-read in that transaction, so a
+     change that landed after the check above issues nothing. The browser's own
+     description is kept only to name the device in the learner's list of
+     sessions. */
+  const evicted: { sessionId: string | null } = { sessionId: null };
+  let token: string;
+  try {
+    token = await issueSession(user.id, {
+      userAgent: request.headers.get("user-agent"),
+      replacing: await readSessionToken(),
+      expectedPasswordHash: user.passwordHash,
+      onEvicted: (sessionId) => {
+        evicted.sessionId = sessionId;
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof SessionIssueRefusedError)) throw error;
+    await createAuditLog({
+      userId: user.id,
+      action: "AUTH_LOGIN_FAILED",
+      metadata: { email: parsed.data.email, reason: "account_changed" },
+      request,
+    });
+    return invalidCredentials();
+  }
+
   await createAuditLog({
     userId: user.id,
     action: "AUTH_LOGIN",
@@ -149,9 +238,16 @@ export async function POST(request: Request) {
   });
 
   const response = NextResponse.json({ user: toPublicUser(user) });
-  /* Issuing revokes whatever this user had, in one transaction, so a second
-     login ends the first session rather than running alongside it (H-7). */
-  response.cookies.set(SESSION_COOKIE_NAME, await issueSession(user.id), sessionCookieOptions);
+  if (evicted.sessionId) {
+    await createAuditLog({
+      userId: user.id,
+      action: "AUTH_SESSION_EVICTED",
+      entityType: "UserSession",
+      entityId: evicted.sessionId,
+      request,
+    });
+  }
+  response.cookies.set(SESSION_COOKIE_NAME, token, sessionCookieOptions);
   /* And expire the pre-`__Host-` cookie, so a browser holding one stops sending
      a value nothing will ever accept. Its value is never read. */
   response.cookies.set(LEGACY_SESSION_COOKIE_NAME, "", clearedLegacySessionCookieOptions);

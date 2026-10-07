@@ -66,7 +66,7 @@ export type JournalSource = (typeof JOURNAL_SOURCES)[number];
  * once shipped, is never reused for a different rule.
  */
 export const JOURNAL_VIOLATIONS = [
-  { code: "no_reason", label: "Вход без записанной причины" },
+  { code: "no_reason", label: "Вход без записанного основания" },
   { code: "news_nearby", label: "Рядом важная новость" },
   { code: "after_daily_limit", label: "Сделка после дневного лимита" },
   { code: "amount_above_plan", label: "Сумма больше плана" },
