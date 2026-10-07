@@ -213,10 +213,11 @@ function RiskState() {
   );
 }
 
+/* The seven conditions of the tool itself (owner 2026-10-07), none a stop factor. */
 const CHECKS = [
-  { group: "Среда", items: [["Рядом нет важной новости (±15 мин)", true], ["Связь стабильна", true], ["Payout не ниже моего минимума — 85 %", false]] },
-  { group: "Setup", items: [["Состояние рынка определено: тренд или боковик", false], ["Цена у зоны, отмеченной до сессии", false], ["Все условия моего setup выполнены", false]] },
-  { group: "Моё состояние", items: [["Дневной лимит не достигнут", true], ["Нет желания отыграться", true], ["Внимание на графике, не устал", false]] },
+  { group: "Среда", items: ["Актив из моего списка", "Время — подходящий период", "Payout посмотрел, планку посчитал — 85 %"] },
+  { group: "График", items: ["Состояние определено: тренд, боковик или неясно", "Область названа"] },
+  { group: "Сделка", items: ["Размер по плану", "Основание сформулировано словами"] },
 ] as const;
 
 function ChecklistState() {
@@ -225,21 +226,20 @@ function ChecklistState() {
     <div className="pw-tool pw-check">
       <div className="pw-tool__head">
         <p className="pw-tool__name">Entry Checklist</p>
-        <p className="pw-tool__sub">Условия допуска перед входом: среда, setup и собственное состояние.</p>
+        <p className="pw-tool__sub">Условия допуска перед входом: среда, график и сделка.</p>
       </div>
       <div className="pw-check__grid">
         <div className="pw-check__list">
-          <p className="pw-mono pw-check__count">EUR/USD · перед входом <b>9 / 9</b></p>
+          <p className="pw-mono pw-check__count">EUR/USD · перед входом <b>7 / 7</b></p>
           {CHECKS.map((group) => (
             <div key={group.group} className="pw-check__group">
               <p className="pw-mono">{group.group}</p>
-              {group.items.map(([label, stop]) => {
+              {group.items.map((label) => {
                 const i = index++;
                 return (
                   <div key={label} className="pw-check__item" style={{ "--i": i } as React.CSSProperties}>
                     <i aria-hidden="true" />
                     <span>{label}</span>
-                    {stop ? <em className="pw-mono">стоп-фактор</em> : null}
                   </div>
                 );
               })}

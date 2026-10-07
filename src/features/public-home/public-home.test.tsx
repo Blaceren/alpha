@@ -1360,3 +1360,37 @@ describe("Public Home — the examples name ordinary assets, not OTC", () => {
     }
   });
 });
+
+/* The owner, 2026-10-07: «в инструменте Entry Checklist нужно не 9 а 7 условий … и так же не
+   забудь поменять его на внешней главной примере». */
+describe("Public Home — the Entry Checklist example is the tool's own seven conditions", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("names the seven, in three groups, with no stop factor, and counts 7 / 7", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query }));
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", { value: vi.fn(), configurable: true, writable: true });
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const rail = container.querySelector("#tools") as HTMLElement;
+    expect(text(rail)).toContain("Семь условий до входа.");
+    expect(text(rail)).not.toContain("Девять");
+    expect(text(rail)).not.toMatch(/стоп-фактор/i);
+    // The checklist window is the state the rail shows for L13.
+    await userEvent.click(within(rail).getByRole("button", { name: /^Entry Checklist, открывается на уровне/ }));
+    const window = rail.querySelector(".pw-check") as HTMLElement;
+    expect(window).not.toBeNull();
+    const items = Array.from(window.querySelectorAll(".pw-check__item span")).map((el) => el.textContent);
+    expect(items).toEqual([
+      "Актив из моего списка",
+      "Время — подходящий период",
+      "Payout посмотрел, планку посчитал — 85 %",
+      "Состояние определено: тренд, боковик или неясно",
+      "Область названа",
+      "Размер по плану",
+      "Основание сформулировано словами",
+    ]);
+    expect(Array.from(window.querySelectorAll(".pw-check__group > .pw-mono")).map((el) => el.textContent)).toEqual(["Среда", "График", "Сделка"]);
+    expect(text(window)).toContain("7 / 7");
+    expect(text(window)).toContain("среда, график и сделка");
+    expect(window.querySelector(".pw-check__item em")).toBeNull();
+  });
+});

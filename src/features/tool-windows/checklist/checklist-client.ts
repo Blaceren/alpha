@@ -23,6 +23,10 @@ export function isEntryCheck(value: unknown): value is EntryCheck {
     VERDICTS.has(value.verdict) &&
     (value.missingItem === null || typeof value.missingItem === "string") &&
     (value.verdict === "enter") === (value.missingItem === null) &&
+    // The named item's own words and the list version (2026-10-07): the Backend of that day sends them,
+    // an older one does not — a check is read either way.
+    (value.missingItemLabel === undefined || value.missingItemLabel === null || typeof value.missingItemLabel === "string") &&
+    (value.listVersion === undefined || typeof value.listVersion === "number") &&
     typeof value.createdAt === "string"
   );
 }

@@ -83,7 +83,7 @@ export const TOOL_WINDOWS: readonly ToolWindowDefinition[] = [
     code: "tool.entry_checklist",
     slug: "entry-checklist",
     title: "Entry Checklist",
-    description: "Условия допуска перед входом: среда, setup и собственное состояние.",
+    description: "Условия допуска перед входом: среда, график и сделка.",
     unlockLevel: 20,
     releasedBy: "checkpoint",
     built: true,
