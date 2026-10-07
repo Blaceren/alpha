@@ -77,7 +77,6 @@
 
 html.ph-smooth-scroll {
   scroll-behavior: smooth;
-  background: var(--mist-200);
 }
 
 .ph {
@@ -1046,15 +1045,16 @@ html.ph-smooth-scroll {
 .ph .faq__heading > p:last-child {
   max-width: 500px;
   margin-top: 32px;
-  color: var(--text-secondary);
+  color: var(--text-on-dark-muted);
 }
 
+/* The list on Ink (DD-360): the page's own hairline, the page's own text. */
 .ph .faq-list {
-  border-top: 1px solid var(--line-300);
+  border-top: 1px solid var(--line-dark);
 }
 
 .ph .faq-list details {
-  border-bottom: 1px solid var(--line-300);
+  border-bottom: 1px solid var(--line-dark);
 }
 
 .ph .faq-list summary {
@@ -1077,7 +1077,7 @@ html.ph-smooth-scroll {
   right: 2px;
   width: 15px;
   height: 1px;
-  background: var(--ink-950);
+  background: var(--text-on-dark);
   content: "";
   transition: transform 180ms var(--ease);
 }
@@ -1093,7 +1093,7 @@ html.ph-smooth-scroll {
 .ph .faq-list details p {
   max-width: 690px;
   margin: -4px 48px 24px 0;
-  color: var(--text-secondary);
+  color: var(--text-on-dark-muted);
   font-size: 14px;
 }
 
@@ -1964,12 +1964,15 @@ html.ph-smooth-scroll {
 
 /* --- final step --------------------------------------------------------- */
 
+/* Its own sheet since DD-360: it used to be the tail of the FAQ, behind a
+   hairline; now the section carries the padding and the step stands alone. */
+.ph .first-step {
+  padding: var(--section-pad) 0;
+}
+
 .ph .final-step {
   position: relative;
   z-index: 1;
-  margin-top: clamp(64px, 7vw, 104px);
-  padding-top: clamp(48px, 5vw, 72px);
-  border-top: 1px solid var(--line-300);
 }
 
 .ph .final-step__title {
@@ -1979,7 +1982,7 @@ html.ph-smooth-scroll {
 .ph .final-step__support {
   max-width: 46ch;
   margin: 20px 0 26px;
-  color: var(--text-secondary);
+  color: rgba(11, 13, 10, 0.66);
 }
 
 .ph .final-step__actions {
@@ -2089,11 +2092,13 @@ html.ph-smooth-scroll {
  * Every rule stays inside `.ph`; no token is redefined.
  * ====================================================================== */
 
-/* K2. «Уже клиент? Войти» sits on the paper surface but was coloured for ink:
+/* K2. «Уже клиент? Войти» sat on a light surface but was coloured for ink:
    the strong word was #f3f4ef on #f1f3ec — invisible — and the rest 11px at
-   2.3:1. Paper gets the paper text colours, at a readable size. */
-.ph .surface--paper .client-entry {
-  color: var(--text-secondary);
+   2.3:1. A light surface gets the light surface's text colours, at a readable
+   size. Since DD-360 that surface is the Signal sheet of the first step. */
+.ph .surface--paper .client-entry,
+.ph .surface--signal .client-entry {
+  color: rgba(11, 13, 10, 0.66);
   font-size: 14px;
 }
 
@@ -2103,12 +2108,15 @@ html.ph-smooth-scroll {
   gap: 0.35em;
 }
 
-.ph .surface--paper .client-entry strong {
-  color: var(--text-primary);
+.ph .surface--paper .client-entry strong,
+.ph .surface--signal .client-entry strong {
+  color: var(--ink-950);
 }
 
 .ph .surface--paper .client-entry:hover,
-.ph .surface--paper .client-entry:hover strong {
+.ph .surface--paper .client-entry:hover strong,
+.ph .surface--signal .client-entry:hover,
+.ph .surface--signal .client-entry:hover strong {
   color: var(--olive-800);
 }
 
@@ -2131,7 +2139,7 @@ html.ph-smooth-scroll {
 
 /* M2. An answer the visitor opened was smaller and paler than its question. */
 .ph .faq-list details p {
-  color: var(--text-primary);
+  color: var(--text-on-dark);
   font-size: 15.5px;
   line-height: 1.55;
 }
@@ -5793,11 +5801,6 @@ html.ph-smooth-scroll {
   .ph .faq__grid {
     gap: 36px;
   }
-
-  .ph .final-step {
-    margin-top: 48px;
-    padding-top: 40px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -6138,5 +6141,62 @@ html.ph-smooth-scroll {
 
   .ph .mobile-academy__short {
     display: inline;
+  }
+}
+
+/* =========================================================================
+ * ONE SHEET OVER ANOTHER (DD-360, owner 2026-10-07: «избавиться от эффекта
+ * блоков на белом фоне … нужен финальный хай фай в этой области»).
+ *
+ * Every section was a rounded block with a 10px (5px on a phone) margin, and
+ * the page's near-white ground showed between the blocks and in their
+ * corners: a dark showcase cut into tiles on white. Now the ground is Ink and
+ * the sections lie edge to edge, each laid OVER the one before it with a
+ * rounded top edge — a sheet on a sheet. Where the colour changes (Ink to
+ * Signal, Signal to Ink) the lip is seen; where it does not, nothing is.
+ *
+ * How the lip works: each sheet grows a transparent bottom border as deep as
+ * the lip, which its own background still paints; the next sheet rises by
+ * that much and rounds its top corners. So no content is ever covered, and
+ * what the corners reveal is the sheet below. Scoped to the Public Home root
+ * (`data-ph-root`): the news pages are built on this stylesheet too, and they
+ * are paper on purpose.
+ * ====================================================================== */
+.ph[data-ph-root] {
+  --sheet-lip: var(--radius-xl);
+  background: var(--ink-950);
+}
+
+/* The root's class is added by the page's own controller, so this is the
+   Public Home's document and no other. The ground past the page's end — an
+   overscroll, a short page — is the page's own. The literal, not the token:
+   the tokens live on `.ph`, and `html` is above it (the old rule's
+   `var(--mist-200)` never resolved here either). */
+html.ph-smooth-scroll {
+  background: #0b0d0a;
+}
+
+.ph[data-ph-root] .surface {
+  margin: 0;
+  border-bottom: var(--sheet-lip) solid transparent;
+  border-radius: 0;
+}
+
+.ph[data-ph-root] .surface + .surface,
+.ph[data-ph-root] .site-footer {
+  margin-top: calc(-1 * var(--sheet-lip));
+  border-radius: var(--sheet-lip) var(--sheet-lip) 0 0;
+}
+
+.ph[data-ph-root] .site-footer {
+  position: relative;
+  margin-right: 0;
+  margin-bottom: 0;
+  margin-left: 0;
+}
+
+@media (max-width: 680px) {
+  .ph[data-ph-root] {
+    --sheet-lip: 22px;
   }
 }

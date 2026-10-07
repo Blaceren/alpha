@@ -22,7 +22,8 @@ import { PROGRAM_TOOL_LEVEL } from "@/features/public-home/product-route-data";
  * losing the label that says it is synthetic.
  */
 
-/** The ten sections of `<main>`; with the header that is eleven responsibilities. */
+/** The eleven sections of `<main>`; with the header that is twelve responsibilities.
+    The first step has been its own sheet since DD-360 (2026-10-07). */
 const SECTION_IDS = [
   "top",
   "decide",
@@ -34,6 +35,7 @@ const SECTION_IDS = [
   "fit",
   "boundaries",
   "faq",
+  "first-step",
 ] as const;
 
 /** Addresses the page published before this phase. They must keep resolving. */
@@ -76,7 +78,7 @@ function words(container: HTMLElement): string {
 }
 
 describe("Public Home — architecture", () => {
-  it("renders eleven responsibilities: a header and ten sections, in order", () => {
+  it("renders twelve responsibilities: a header and eleven sections, in order", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     expect(container.querySelectorAll("header").length).toBe(1);
     expect(sections(container)).toEqual([...SECTION_IDS]);
@@ -490,7 +492,7 @@ describe("Public Home — signature evidence", () => {
 
   it("stops the Decision Frame after the evidence", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
-    for (const id of ["path", "tools", "fit", "boundaries", "faq"]) {
+    for (const id of ["path", "tools", "fit", "boundaries", "faq", "first-step"]) {
       const section = container.querySelector(`#${id}`) as HTMLElement;
       expect(section.querySelector(".dframe"), `frame leaked into #${id}`).toBeNull();
       expect(section.querySelector("[data-frame-stage]")).toBeNull();
@@ -1252,5 +1254,70 @@ describe("the header while the page scrolls", () => {
     expect(css).not.toMatch(/\.site-header\.is-compact \{/);
     expect(css).not.toMatch(/\.site-header::before/);
     expect(css).not.toMatch(/--ph-shade/);
+  });
+});
+
+/* DD-360 (2026-10-07), the owner: «на внешней главной нужно избавиться от эффекта блоков на
+   белом фоне, возможно заменить на наш салатовый, вообщем нужен финальный хай фай в этой
+   области». The page is one sheet laid over another: no light ground, no gaps. */
+describe("Public Home — one sheet over another (DD-360)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("has no light ground: the root and the document behind it are Ink", () => {
+    expect(css).toMatch(/\n\.ph\[data-ph-root\] \{[^}]*background: var\(--ink-950\);/);
+    expect(css).toMatch(/\nhtml\.ph-smooth-scroll \{\s*background: #0b0d0a;\s*\}/);
+    // The old ground is not painted by the smooth-scroll rule any more.
+    expect(css).not.toMatch(/html\.ph-smooth-scroll \{[^}]*mist-200/);
+  });
+
+  it("lays every sheet over the one before it, edge to edge, with a rounded lip the width of the page", () => {
+    expect(css).toMatch(/\n\.ph\[data-ph-root\] \.surface \{\s*margin: 0;\s*border-bottom: var\(--sheet-lip\) solid transparent;\s*border-radius: 0;\s*\}/);
+    expect(css).toMatch(
+      /\n\.ph\[data-ph-root\] \.surface \+ \.surface,\s*\.ph\[data-ph-root\] \.site-footer \{\s*margin-top: calc\(-1 \* var\(--sheet-lip\)\);\s*border-radius: var\(--sheet-lip\) var\(--sheet-lip\) 0 0;\s*\}/,
+    );
+    // The lip is the page's largest radius; on a phone the surfaces' 22px.
+    expect(css).toMatch(/\n\.ph\[data-ph-root\] \{\s*--sheet-lip: var\(--radius-xl\);/);
+    expect(css).toMatch(/@media \(max-width: 680px\) \{\s*\.ph\[data-ph-root\] \{\s*--sheet-lip: 22px;\s*\}\s*\}/);
+    // The footer is a sheet too: no margin of its own around it.
+    expect(css).toMatch(/\n\.ph\[data-ph-root\] \.site-footer \{\s*position: relative;\s*margin-right: 0;\s*margin-bottom: 0;\s*margin-left: 0;\s*\}/);
+  });
+
+  it("leaves the news pages, which are paper on purpose, exactly as they are", () => {
+    // Every sheet rule is scoped to the Public Home root; the shared `.ph .surface` keeps its margin.
+    expect(css).toMatch(/\n\.ph \.surface \{\s*position: relative;\s*margin: 10px;/);
+    expect(css).toMatch(/\n\.ph \.surface--paper \{\s*background: var\(--paper-100\);/);
+    const sheetRules = css.match(/^[^@{}\n]*--sheet-lip[^{}]*\{|^[^{}\n]*\.surface \+ \.surface[^{]*\{/gm) ?? [];
+    for (const rule of sheetRules) expect(rule, rule).toContain("[data-ph-root]");
+  });
+
+  it("puts the fine print on Ink and the first step on Signal, the page's last word before the footer", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const faq = container.querySelector("#faq") as HTMLElement;
+    expect(faq.classList.contains("surface--ink")).toBe(true);
+    expect(faq.classList.contains("surface--paper")).toBe(false);
+    expect(container.querySelector(".surface--paper")).toBeNull();
+    const first = container.querySelector("#first-step") as HTMLElement;
+    expect(first.classList.contains("surface--signal")).toBe(true);
+    expect(first.previousElementSibling).toBe(faq);
+    expect(first.nextElementSibling).toBeNull();
+    // The legacy #start alias lives in the new sheet, right before the step.
+    expect(container.querySelector("#start")?.closest("section")?.id).toBe("first-step");
+    expect(first.querySelector(".final-step .button--dark")).toBeTruthy();
+    // The FAQ's text is the dark surface's: no light-surface eyebrow left in it.
+    expect(faq.querySelector(".eyebrow--dark")).toBeNull();
+  });
+
+  it("colours the FAQ list and the first step for the surfaces they stand on", () => {
+    expect(css).toMatch(/\n\.ph \.faq-list \{\s*border-top: 1px solid var\(--line-dark\);/);
+    expect(css).toMatch(/\n\.ph \.faq-list details \{\s*border-bottom: 1px solid var\(--line-dark\);/);
+    expect(css).toMatch(/\.ph \.faq-list summary::after \{[^}]*background: var\(--text-on-dark\);/);
+    expect(css).not.toMatch(/\.ph \.faq-list details p \{[^}]*color: var\(--text-primary\)/);
+    expect(css).toMatch(/\n\.ph \.first-step \{\s*padding: var\(--section-pad\) 0;\s*\}/);
+    expect(css).not.toMatch(/\.ph \.final-step \{[^}]*border-top/);
+    expect(css).toMatch(/\.ph \.surface--signal \.client-entry \{[^}]*color: rgba\(11, 13, 10, 0\.66\);/);
+    expect(css).toMatch(/\n\.ph \.final-step__support \{[^}]*color: rgba\(11, 13, 10, 0\.66\);/);
   });
 });
