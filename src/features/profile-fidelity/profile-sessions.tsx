@@ -33,6 +33,7 @@ export const SESSIONS_COPY = {
   closing: "Завершение…",
   closed: "Сеанс завершён. На том устройстве нужно будет войти снова.",
   closeFailed: "Не удалось завершить сеанс. Попробуйте ещё раз.",
+  alreadyClosed: "Этот сеанс уже завершён.",
   failed: "Не удалось загрузить список сеансов.",
   retry: "Повторить",
   unknownDevice: "Неизвестное устройство",
@@ -128,15 +129,21 @@ export function ProfileSessions() {
     const result = await closeAccountSession(id);
     setClosing(null);
     setAsking(null);
-    if (result.ok) {
-      setSaid(SESSIONS_COPY.closed);
+    /* A session that is already gone — the other device signed out, or a new
+       sign-in took its place — answers «not found». That is the outcome the
+       learner asked for, not a failure to retry forever (2026-10-07 audit); and
+       the list is read again after EVERY answer, so it shows the sessions that
+       are live now. */
+    const gone = !result.ok && result.error.status === 404;
+    if (result.ok || gone) {
+      setSaid(result.ok ? SESSIONS_COPY.closed : SESSIONS_COPY.alreadyClosed);
       if (list.phase === "ready") {
         setList({ phase: "ready", sessions: list.sessions.filter((row) => row.id !== id) });
       }
-      void refresh();
     } else {
       setSaid(SESSIONS_COPY.closeFailed);
     }
+    void refresh();
   }
 
   const rows: AccountSession[] = list.phase === "ready" ? list.sessions : [];

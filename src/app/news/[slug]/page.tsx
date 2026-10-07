@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { NewsItemScreen } from "@/features/public-news/public-news-screens";
 import { NEWS_SLUG_RE, newsPath, releaseDayWords } from "@/features/public-news/public-news-model";
-import { getServerViewer } from "@/server/auth/server-session";
+import { SessionUnavailable } from "@/features/auth/session-unavailable";
+import { readServerSession } from "@/server/auth/server-session";
 import { readPublicNewsItem } from "@/server/news/public-news-read";
 import "@/features/public-home/public-home.css";
 import "@/features/public-news/public-news.css";
@@ -39,8 +40,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function NewsItemPage({ params }: Props) {
   const { slug } = await params;
-  const viewer = await getServerViewer();
-  if (viewer === null) redirect(`/login?next=${encodeURIComponent(newsPath(slug))}`);
+  /* A Backend that cannot say who is here is not «signed out» (2026-10-07
+     audit) — see /news. */
+  const session = await readServerSession();
+  if (session.kind === "unavailable") return <SessionUnavailable retryHref={newsPath(slug)} />;
+  if (session.kind !== "viewer") redirect(`/login?next=${encodeURIComponent(newsPath(slug))}`);
   const read = await readItem(slug);
   if (!read || read.status === "not_found") notFound();
   if (read.status === "unavailable") throw new Error("news: the Backend could not be read");

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useReducer, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import * as api from "@/lib/api/client";
+import { hardReplace } from "@/lib/navigation/hard-replace";
 import { toAcademyViewer } from "@/lib/api/viewer";
 import {
   sessionReducer,
@@ -26,7 +26,6 @@ export function SessionProvider({
   initialState: SessionState;
   children: ReactNode;
 }) {
-  const router = useRouter();
   const [state, dispatch] = useReducer(sessionReducer, initialState);
 
   const refresh = useCallback(async () => {
@@ -42,12 +41,14 @@ export function SessionProvider({
 
   const logout = useCallback(async () => {
     // Best-effort server mutation. Whether it succeeds or the session was
-    // already invalid, we clear the in-memory viewer and return to /login.
-    // Drafts and tool data are never touched.
+    // already invalid, we clear the in-memory viewer and return to /login —
+    // with a full load, so no page of this account stays in the app's memory
+    // for Back to bring out (2026-10-07 audit). Drafts and tool data are never
+    // touched.
     await api.logout();
     dispatch({ type: "LOGGED_OUT" });
-    router.replace("/login");
-  }, [router]);
+    hardReplace("/login");
+  }, []);
 
   const expire = useCallback(() => {
     dispatch({ type: "SESSION_EXPIRED" });

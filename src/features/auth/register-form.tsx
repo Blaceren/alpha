@@ -135,6 +135,22 @@ export function RegisterForm({ turnstileSiteKey, verificationMail = false }: Reg
     setCaptchaResetSignal((value) => value + 1);
   }, []);
 
+  /* SIGNED IN ALREADY, SEEN FROM THIS PAGE (2026-10-07 audit). The server
+     sends a signed-in learner to /home before this form renders — when it can
+     see the session. An invitation opened from a messenger arrives without the
+     session cookie (it is SameSite=Strict), so a learner who was signed in met
+     a form for a second account. This page's own request does carry the
+     cookie: a learner it finds goes to /home. Nothing changes if it finds
+     nobody. */
+  useEffect(() => {
+    const controller = new AbortController();
+    void api.fetchSession(controller.signal).then((result) => {
+      if (controller.signal.aborted || inFlight.current) return;
+      if (result.ok && result.data.user) router.replace(POST_REGISTRATION_RETURN_TO);
+    });
+    return () => controller.abort();
+  }, [router]);
+
   // Move focus to the error summary so a keyboard/screen-reader user is taken
   // straight to what went wrong instead of hunting for it.
   useEffect(() => {

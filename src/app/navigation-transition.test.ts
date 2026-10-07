@@ -583,6 +583,15 @@ describe("the authenticated route group", () => {
   "src/features/profile-fidelity/profile-sessions.tsx",
   "src/server/proxy/backend-proxy.ts",
   "src/server/proxy/sessions-proxy.ts",
+  /* The sign-in and session audit (owner 2026-10-07: «проверь какие
+     потенциально баги могут быть в нашей системе логина/сессий и устрани их»):
+     «Выйти» leaves with a full load, so no page of the account stays in memory;
+     a challenge whose answer was lost is renewed; the proxy refuses an account
+     operation another site's page submitted. */
+  "src/features/auth/session-provider.tsx",
+  "src/lib/auth/login-outcome.ts",
+  "src/lib/navigation/hard-replace.ts",
+  "src/server/proxy/cross-site.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {

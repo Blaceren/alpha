@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace, push: vi.fn() }) }));
 vi.mock("@/lib/api/client", () => ({ logout: vi.fn(), fetchSession: vi.fn() }));
+vi.mock("@/lib/navigation/hard-replace", () => ({ hardReplace: (path: string) => replace(path) }));
 
 import * as api from "@/lib/api/client";
 import { SessionProvider } from "@/features/auth/session-provider";

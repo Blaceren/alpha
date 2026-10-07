@@ -76,7 +76,13 @@ const UNTOUCHED = [
      challenge, the instance removed on unmount, the token never persisted. The
      assertion below still holds it to its error callback. */
   "src/features/auth/session-machine.ts",
-  "src/features/auth/session-provider.tsx",
+  /* `session-provider.tsx` is no longer frozen here: the owner's sign-in and
+     session audit (2026-10-07: «проверь какие потенциально баги могут быть в
+     нашей системе логина/сессий и устрани их») authorised one change — «Выйти»
+     returns to /login with a full load instead of a router transition, so no
+     page of the account stays in the app's memory for Back to bring out on a
+     shared computer. session-provider.test.tsx governs the file: the mutation
+     runs, the viewer is cleared, /login follows, drafts are never touched. */
   "src/features/auth/auth.css",
   /* `src/middleware.ts` is no longer frozen here. TOOLS-V2 NEWS (2026-09-21) was
      authorised to let anonymous visitors reach the public news pages and the

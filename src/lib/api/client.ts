@@ -339,13 +339,18 @@ export async function closeAccountSession(id: string): Promise<ApiResult<unknown
  * a CSRF token, then send it as the `x-csrf-token` header. No auto-retry.
  */
 export async function logout(): Promise<ApiResult<{ ok: true }>> {
+  /* THE LOGOUT IS SENT EVEN WITHOUT A CSRF PAIR (2026-10-07 audit). When the
+     pair could not be fetched — the Backend down or slow — nothing was sent,
+     so the Academy's logout route never ran its fallback and the browser kept
+     a live session cookie while the learner was shown /login. Sent without the
+     header, the Backend refuses it (or cannot be reached) and the route still
+     expires the cookie on this device. */
   const csrf = await fetchCsrfToken();
-  if (!csrf.ok) return csrf;
 
   return apiRequest<{ ok: true }>({
     method: "POST",
     path: `${PROXY_BASE}/auth/logout`,
-    csrfToken: csrf.data,
+    csrfToken: csrf.ok ? csrf.data : undefined,
     validate: (value): value is { ok: true } =>
       typeof value === "object" && value !== null && (value as { ok?: unknown }).ok === true,
   });

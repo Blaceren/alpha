@@ -273,6 +273,32 @@ describe("the sessions at the bottom of the profile", () => {
     expect(screen.getByText("Safari на iPhone")).toBeTruthy();
   });
 
+  /* 2026-10-07 audit: a session that is already gone answered «not found», and
+     «Завершить сеанс» failed again and again while the list stayed stale. */
+  it("a session that is already gone is said to be closed, and the list is read again", async () => {
+    real();
+    closeSession.mockResolvedValue({ ok: false, error: { category: "UNKNOWN_ERROR", status: 404 } });
+    render(<ProfileSessions />);
+    await userEvent.click(await screen.findByRole("button", { name: `${SESSIONS_COPY.close}: Safari на iPhone` }));
+    const readsBefore = listSessions.mock.calls.length;
+    listSessions.mockResolvedValue({ ok: true, data: { limit: 2, sessions: [TWO_SESSIONS.sessions[0]] } });
+    await userEvent.click(screen.getByRole("button", { name: SESSIONS_COPY.confirmYes }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(SESSIONS_COPY.alreadyClosed));
+    expect(screen.queryByText("Safari на iPhone")).toBeNull();
+    await waitFor(() => expect(listSessions.mock.calls.length).toBeGreaterThan(readsBefore));
+  });
+
+  it("a failed close reads the list again, so it shows what is live now", async () => {
+    real();
+    closeSession.mockResolvedValue({ ok: false, error: { category: "NETWORK_ERROR", status: null } });
+    render(<ProfileSessions />);
+    await userEvent.click(await screen.findByRole("button", { name: `${SESSIONS_COPY.close}: Safari на iPhone` }));
+    const readsBefore = listSessions.mock.calls.length;
+    await userEvent.click(screen.getByRole("button", { name: SESSIONS_COPY.confirmYes }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(SESSIONS_COPY.closeFailed));
+    await waitFor(() => expect(listSessions.mock.calls.length).toBeGreaterThan(readsBefore));
+  });
+
   it("signing out never waits for the list: without it this browser's row and its action stay", async () => {
     real();
     listSessions.mockResolvedValue({ ok: false, error: { category: "NETWORK_ERROR" } });

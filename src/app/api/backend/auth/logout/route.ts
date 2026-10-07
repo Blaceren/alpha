@@ -1,4 +1,5 @@
 import { proxyToBackend } from "@/server/proxy/backend-proxy";
+import { isCrossSiteRequest } from "@/server/proxy/cross-site";
 import { LEGACY_SESSION_COOKIE_NAME, SESSION_COOKIE_NAME } from "@/lib/auth/constants";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,9 @@ export const runtime = "nodejs";
 export async function POST(request: Request): Promise<Response> {
   const response = await proxyToBackend(request, "logout");
   if (response.ok) return response;
+  // A logout that another site's page asked for is refused, and changes nothing
+  // on this device either (2026-10-07 audit).
+  if (isCrossSiteRequest(request)) return response;
   const headers = new Headers(response.headers);
   headers.append("set-cookie", `${SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict`);
   headers.append("set-cookie", `${LEGACY_SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax`);

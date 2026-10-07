@@ -16,6 +16,7 @@ import { makeError, REQUEST_ID_HEADER, type NormalizedError } from "@/lib/api/er
 import { getProxyRoute, type ProxyOperation, type ProxyRoute } from "@/server/proxy/allow-list";
 import { BACKEND_AUTH_SURFACE_HEADER } from "@/server/proxy/auth-surface";
 import { deriveTrustedClientIp, FORWARDED_CLIENT_IP_HEADERS } from "@/server/proxy/client-ip";
+import { isCrossSiteRequest } from "./cross-site";
 
 /** 64 KiB is far more than any auth payload needs. */
 export const MAX_BODY_BYTES = 64 * 1024;
@@ -114,6 +115,11 @@ export async function proxyToBackend(
   // 1. Method allow-list.
   if (request.method !== route.method) {
     return errorResponse(makeError("VALIDATION_ERROR", { status: 405 }), 405);
+  }
+
+  // 1b. Not from another site's page (2026-10-07 audit) — see `cross-site.ts`.
+  if (route.method === "POST" && isCrossSiteRequest(request)) {
+    return errorResponse(makeError("FORBIDDEN", { status: 403 }), 403);
   }
 
   // 2. Configuration (fail-closed).
