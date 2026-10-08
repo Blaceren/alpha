@@ -1648,3 +1648,35 @@ describe("Public Home — the route opens on five growing dots (DD-370)", () => 
     expect(phone).toMatch(/\.ph \.rstep__node--dot::after \{\s*width: 21px;\s*height: 21px;/);
   });
 });
+
+/* DD-371 (2026-10-08), the owner, on #fit: the heading «Право сказать «не сейчас» тоже создаёт
+   доверие.» → «Почему АТА может быть не для меня ?»; the lead → «АТА создана для тех кто может понимать
+   основания собственного решения и готов проверять качество своей работы»; the two groups swapped;
+   four reasons «not now» in the owner's words, the money one removed. */
+describe("Public Home — #fit asks the owner's question and opens on «not now» (DD-371)", () => {
+  it("has the question, the owner's lead, and the groups in the owner's order", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const fit = container.querySelector("#fit") as HTMLElement;
+    expect(text(fit.querySelector("h2") as HTMLElement).trim()).toBe("Почему ATA может быть не для меня?");
+    expect(text(fit.querySelector(".lead") as HTMLElement).trim()).toBe(
+      "ATA создана для тех, кто может понимать основания собственного решения и готов проверять качество своей работы.",
+    );
+    const groups = Array.from(fit.querySelectorAll(".fit__columns > article")) as HTMLElement[];
+    expect(groups.map((g) => text(g.querySelector(".micro-label") as HTMLElement).trim())).toEqual([
+      "Лучше не начинать сейчас, если вы",
+      "ATA может подойти, если вы",
+    ]);
+    const notNow = Array.from(groups[0]!.querySelectorAll("li")).map((li) => text(li).trim());
+    expect(notNow).toEqual([
+      "хотите получать только сигналы или копировать сделки;",
+      "не готовы обучаться, воспринимать экспертное мнение и совершенствоваться в том, на что тратите время;",
+      "не готовы брать на себя ответственность за свои решения;",
+      "пытаетесь компенсировать прошлые потери.",
+    ]);
+    expect(text(fit)).not.toContain("обязательных расходов");
+    expect(text(fit)).not.toContain("Право сказать");
+    const may = Array.from(groups[1]!.querySelectorAll("li")).map((li) => text(li).trim());
+    expect(may).toHaveLength(5);
+    expect(may[0]).toBe("не являетесь профессиональным трейдером;");
+  });
+});

@@ -309,16 +309,31 @@ export function PublicHomeScreen({
           <div className="shell">
             <div className="section-intro section-intro--wide" data-reveal>
               <p className="eyebrow eyebrow--dark">Подходит ли вам ATA</p>
-              <h2 className="display display--section">
-                Право сказать «не сейчас» тоже создаёт доверие.
-              </h2>
+              {/* DD-371 (owner, 2026-10-08): the question in the owner's words,
+                  the lead their sentence; the «not now» group first, with four
+                  reasons in their words. */}
+              <h2 className="display display--section">Почему ATA может быть не для меня?</h2>
               <p className="lead">
-                ATA может подойти тем, кто хочет понимать основания собственного решения и готов
+                ATA создана для тех, кто может понимать основания собственного решения и готов
                 проверять качество своей работы.
               </p>
             </div>
 
             <div className="fit__columns">
+              <article data-reveal>
+                <p className="micro-label">Лучше не начинать сейчас, если вы</p>
+                <h3>Ищете быстрый или гарантированный результат.</h3>
+                <ul className="plain-list">
+                  <li>хотите получать только сигналы или копировать сделки;</li>
+                  <li>
+                    не готовы обучаться, воспринимать экспертное мнение и совершенствоваться в том,
+                    на что тратите время;
+                  </li>
+                  <li>не готовы брать на себя ответственность за свои решения;</li>
+                  <li>пытаетесь компенсировать прошлые потери.</li>
+                </ul>
+              </article>
+
               <article data-reveal>
                 <p className="micro-label">ATA может подойти, если вы</p>
                 <h3>Хотите выстроить собственное понимание.</h3>
@@ -328,18 +343,6 @@ export function PublicHomeScreen({
                   <li>цените последовательность и обратную связь;</li>
                   <li>хотите лучше понимать собственные решения;</li>
                   <li>можете выделять время на самостоятельную работу.</li>
-                </ul>
-              </article>
-
-              <article data-reveal>
-                <p className="micro-label">Лучше не начинать сейчас, если вы</p>
-                <h3>Ищете быстрый или гарантированный результат.</h3>
-                <ul className="plain-list">
-                  <li>хотите получать только сигналы или копировать сделки;</li>
-                  <li>не готовы проходить проверки и исправлять работу;</li>
-                  <li>ожидаете пассивного решения без обучения;</li>
-                  <li>пытаетесь немедленно компенсировать прошлые потери;</li>
-                  <li>планируете использовать деньги для обязательных расходов.</li>
                 </ul>
               </article>
             </div>
