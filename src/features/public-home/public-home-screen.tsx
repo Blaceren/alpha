@@ -101,13 +101,17 @@ export function PublicHomeScreen({
           <div className="hero__inner shell">
             <div className="hero__copy" data-reveal>
               <p className="eyebrow">ALPHA TRADE ACADEMY · СРЕДА РАБОТЫ С РЫНКОМ</p>
+              {/* DD-364 (owner, 2026-10-08): «тут меняем на АТА - инновационная
+                  платформа обучения трейдингу». The line under it used to begin
+                  «Рынок — одна из таких сред», which pointed back at the old
+                  headline; with nothing left to point at, it begins with the
+                  learner and names the market itself. */}
               <h1 className="display display--hero">
-                Возможности не приходят с готовыми ответами.
+                ATA — инновационная платформа обучения трейдингу.
               </h1>
               <p className="hero__definition">
-                Рынок — одна из таких сред. В ATA вы последовательно учитесь понимать ситуацию,
-                формулировать собственное решение и его основание, действовать, проверять работу и
-                исправлять её.
+                Здесь вы последовательно учитесь понимать ситуацию на рынке, формулировать
+                собственное решение и его основание, действовать, проверять работу и исправлять её.
               </p>
               <div className="hero__actions">
                 <a className="button button--signal" href="#mechanism">

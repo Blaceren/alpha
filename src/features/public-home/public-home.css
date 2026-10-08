@@ -248,9 +248,16 @@ html.ph-smooth-scroll {
   text-wrap: balance;
 }
 
+/* DD-364 (2026-10-08): the headline is «ATA — инновационная платформа
+   обучения трейдингу.» Beside the film its column is only 487–575px wide,
+   and at the old 64–82px every word took a line of its own — five lines,
+   «ATA —» alone on the first, the buttons pushed under the first screen of a
+   1366×768 laptop. At 52–63px it reads in three: «ATA — инновационная /
+   платформа / обучения трейдингу.» Up to 1180 the headline has the whole row
+   and keeps its old size (restored in that block). */
 .ph .display--hero {
   max-width: 760px;
-  font-size: clamp(56px, 5.4vw, 82px);
+  font-size: clamp(52px, 4.4vw, 63px);
 }
 
 .ph .display--hero span {
@@ -542,6 +549,8 @@ html.ph-smooth-scroll {
   font-size: clamp(18px, 1.45vw, 22px);
   line-height: 1.58;
   margin: 26px 0 26px;
+  /* DD-364: the new sentence left «её.» alone on its last line at 1440 and 390. */
+  text-wrap: pretty;
 }
 
 .ph .hero__actions {
@@ -1261,6 +1270,12 @@ html.ph-smooth-scroll {
     max-width: 900px;
   }
 
+  /* The film goes below the copy here, so the headline has the whole row
+     and keeps the size it always had (DD-364 smaller only beside the film). */
+  .ph .display--hero {
+    font-size: clamp(56px, 5.4vw, 82px);
+  }
+
   .ph .section-intro--wide,
 .ph .review-proof__heading {
     grid-template-columns: 1fr;
@@ -1639,6 +1654,14 @@ html.ph-smooth-scroll {
     margin: 0 5px 5px;
     padding: 26px 0;
     border-radius: 18px;
+  }
+}
+
+/* DD-364: «инновационная», the headline's longest word, is 6.6 of its own
+   font size wide; at 14vw it ran 7px past the 16px gutter of a 320px phone. */
+@media (max-width: 359px) {
+  .ph .display--hero {
+    font-size: 13.2vw;
   }
 }
 

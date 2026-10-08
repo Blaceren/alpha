@@ -109,10 +109,16 @@ describe("Public Home — architecture", () => {
     }
   });
 
-  it("opens on the opportunity, not on a negated category", () => {
+  it("opens on what ATA is, not on a negated category", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const h1 = container.querySelector("h1") as HTMLElement;
-    expect(text(h1)).toBe("Возможности не приходят с готовыми ответами.");
+    // DD-364 (owner, 2026-10-08): the headline names the platform.
+    expect(text(h1)).toBe("ATA — инновационная платформа обучения трейдингу.");
+    // The line under it no longer points back at a headline that is gone
+    // («Рынок — одна из таких сред» followed «Возможности не приходят…»).
+    const definition = container.querySelector(".hero__definition") as HTMLElement;
+    expect(text(definition)).toMatch(/^Здесь вы последовательно учитесь понимать ситуацию на рынке,/);
+    expect(text(container)).not.toContain("одна из таких сред");
     // The page used to open by defining itself against a competitor category.
     // An argument against others leaves no room for the learner's own agency.
     expect(text(container)).not.toContain("Не ещё один источник информации");
@@ -1392,5 +1398,33 @@ describe("Public Home — the Entry Checklist example is the tool's own seven co
     expect(text(window)).toContain("7 / 7");
     expect(text(window)).toContain("среда, график и сделка");
     expect(window.querySelector(".pw-check__item em")).toBeNull();
+  });
+});
+
+/* DD-364 (2026-10-08), the owner: «тут меняем на АТА - инновационная платформа обучения
+   трейдингу». The headline's longest word is long, and beside the film its column is narrow. */
+describe("Public Home — the headline names the platform and fits every width (DD-364)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("is set smaller only beside the film, so it reads in three lines there", () => {
+    // Base (wider than 1180, beside the film): at most 63px, «ATA — инновационная» on one line.
+    expect(css).toMatch(/\n\.ph \.display--hero \{\s*max-width: 760px;\s*font-size: clamp\(52px, 4\.4vw, 63px\);\s*\}/);
+    // Up to 1180 the headline has the whole row and keeps its old size.
+    const wholeRow = css.search(/@media \(max-width: 1180px\) \{[^@]*?\.ph \.display--hero \{\s*font-size: clamp\(56px, 5\.4vw, 82px\);\s*\}/);
+    const phone = css.search(/\.ph \.display--hero \{\s*font-size: clamp\(44px, 14vw, 64px\);/);
+    const narrowPhone = css.search(/@media \(max-width: 359px\) \{\s*\.ph \.display--hero \{\s*font-size: 13\.2vw;\s*\}\s*\}/);
+    expect(wholeRow, "the 1180 rule restoring the old size").toBeGreaterThan(-1);
+    expect(phone, "the phone rule").toBeGreaterThan(-1);
+    expect(narrowPhone, "the 359 rule keeping «инновационная» inside a 320px phone's gutter").toBeGreaterThan(-1);
+    // Same specificity everywhere, so the narrower rule must come later in the file.
+    expect(wholeRow).toBeLessThan(phone);
+    expect(phone).toBeLessThan(narrowPhone);
+  });
+
+  it("does not leave the line under it ending on a lone word", () => {
+    expect(css).toMatch(/\n\.ph \.hero__definition \{[^}]*text-wrap: pretty;/);
   });
 });
