@@ -1,0 +1,54 @@
+{
+ "schema": "ata.prune.record/1",
+ "recorded_at_utc": "2026-10-08T15:14:24.179010Z",
+ "authorised_by": "the owner's task of 2026-10-08 (DD-372, the boundary card) with / at 2.5 GB free — below the publish gate; the protocol's exception (the disk blocks a release the owner ordered); the owner has been asked three times today to delete the data-disk archives and has not yet; reversible; announced in the report.",
+ "gate": "tools/prune-release.sh → PRUNABLE on the exact path (gate output in entries[].gate_output and audits/ata-disk-prune-2026-10-08/gates/)",
+ "extra_check": "dry run with DRY passed through `sudo -n env DRY=1` printed exactly one «would move» line; the move script is the 2026-10-08 one with this one literal path and the KEEP list extended with the four releases of the day (9577c4c live, 7be23e5, e038305, c5ba356)",
+ "protected": {
+  "live": {
+   "academy": "9577c4cdf4c90b4dfdf98ac890fafc478c88af05",
+   "backend": "a2adfe0d68f560c19e1242acb1b34fc5fb91bcb9",
+   "crm": "24b128e2a4873408a52de6999f474541f6b7f378",
+   "partner": "c1f0849e98aa68df8694e975a3890e932bca3f19"
+  },
+  "kept": {
+   "academy today": "9577c4c (live), 7be23e5, e038305, c5ba356, 47165575, 24f0148, 1dd61bd, dfdc9e7, 01f709c",
+   "academy QA-held": "3d85b10, 91549bc, 99b2b72",
+   "backend, crm, partner": "untouched"
+  }
+ },
+ "deleted": false,
+ "action": "move to /srv/ata-data/release-archive/2026-10-08/academy/<commit> (mv, whole directory); entry count and tree-shape digest equal before and after",
+ "entries": [
+  {
+   "component": "academy",
+   "path": "/srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7",
+   "source_commit": "b62e3680d43ea201b0f905561b8dea6c443ea6a7",
+   "source_tree": "a9a9c0fcd73e74451f867d4fcb4c3a83fc14a0aa",
+   "build_id": "W8F7k3nPp9yY9Oqd2NTjf",
+   "size_mib": 1028,
+   "verdict": "PRUNABLE",
+   "archive_to": "/srv/ata-data/release-archive/2026-10-08/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7",
+   "gate_output": "=== prune gate: academy b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  1 exactly one path      : /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7\n  2 manifest              : /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7/ATA_RELEASE_MANIFEST.json\n  3 commit/tree/build     : b62e3680d43ea201b0f905561b8dea6c443ea6a7 / a9a9c0fcd73e74451f867d4fcb4c3a83fc14a0aa / W8F7k3nPp9yY9Oqd2NTjf\n  4 activated_at_publish  : false\n  5 real directory        : yes\n  6 /srv/ata/current/*:\n      academy   -> /srv/ata/releases/academy/9577c4cdf4c90b4dfdf98ac890fafc478c88af05\n      backend   -> /srv/ata/releases/backend/a2adfe0d68f560c19e1242acb1b34fc5fb91bcb9\n      crm       -> /srv/ata/releases/crm/24b128e2a4873408a52de6999f474541f6b7f378\n      partner   -> /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  7 live service identity:\n  academy  unit=ata-preprod-academy.service port=3050\n    LoadState/ActiveState/SubState ok, MainPID=3173574, cwd==symlink, port 3050 owned by pid 3173605 in-cgroup\n    release: /srv/ata/releases/academy/9577c4cdf4c90b4dfdf98ac890fafc478c88af05\n  backend  unit=ata-preprod-backend.service port=3100\n    LoadState/ActiveState/SubState ok, MainPID=2879286, cwd==symlink, port 3100 owned by pid 2879316 in-cgroup\n    release: /srv/ata/releases/backend/a2adfe0d68f560c19e1242acb1b34fc5fb91bcb9\n  crm      unit=ata-preprod-crm.service port=3010\n    LoadState/ActiveState/SubState ok, MainPID=2731899, cwd==symlink, port 3010 owned by pid 2731926 in-cgroup\n    release: /srv/ata/releases/crm/24b128e2a4873408a52de6999f474541f6b7f378\n  partner  unit=ata-preprod-partner.service port=3110\n    LoadState/ActiveState/SubState ok, MainPID=1922014, cwd==symlink, port 3110 owned by pid 1922014 in-cgroup\n    release: /srv/ata/releases/partner/c1f0849e98aa68df8694e975a3890e932bca3f19\n  8 references:\n    [prune record, not a live reference] /home/ubuntu/ata-release-tooling/prune-records/releases-prune-20261003T153308Z-2026-10-03.json\n      no live references\n  PRUNABLE: /srv/ata/releases/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7  (1028 MiB)\n  This tool does not delete. Remove exactly that absolute path, and nothing else.\nexit 0\n",
+   "result": {
+    "archived_at_utc": "2026-10-08T15:11:27Z",
+    "archived_to": "/srv/ata-data/release-archive/2026-10-08/academy/b62e3680d43ea201b0f905561b8dea6c443ea6a7",
+    "entries": 36593,
+    "mib_after": 1028,
+    "tree_shape_sha256": "7adecbdc685b31ad662b49fd4d8da4a3dbd098b98c7fb0e4b1253e2019b2c522"
+   }
+  }
+ ],
+ "completed": {
+  "moved": 1,
+  "deleted": false,
+  "started": "2026-10-08T15:11:27Z",
+  "ended": "2026-10-08T15:11:27Z",
+  "verification": "entry count and tree-shape digest equal before and after the move",
+  "services_after": "academy, backend, crm, partner units active",
+  "journal": "/srv/ata/releases/academy/ATA_PRUNE_RECORD.jsonl",
+  "owner_scripts": [
+   "/home/ubuntu/audits/ata-disk-prune-2026-10-08/2-udalit-arhiv-navsegda.sh (extend: the archive now also holds b62e368)"
+  ]
+ }
+}
