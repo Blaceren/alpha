@@ -143,13 +143,16 @@ export function PublicHomeScreen({
                 stack with the other cells», so each is the rail's own two tiers:
                 the level as the lit figure, the owner's words as the caption
                 that continues it («4 | уровень, на котором…»). */}
+            {/* DD-368 (owner, 2026-10-08): «1 финальный экзамен», «20 домашних
+                заданий с индивидуальным фидбеком» — the owner's facts and
+                words, in the rail's own two tiers. */}
             <div>
-              <strong>4</strong>
-              <span>уровень, на котором вас уже ждёт первая проверка знаний</span>
+              <strong>1</strong>
+              <span>финальный экзамен</span>
             </div>
             <div>
-              <strong>9</strong>
-              <span>урок, с которого уже начинается практика</span>
+              <strong>20</strong>
+              <span>домашних заданий с индивидуальным фидбеком</span>
             </div>
           </div>
         </section>

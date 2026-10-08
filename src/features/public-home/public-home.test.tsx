@@ -1438,7 +1438,7 @@ describe("Public Home — the headline names the platform and fits every width (
    Практика начинается уже с 9 урока». Set as sentences in their own type (15px, primary, the
    level lit inline) they «stood out and did not stack with the other cells of the block» — so
    every cell is the rail's own two tiers: a lit figure and a muted caption that continues it. */
-describe("Public Home — the facts rail: four cells of one kind (DD-365)", () => {
+describe("Public Home — the facts rail: four cells of one kind (DD-365, words DD-368)", () => {
   const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
     /\/\*[\s\S]*?\*\//g,
     "",
@@ -1453,12 +1453,14 @@ describe("Public Home — the facts rail: four cells of one kind (DD-365)", () =
       expect(cell.className).toBe("");
       expect(Array.from(cell.children).map((child) => child.tagName)).toEqual(["STRONG", "SPAN"]);
     }
-    expect(cells.map((cell) => text(cell.querySelector("strong") as HTMLElement))).toEqual(["20", "100", "4", "9"]);
+    // DD-368 (owner, 2026-10-08): the last two are «1 финальный экзамен» and
+    // «20 домашних заданий с индивидуальным фидбеком».
+    expect(cells.map((cell) => text(cell.querySelector("strong") as HTMLElement))).toEqual(["20", "100", "1", "20"]);
     expect(cells.map((cell) => text(cell.querySelector("span") as HTMLElement))).toEqual([
       "модулей",
       "последовательных уровней",
-      "уровень, на котором вас уже ждёт первая проверка знаний",
-      "урок, с которого уже начинается практика",
+      "финальный экзамен",
+      "домашних заданий с индивидуальным фидбеком",
     ]);
     expect(text(rail)).not.toMatch(/\bL4\b|\bL9\b/);
   });
