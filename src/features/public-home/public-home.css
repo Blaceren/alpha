@@ -1061,13 +1061,14 @@ html.ph-smooth-scroll {
   background: rgba(243, 244, 239, 0.035);
 }
 
+/* DD-373 (owner, 2026-10-08: «стрелочки разместить не справа сверху, а одну
+   слева сверху, другую справа снизу»): the mark spans the card 12px in from
+   its edge, so its two pieces sit at the card's opposite corners — above the
+   label's line at the top-left, under the last row at the bottom-right. */
 .ph .not-list .frame-mark {
-  top: 26px;
-  right: 26px;
-}
-
-.ph .not-list .micro-label {
-  padding-right: 72px;
+  inset: 12px;
+  width: auto;
+  height: auto;
 }
 
 .ph .contrast {
@@ -1078,9 +1079,12 @@ html.ph-smooth-scroll {
 
 .ph .contrast li {
   display: grid;
-  grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
-  gap: 8px 22px;
-  align-items: baseline;
+  /* DD-373: the answers grew to a sentence each; beside a two-word denial
+     they ran to four lines in a 58% column. The two halves now stand one
+     under the other at every width — the denial a muted line, the answer a
+     lit one or two below it. */
+  grid-template-columns: 1fr;
+  gap: 5px;
   padding: 13px 0;
   border-top: 1px solid var(--line-dark);
 }
@@ -1364,15 +1368,6 @@ html.ph-smooth-scroll {
  * stands before the 1180px block so that the narrower blocks after it still
  * win. */
 @media (max-width: 1340px) {
-  /* The boundary card's column is 360–432px from here down to 921: each
-     contrast stacks its two halves (DD-372). Below 920 the card has the
-     whole row and the halves sit side by side again; under 680 they stack
-     for good. */
-  .ph .contrast li {
-    grid-template-columns: 1fr;
-    gap: 5px;
-  }
-
   /* Two rows of three. One line cannot serve two rows, so each cell carries
      its own piece of the row's line: from the node of the first cell to the
      node of the last. */
@@ -5250,10 +5245,6 @@ html.ph-smooth-scroll {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .ph .contrast li {
-    grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
-    gap: 8px 22px;
-  }
 
   /* The decision window is not the route's sticky window: it holds one card
      and shows all of it. The phone height every product window takes cut

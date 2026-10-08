@@ -1702,12 +1702,13 @@ describe("Public Home — the boundary card says what ATA is instead (DD-372)", 
       "обещание прибыли",
     ]);
     const answers = rows.map((r) => text(r.querySelector(".contrast__but") as HTMLElement).trim());
+    // DD-373: the owner's wording for the first, second and last answers.
     expect(answers).toEqual([
-      "а обучение самостоятельному решению",
-      "а собственное основание каждой сделки",
+      "а платформа, специализированная на обучении правильному принятию решений",
+      "а возможность самостоятельно находить и понимать, когда время открывать сделку",
       "а среда, где решение готовится до входа",
       "а дисциплина ваших решений",
-      "а проверяемая работа и честная обратная связь",
+      "а проверяемая работа и эффективная обратная связь",
     ]);
     // Every answer is a positive claim about the learner's own work, never an outcome.
     for (const answer of answers) expect(answer).not.toMatch(/прибыл|доход|заработ|гарант/);
@@ -1717,6 +1718,8 @@ describe("Public Home — the boundary card says what ATA is instead (DD-372)", 
 
   it("sets the denial muted behind its cross and the answer lit behind a Signal dot, and moves once inside the budget", () => {
     expect(css).toMatch(/\n\.ph \.not-list \{[^}]*align-self: start;/);
+    // DD-373: the corners at the card's own opposite corners — the mark spans the card.
+    expect(css).toMatch(/\n\.ph \.not-list \.frame-mark \{\s*inset: 12px;\s*width: auto;\s*height: auto;\s*\}/);
     expect(css).toMatch(/\n\.ph \.contrast__not::before \{[^}]*font-family: var\(--font-data\);[^}]*content: "×";/);
     expect(css).toMatch(/\n\.ph \.contrast__but::before \{[^}]*background: var\(--signal-400\);/);
     expect(css).toMatch(/\n\.ph \.not-list\.is-visible \.contrast li \{\s*animation: ph-reply-in-down 360ms var\(--ease\) both;/);

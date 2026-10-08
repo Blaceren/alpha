@@ -369,8 +369,9 @@ export function PublicHomeScreen({
                 each say what ATA is instead — the denial muted with its
                 cross, the answer in full light with a Signal dot. The rows
                 come in one after another when the card is reached, and the
-                card wears the hero frame's corners. «прибыл» stays the page's
-                one allowed use (the honesty test counts it). */}
+                card wears the hero frame's corners — since DD-373 at its own
+                opposite corners, one top-left, one bottom-right. «прибыл»
+                stays the page's one allowed use (the honesty test counts it). */}
             <div className="not-list" data-reveal>
               <span className="frame-mark" aria-hidden="true">
                 <i />
@@ -380,11 +381,11 @@ export function PublicHomeScreen({
               <ul className="contrast">
                 <li>
                   <span className="contrast__not">сигнальный сервис</span>
-                  <span className="contrast__but">а обучение самостоятельному решению</span>
+                  <span className="contrast__but">а платформа, специализированная на обучении правильному принятию решений</span>
                 </li>
                 <li>
                   <span className="contrast__not">копирование сделок</span>
-                  <span className="contrast__but">а собственное основание каждой сделки</span>
+                  <span className="contrast__but">а возможность самостоятельно находить и понимать, когда время открывать сделку</span>
                 </li>
                 <li>
                   <span className="contrast__not">торговый терминал</span>
@@ -396,7 +397,7 @@ export function PublicHomeScreen({
                 </li>
                 <li>
                   <span className="contrast__not">обещание прибыли</span>
-                  <span className="contrast__but">а проверяемая работа и честная обратная связь</span>
+                  <span className="contrast__but">а проверяемая работа и эффективная обратная связь</span>
                 </li>
               </ul>
             </div>
