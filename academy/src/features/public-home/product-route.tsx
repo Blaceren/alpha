@@ -228,8 +228,10 @@ export function ProductRoute() {
         className={`rstep${item.id === active ? " is-active" : ""}${reached ? " is-reached" : ""}${shown ? " is-shown" : ""}`}
         data-route-step={item.id}
       >
-        <i className="rstep__node" aria-hidden="true">
-          <b>{item.node}</b>
+        {/* DD-370: the level-4 node is the fifth and largest dot of the first
+            steps; the tools' nodes keep their level codes. */}
+        <i className={`rstep__node${item.id === "home" ? " rstep__node--dot" : ""}`} aria-hidden="true">
+          {item.id === "home" ? null : <b>{item.node}</b>}
         </i>
         <p className="rstep__label">{item.label}</p>
         <h3 className="rstep__title">
@@ -266,7 +268,8 @@ export function ProductRoute() {
           <div className="route__segment" data-segment="product">
             <div className="route__intro" data-reveal>
               <p className="eyebrow">Реальный продукт · один следующий шаг</p>
-              <h2 className="display route__title">Не витрина контента. Последовательная работа.</h2>
+              {/* DD-370 (owner, 2026-10-08): «ATA обучает последовательной работе». */}
+              <h2 className="display route__title">ATA обучает последовательной работе.</h2>
               <p className="lead">
                 В каждый момент Academy показывает текущее действие. Следующий уровень
                 открывается после выполнения условий предыдущего — не за XP и не случайным
@@ -278,11 +281,13 @@ export function ProductRoute() {
                 journey the route starts with. */}
             <span className="anchor-alias" id="first-journey" aria-hidden="true" />
             <ol className="journey-line route__start" aria-label="Первые шаги пользователя ATA" data-reveal>
-              {ROUTE_START.map((item, index) => (
-                <li key={item.node} className={`rstart${index === 0 ? " rstart--origin" : ""}`}>
-                  <i className="rstart__node" aria-hidden="true">
-                    {index === 0 ? null : <b>{item.node}</b>}
-                  </i>
+              {/* DD-370 (owner, 2026-10-08): the first steps' nodes are dots,
+                  like the origin's, growing from the first to the level-4
+                  node below (sizes in CSS by position); the codes L1–L3 are
+                  no longer written in them. */}
+              {ROUTE_START.map((item) => (
+                <li key={item.node} className="rstart">
+                  <i className="rstart__node" aria-hidden="true" />
                   <h3>{item.title}</h3>
                   <p>{item.copy}</p>
                 </li>

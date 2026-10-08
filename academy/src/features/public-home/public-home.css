@@ -248,9 +248,16 @@ html.ph-smooth-scroll {
   text-wrap: balance;
 }
 
+/* DD-364 (2026-10-08): the headline is «ATA — инновационная платформа
+   обучения трейдингу.» Beside the film its column is only 487–575px wide,
+   and at the old 64–82px every word took a line of its own — five lines,
+   «ATA —» alone on the first, the buttons pushed under the first screen of a
+   1366×768 laptop. At 52–63px it reads in three: «ATA — инновационная /
+   платформа / обучения трейдингу.» Up to 1180 the headline has the whole row
+   and keeps its old size (restored in that block). */
 .ph .display--hero {
   max-width: 760px;
-  font-size: clamp(56px, 5.4vw, 82px);
+  font-size: clamp(52px, 4.4vw, 63px);
 }
 
 .ph .display--hero span {
@@ -264,6 +271,15 @@ html.ph-smooth-scroll {
 .ph .display--section {
   max-width: 880px;
   font-size: clamp(50px, 6vw, 86px);
+}
+
+/* DD-366: #decide's intro is the narrow column of a two-column grid (452px
+   at 1440), and its headline is a sentence of seven words: at the section
+   size it ran to seven lines, one word each. Up to 68px it is four lines and
+   the column stands as tall as the card beside it. Below 1180 the grid is
+   one column and the headline takes the section size again. */
+.ph .recognition .display--section {
+  font-size: clamp(44px, 4.8vw, 68px);
 }
 
 .ph .eyebrow,
@@ -542,6 +558,8 @@ html.ph-smooth-scroll {
   font-size: clamp(18px, 1.45vw, 22px);
   line-height: 1.58;
   margin: 26px 0 26px;
+  /* DD-364: the new sentence left «её.» alone on its last line at 1440 and 390. */
+  text-wrap: pretty;
 }
 
 .ph .hero__actions {
@@ -571,9 +589,14 @@ html.ph-smooth-scroll {
 .ph .hero__facts div {
   display: grid;
   min-height: 118px;
-  align-content: center;
+  /* DD-365: the figures of a row sit on one line. Centred content put a cell
+     with a two-line caption 11px higher than its neighbours; now every cell
+     starts at the top, with the padding the centred one-line cells had
+     (figure at 28px, caption at 70px), and a two-line caption still fits
+     the 118px. */
+  align-content: start;
   gap: 6px;
-  padding: 22px 28px;
+  padding: 28px 28px 15px;
   border-right: 1px solid var(--line-dark);
 }
 
@@ -592,6 +615,11 @@ html.ph-smooth-scroll {
 .ph .hero__facts span {
   color: var(--text-on-dark-muted);
   font-size: 12px;
+  /* DD-365: the last two captions are a clause each, two lines beside the
+     film — set tight, so a two-line cell stays the rail's 118px, and never
+     ending on a lone word. */
+  line-height: 1.35;
+  text-wrap: pretty;
 }
 
 .ph .recognition,
@@ -602,8 +630,10 @@ html.ph-smooth-scroll {
 
 .ph .recognition__grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(540px, 1.2fr);
-  align-items: center;
+  /* DD-367: without the replies the card has the column to itself — two
+     equal columns, both starting at the top edge. */
+  grid-template-columns: minmax(0, 1fr) minmax(480px, 1fr);
+  align-items: start;
   gap: clamp(70px, 10vw, 150px);
 }
 
@@ -627,84 +657,124 @@ html.ph-smooth-scroll {
   margin: 0;
 }
 
+/* DD-367 (owner, 2026-10-08): the replies are gone — the device is the card
+   alone, under its one word. */
 .ph .reframe {
   display: grid;
-  grid-template-columns: minmax(200px, 0.62fr) 44px minmax(300px, 1.38fr);
-  align-items: center;
+  gap: 14px;
 }
 
-/* OTHERS' ANSWERS, SAID (2026-10-04, owner: «тут нужен хай фай»). Each kind of
-   answer is a reply — its kind as a mono label, a line of it in the display
-   face — frosted on the lime. The stack points at the line that leaves it: the
-   middle two reach furthest right, the outer ones step back and fade, so the
-   six read as noise converging on one place — the card where the learner's own
-   reason is written. */
-.ph .source-cloud {
+/* THE LADDER (DD-366 → DD-367, owner 2026-10-08: «в нашем стиле, добавить
+   брендинга»). Three rungs under the headline on the page's own spine: each
+   node is the cycle's — an Ink disc with its number in Signal mono — on an
+   Ink line; the title in the display face; the last rung carries the tool's
+   chip in the product window's own language (Ink, Signal mono), the one
+   object that reaches the card on the right. */
+.ph .ladder {
+  --rung-node: 30px;
+  --rung-gap: 26px;
   display: grid;
-  gap: 8px;
-  margin: 0;
+  gap: var(--rung-gap);
+  max-width: 560px;
+  margin: 36px 0 0;
   padding: 0;
   list-style: none;
+  counter-reset: rung;
 }
 
-.ph .source-cloud > li {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  padding: 10px 14px 11px;
-  border: 1px solid rgba(11, 13, 10, 0.13);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.24);
-  box-shadow: 0 12px 26px -20px rgba(11, 13, 10, 0.45);
-  color: var(--ink-950);
-}
-
-.ph .source-cloud > li:nth-child(1),
-.ph .source-cloud > li:nth-child(6) {
-  margin-right: 30px;
-  opacity: 0.5;
-}
-
-.ph .source-cloud > li:nth-child(2),
-.ph .source-cloud > li:nth-child(5) {
-  margin-right: 14px;
-  opacity: 0.74;
-}
-
-.ph .src__kind {
-  color: rgba(11, 13, 10, 0.56);
-  font-family: var(--font-data);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  line-height: 1.3;
-  text-transform: uppercase;
-}
-
-.ph .src__said {
-  color: rgba(11, 13, 10, 0.88);
-  font-family: var(--font-display);
-  font-size: 15px;
-  line-height: 1.3;
-  overflow-wrap: break-word;
-}
-
-.ph .reframe__axis {
+.ph .ladder > li {
   position: relative;
-  width: 100%;
-  height: 1px;
-  background: rgba(11, 13, 10, 0.32);
+  display: grid;
+  gap: 7px;
+  padding-left: calc(var(--rung-node) + 18px);
+  counter-increment: rung;
 }
 
-.ph .reframe__axis::after {
+.ph .ladder > li::before {
   position: absolute;
-  top: -3px;
-  right: 0;
-  width: 7px;
-  height: 7px;
+  z-index: 1;
+  top: -1px;
+  left: 0;
+  display: grid;
+  width: var(--rung-node);
+  height: var(--rung-node);
+  place-items: center;
+  border: 1.5px solid var(--signal-400);
   border-radius: 50%;
   background: var(--ink-950);
+  color: var(--signal-400);
+  font-family: var(--font-data);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  content: "0" counter(rung);
+}
+
+.ph .ladder > li::after {
+  position: absolute;
+  top: calc(var(--rung-node) + 4px);
+  bottom: calc(-1 * var(--rung-gap) - 4px);
+  left: calc(var(--rung-node) / 2);
+  width: 1px;
+  background: rgba(11, 13, 10, 0.32);
   content: "";
+}
+
+.ph .ladder > li:last-child::after {
+  display: none;
+}
+
+.ph .ladder h3 {
+  margin: 0;
+  color: var(--ink-950);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.16;
+  text-wrap: balance;
+}
+
+.ph .ladder p {
+  max-width: 46ch;
+  margin: 0;
+  color: rgba(11, 13, 10, 0.72);
+  font-size: 15px;
+  line-height: 1.52;
+  text-wrap: pretty;
+}
+
+.ph .ladder__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  margin-top: 6px;
+  padding: 0 12px 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--ink-950);
+  color: var(--signal-400);
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-decoration: none;
+  text-transform: uppercase;
+  justify-self: start;
+  transition: transform 180ms var(--ease);
+}
+
+.ph .ladder__chip::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--signal-400);
+  content: "";
+}
+
+.ph .ladder__chip:hover {
+  transform: translateY(-2px);
 }
 
 .ph .next-action-concept {
@@ -975,24 +1045,125 @@ html.ph-smooth-scroll {
   margin-top: 32px;
 }
 
+/* THE BOUNDARY CARD (DD-372, owner 2026-10-08: «сделать сильно интереснее,
+   анимации, акценты и текста улучшить»). Five lines of denial became five
+   contrasts: what ATA is not, muted behind its cross, and what it is instead,
+   in full light behind a Signal dot. The card wears the hero frame's corners
+   and stands at the top of its column instead of stretching to the intro's
+   height. When it is reached the rows come in one after another and each
+   answer's dot pops once — inside the page's motion budget. */
 .ph .not-list {
+  position: relative;
+  align-self: start;
   padding: 34px;
   border: 1px solid var(--line-dark);
   border-radius: 22px;
   background: rgba(243, 244, 239, 0.035);
 }
 
-.ph .not-list ul {
-  margin: 34px 0 0;
+/* DD-373 (owner, 2026-10-08: «стрелочки разместить не справа сверху, а одну
+   слева сверху, другую справа снизу»): the mark spans the card 12px in from
+   its edge, so its two pieces sit at the card's opposite corners — above the
+   label's line at the top-left, under the last row at the bottom-right. */
+.ph .not-list .frame-mark {
+  inset: 12px;
+  width: auto;
+  height: auto;
+}
+
+.ph .contrast {
+  margin: 30px 0 0;
   padding: 0;
   list-style: none;
 }
 
-.ph .not-list li {
-  padding: 12px 0;
+.ph .contrast li {
+  display: grid;
+  /* DD-373: the answers grew to a sentence each; beside a two-word denial
+     they ran to four lines in a 58% column. The two halves now stand one
+     under the other at every width — the denial a muted line, the answer a
+     lit one or two below it. */
+  grid-template-columns: 1fr;
+  gap: 5px;
+  padding: 13px 0;
   border-top: 1px solid var(--line-dark);
-  color: var(--text-on-dark-muted);
 }
+
+.ph .contrast__not {
+  position: relative;
+  padding-left: 22px;
+  color: var(--text-on-dark-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.ph .contrast__not::before {
+  position: absolute;
+  top: 0;
+  left: 1px;
+  color: rgba(243, 244, 239, 0.4);
+  font-family: var(--font-data);
+  font-size: 13px;
+  line-height: 1.45;
+  content: "×";
+}
+
+.ph .contrast__but {
+  position: relative;
+  padding-left: 22px;
+  color: var(--text-on-dark);
+  font-size: 15px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.ph .contrast__but::before {
+  position: absolute;
+  top: 0.5em;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--signal-400);
+  box-shadow: 0 0 10px rgba(199, 247, 109, 0.5);
+  content: "";
+}
+
+@keyframes ph-dot-pop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  70% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.ph .not-list.is-visible .contrast li {
+  animation: ph-reply-in-down 360ms var(--ease) both;
+}
+
+.ph .not-list.is-visible .contrast li:nth-child(2) { animation-delay: 110ms; }
+.ph .not-list.is-visible .contrast li:nth-child(3) { animation-delay: 220ms; }
+.ph .not-list.is-visible .contrast li:nth-child(4) { animation-delay: 330ms; }
+.ph .not-list.is-visible .contrast li:nth-child(5) { animation-delay: 440ms; }
+
+.ph .not-list.is-visible .contrast__but::before {
+  animation: ph-dot-pop 260ms var(--ease) both;
+}
+
+.ph .not-list.is-visible .contrast li:nth-child(1) .contrast__but::before { animation-delay: 200ms; }
+.ph .not-list.is-visible .contrast li:nth-child(2) .contrast__but::before { animation-delay: 310ms; }
+.ph .not-list.is-visible .contrast li:nth-child(3) .contrast__but::before { animation-delay: 420ms; }
+.ph .not-list.is-visible .contrast li:nth-child(4) .contrast__but::before { animation-delay: 530ms; }
+.ph .not-list.is-visible .contrast li:nth-child(5) .contrast__but::before { animation-delay: 640ms; }
 
 .ph .environment-note {
   display: grid;
@@ -1253,12 +1424,23 @@ html.ph-smooth-scroll {
     grid-template-columns: 1fr;
   }
 
+  /* One column: #decide's headline has the whole row and the section size (DD-366). */
+  .ph .recognition .display--section {
+    font-size: clamp(50px, 6vw, 86px);
+  }
+
   .ph .hero {
     padding-top: 160px;
   }
 
   .ph .hero__copy {
     max-width: 900px;
+  }
+
+  /* The film goes below the copy here, so the headline has the whole row
+     and keeps the size it always had (DD-364 smaller only beside the film). */
+  .ph .display--hero {
+    font-size: clamp(56px, 5.4vw, 82px);
   }
 
   .ph .section-intro--wide,
@@ -1374,23 +1556,6 @@ html.ph-smooth-scroll {
     border-bottom: 1px solid var(--line-dark);
   }
 
-  .ph .reframe {
-    grid-template-columns: 1fr;
-    gap: 34px;
-  }
-
-  .ph .reframe__axis {
-    width: 1px;
-    height: 54px;
-    margin-left: 50%;
-  }
-
-  .ph .reframe__axis::after {
-    top: auto;
-    right: -3px;
-    bottom: 0;
-  }
-
   .ph .fit__columns,
 .ph .boundaries__grid,
 .ph .faq__grid {
@@ -1484,7 +1649,8 @@ html.ph-smooth-scroll {
     line-height: 0.98;
   }
 
-  .ph .display--section {
+  .ph .display--section,
+  .ph .recognition .display--section {
     font-size: clamp(42px, 12.3vw, 58px);
   }
 
@@ -1642,6 +1808,14 @@ html.ph-smooth-scroll {
   }
 }
 
+/* DD-364: «инновационная», the headline's longest word, is 6.6 of its own
+   font size wide; at 14vw it ran 7px past the 16px gutter of a 320px phone. */
+@media (max-width: 359px) {
+  .ph .display--hero {
+    font-size: 13.2vw;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html.ph-smooth-scroll {
     scroll-behavior: auto;
@@ -1723,6 +1897,16 @@ html.ph-smooth-scroll {
 .ph .surface--signal-deep .demo-badge {
   border-color: rgba(11, 13, 10, 0.22);
   color: rgba(11, 13, 10, 0.66);
+}
+
+/* DD-367 hi-fi pass: inside a product window the badge sits on the window's
+   dark bar whatever the section's surface — on the lime section the rule
+   above had painted it Ink on Ink, and the Trade Card's «Демонстрационный
+   пример» was there but could not be seen. */
+.ph .surface--signal .pw .demo-badge,
+.ph .surface--signal-deep .pw .demo-badge {
+  border-color: var(--line-dark);
+  color: var(--text-on-dark-muted);
 }
 
 /* --- Decision Frame ----------------------------------------------------- */
@@ -2317,12 +2501,37 @@ html.ph-smooth-scroll {
   font-size: 10px;
 }
 
-.ph .rstart--origin .rstart__node::after {
-  width: 10px;
-  height: 10px;
+/* DD-370 (owner, 2026-10-08: «в первых 5 кружках меняем L1, L2, L3, L4 на
+   точки, как в самом первом пункте, только точки должны немного увеличиваться
+   от 1 до 5 пункта»). The four first steps and the level-4 node below them are
+   dots: a Signal disc in each ring, a little larger at every step — the first
+   steps are a run-up, not a list of codes. */
+.ph .rstart__node::after {
+  width: var(--dot, 10px);
+  height: var(--dot, 10px);
   border-radius: 50%;
   background: var(--signal-400);
   content: "";
+}
+
+.ph .route__start > li:nth-child(1) { --dot: 10px; }
+.ph .route__start > li:nth-child(2) { --dot: 13px; }
+.ph .route__start > li:nth-child(3) { --dot: 16px; }
+.ph .route__start > li:nth-child(4) { --dot: 19px; }
+
+.ph .rstep__node--dot::after {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+/* The fifth dot's ring is the level node's, but it does not fill: the dot is
+   the mark, Signal in a tinted ring, with the node's glow. */
+.ph .rstep.is-active .rstep__node.rstep__node--dot {
+  background: #222916;
+  color: var(--signal-400);
 }
 
 .ph .rstart h3 {
@@ -3641,6 +3850,17 @@ html.ph-smooth-scroll {
     font-size: 11px;
   }
 
+  /* 28px rings: the dots a step smaller (DD-370). */
+  .ph .route__start > li:nth-child(1) { --dot: 9px; }
+  .ph .route__start > li:nth-child(2) { --dot: 12px; }
+  .ph .route__start > li:nth-child(3) { --dot: 15px; }
+  .ph .route__start > li:nth-child(4) { --dot: 18px; }
+
+  .ph .rstep__node--dot::after {
+    width: 21px;
+    height: 21px;
+  }
+
   .ph .rstep {
     padding: 20px 0 24px;
   }
@@ -3857,26 +4077,6 @@ html.ph-smooth-scroll {
 /* The six borrowed answers recede toward the axis and dim; the axis draws
    to its point; the learner's own basis is written into the frame; the
    statement follows. ≈ 950ms in all. */
-@keyframes ph-draw-x {
-  from {
-    transform: scaleX(0);
-  }
-
-  to {
-    transform: scaleX(1);
-  }
-}
-
-@keyframes ph-draw-y {
-  from {
-    transform: scaleY(0);
-  }
-
-  to {
-    transform: scaleY(1);
-  }
-}
-
 @keyframes ph-appear {
   from {
     opacity: 0;
@@ -3917,37 +4117,11 @@ html.ph-smooth-scroll {
 
 /* The replies drift in from the left and settle at their own fading — no
    opacity at the end of the keyframes, so each keeps the one its place gives. */
-@keyframes ph-reply-in {
-  from {
-    opacity: 0;
-    transform: translateX(-10px);
-  }
-}
-
 @keyframes ph-reply-in-down {
   from {
     opacity: 0;
     transform: translateY(-6px);
   }
-}
-
-.ph .reframe.is-visible .source-cloud > li {
-  animation: ph-reply-in 420ms var(--ease) both;
-}
-
-.ph .reframe.is-visible .source-cloud > li:nth-child(2) { animation-delay: 45ms; }
-.ph .reframe.is-visible .source-cloud > li:nth-child(3) { animation-delay: 90ms; }
-.ph .reframe.is-visible .source-cloud > li:nth-child(4) { animation-delay: 135ms; }
-.ph .reframe.is-visible .source-cloud > li:nth-child(5) { animation-delay: 180ms; }
-.ph .reframe.is-visible .source-cloud > li:nth-child(6) { animation-delay: 225ms; }
-
-.ph .reframe.is-visible .reframe__axis {
-  transform-origin: left center;
-  animation: ph-draw-x 460ms var(--ease) 180ms both;
-}
-
-.ph .reframe.is-visible .reframe__axis::after {
-  animation: ph-appear 200ms var(--ease) 600ms both;
 }
 
 .ph .dframe__type {
@@ -3959,9 +4133,18 @@ html.ph-smooth-scroll {
   animation: ph-write 540ms steps(30, end) 300ms both;
 }
 
-.ph .reframe.is-visible .decision__statement {
+.ph .reframe.is-visible .decision__statement,
+.ph .reframe.is-visible .decision__action {
   animation: ph-appear 240ms var(--ease) 720ms both;
 }
+
+/* The ladder's rungs come down one after another with the intro (DD-366). */
+.ph .section-intro.is-visible .ladder > li {
+  animation: ph-reply-in-down 420ms var(--ease) both;
+}
+
+.ph .section-intro.is-visible .ladder > li:nth-child(2) { animation-delay: 90ms; }
+.ph .section-intro.is-visible .ladder > li:nth-child(3) { animation-delay: 180ms; }
 
 /* --- the cycle (#mechanism) -------------------------------------------- */
 
@@ -4000,18 +4183,6 @@ html.ph-smooth-scroll {
    pulses once — after the stagger that brings V2 in. */
 .ph .evidence-track > li.is-visible[data-frame-stage="v2"] .evidence__object--corrected {
   animation: ph-pulse 720ms var(--ease) 660ms both;
-}
-
-@media (max-width: 920px) {
-  /* The axis stands vertical here and the replies sit above it. */
-  .ph .reframe.is-visible .source-cloud > li {
-    animation-name: ph-reply-in-down;
-  }
-
-  .ph .reframe.is-visible .reframe__axis {
-    transform-origin: center top;
-    animation-name: ph-draw-y;
-  }
 }
 
 /* Below 1340px the cycle is two rows of three, and under 680px a column: the
@@ -4336,7 +4507,102 @@ html.ph-smooth-scroll {
 
 /* the strip: the same four states as words, compact under the window */
 .ph .review .evidence-track {
-  margin-top: 18px;
+  position: relative;
+  margin-top: 12px;
+  counter-reset: stage;
+}
+
+/* THE STRIP SAYS IT IS A CONTROL (DD-369, owner 2026-10-08: «нужно, чтобы
+   интуитивно было понятно, что кнопки снизу нужно нажимать … добавить
+   подсветку, которая будет аккуратно идти слева направо»). Three things, in
+   the page's own language: a line above the strip, as the tools deck has
+   above its rail; each card's title opens with its step's number in the
+   stepper's mono, lit as far as the state on show; and once, when the strip
+   comes into view, a band of light passes over the four cards from left to
+   right — the direction of the cycle — and is gone. */
+.ph .evidence__hint {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 22px 0 0;
+  color: var(--text-on-dark);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.ph .evidence__hint::before {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--signal-400);
+  box-shadow: 0 0 10px rgba(199, 247, 109, 0.5);
+  content: "";
+}
+
+.ph .review .evidence-track h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ph .review .evidence-track h3::before {
+  flex: none;
+  color: var(--text-on-dark-muted);
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  content: "0" counter(stage);
+  transition: color 240ms var(--ease);
+}
+
+.ph .review .evidence-track > li.is-reached h3::before {
+  color: rgba(199, 247, 109, 0.7);
+}
+
+.ph .review .evidence-track > li.is-active h3::before {
+  color: var(--signal-400);
+}
+
+@keyframes ph-sweep {
+  0% {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+
+  12% {
+    opacity: 1;
+  }
+
+  88% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateX(330%);
+    opacity: 0;
+  }
+}
+
+.ph .review .evidence-track::after {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 30%;
+  background: linear-gradient(90deg, rgba(199, 247, 109, 0) 0, rgba(199, 247, 109, 0.22) 50%, rgba(199, 247, 109, 0) 100%);
+  /* a bright run of the same light along the strip's top edge — the rail,
+     lit where the band is */
+  box-shadow: inset 0 2px 0 rgba(199, 247, 109, 0.55);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ph .review .evidence-track.is-visible::after {
+  animation: ph-sweep 900ms var(--ease) 150ms both;
 }
 
 /* NO BADGES (owner's review, 2026-10-01). Each card used to open with a chip —
@@ -4348,6 +4614,7 @@ html.ph-smooth-scroll {
   /* The card's light lies between its ground and its words (see `::after`). */
   isolation: isolate;
   padding: 24px 20px 20px;
+  counter-increment: stage;
   transition:
     opacity 240ms var(--ease),
     transform 240ms var(--ease),
@@ -4434,6 +4701,11 @@ html.ph-smooth-scroll {
   }
 
   .ph .review .evidence-track > li:hover .evidence__button {
+    color: var(--signal-300);
+  }
+
+  /* The boundary card's answers brighten under the pointer (DD-372). */
+  .ph .contrast li:hover .contrast__but {
     color: var(--signal-300);
   }
 }
@@ -4661,11 +4933,28 @@ html.ph-smooth-scroll {
 }
 
 .ph .decision__statement {
-  max-width: 44ch;
+  /* DD-367 hi-fi pass: under a card the width of the column, the sentence
+     runs the card's width — three lines, not four in a narrow block. */
+  max-width: 62ch;
   margin: 18px 0 0;
   color: rgba(11, 13, 10, 0.72);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.55;
+  text-wrap: pretty;
+}
+
+/* The one action of the section (DD-366 → DD-367, «в нашем стиле»): the
+   page's own dark pill, as on the first step. */
+.ph .decision__action {
+  margin-top: 20px;
+}
+
+.ph .decision__action svg {
+  transition: transform 180ms var(--ease);
+}
+
+.ph .decision__action:hover svg {
+  transform: translateX(3px);
 }
 
 @media (max-width: 920px) {
@@ -4956,6 +5245,7 @@ html.ph-smooth-scroll {
     grid-template-columns: minmax(0, 1fr);
   }
 
+
   /* The decision window is not the route's sticky window: it holds one card
      and shows all of it. The phone height every product window takes cut
      its foot («Зафиксировано 17:20», the note) from 390 down. */
@@ -5158,7 +5448,8 @@ html.ph-smooth-scroll {
     container-type: inline-size;
   }
 
-  .ph .review .evidence-track {
+  .ph .review .evidence-track,
+  .ph .evidence__hint {
     display: none;
   }
 }
@@ -5316,9 +5607,19 @@ html.ph-smooth-scroll {
  * screens are untouched.
  * ====================================================================== */
 
-/* --- «многое → одно» says its two words when it stands in a column ------- */
+/* --- the card's one word, on every width (DD-367; two words on phones only
+   until DD-342, on every width since DD-366): where the learner's own basis
+   lives — in the tool ATA gives. */
 .ph .reframe__caption {
-  display: none;
+  display: block;
+  margin: 0;
+  color: var(--ink-950);
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
 }
 
 /* --- the tools deck: a card per tool, under the rail of their levels ---- */
@@ -5372,22 +5673,6 @@ html.ph-smooth-scroll {
   .ph .rstart__node,
   .ph .environment-note > span {
     font-size: 11px;
-  }
-
-  .ph .reframe__caption {
-    display: block;
-    margin: 0;
-    color: rgba(11, 13, 10, 0.62);
-    font-family: var(--font-data);
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    line-height: 1.4;
-    text-transform: uppercase;
-  }
-
-  .ph .reframe__caption--own {
-    color: var(--ink-950);
   }
 
   .ph .route {
@@ -5668,8 +5953,27 @@ html.ph-smooth-scroll {
     gap: 14px;
   }
 
-  .ph .reframe__axis {
-    height: 32px;
+  .ph .ladder {
+    --rung-node: 26px;
+    --rung-gap: 20px;
+    margin-top: 26px;
+  }
+
+  /* The section's one action spans the column, as the hero's buttons do. */
+  .ph .decision__action {
+    width: 100%;
+  }
+
+  .ph .ladder > li::before {
+    font-size: 11px;
+  }
+
+  .ph .ladder h3 {
+    font-size: 20px;
+  }
+
+  .ph .ladder p {
+    font-size: 14px;
   }
 
 
@@ -5794,8 +6098,22 @@ html.ph-smooth-scroll {
     gap: 36px;
   }
 
-  .ph .not-list ul {
+  .ph .contrast {
     margin-top: 20px;
+  }
+
+  .ph .contrast li {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 11px 0;
+  }
+
+  .ph .contrast__not {
+    font-size: 13px;
+  }
+
+  .ph .contrast__but {
+    font-size: 14px;
   }
 
   .ph .faq__grid {
@@ -6043,21 +6361,6 @@ html.ph-smooth-scroll {
 .ph .hfilm__play:focus-visible {
   outline: 3px solid var(--text-on-dark);
   outline-offset: 4px;
-}
-
-@media (max-width: 920px) {
-  /* The replies, two to a row; the fan is for the wide layout only. */
-  .ph .source-cloud {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .ph .source-cloud > li:nth-child(n) {
-    margin-right: 0;
-  }
-
-  .ph .src__said {
-    font-size: 14px;
-  }
 }
 
 @media (max-width: 680px) {

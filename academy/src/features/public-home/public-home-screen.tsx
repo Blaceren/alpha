@@ -62,17 +62,6 @@ import type { PublicFilm } from "@/server/media/public-film";
  * about the visitor is whether a session exists.
  */
 
-/** What others hand you — the kind, and a line of it. Authored examples, no
-    instrument, no amount, no person. */
-const OTHERS_ANSWERS = [
-  { kind: "Разбор", said: "«У сильного уровня — жду отскок»" },
-  { kind: "Стратегия", said: "«Три свечи подряд — входи по тренду»" },
-  { kind: "Сигнал", said: "«Вверх, пять минут»" },
-  { kind: "Прогноз", said: "«К пятнице будет ниже»" },
-  { kind: "Мнение", said: "«Рынок перегрет»" },
-  { kind: "Чужой вывод", said: "«Все уже в покупках»" },
-] as const;
-
 export function PublicHomeScreen({
   authenticated,
   film = null,
@@ -101,13 +90,17 @@ export function PublicHomeScreen({
           <div className="hero__inner shell">
             <div className="hero__copy" data-reveal>
               <p className="eyebrow">ALPHA TRADE ACADEMY · СРЕДА РАБОТЫ С РЫНКОМ</p>
+              {/* DD-364 (owner, 2026-10-08): «тут меняем на АТА - инновационная
+                  платформа обучения трейдингу». The line under it used to begin
+                  «Рынок — одна из таких сред», which pointed back at the old
+                  headline; with nothing left to point at, it begins with the
+                  learner and names the market itself. */}
               <h1 className="display display--hero">
-                Возможности не приходят с готовыми ответами.
+                ATA — инновационная платформа обучения трейдингу.
               </h1>
               <p className="hero__definition">
-                Рынок — одна из таких сред. В ATA вы последовательно учитесь понимать ситуацию,
-                формулировать собственное решение и его основание, действовать, проверять работу и
-                исправлять её.
+                Здесь вы последовательно учитесь понимать ситуацию на рынке, формулировать
+                собственное решение и его основание, действовать, проверять работу и исправлять её.
               </p>
               <div className="hero__actions">
                 <a className="button button--signal" href="#mechanism">
@@ -143,15 +136,23 @@ export function PublicHomeScreen({
               <span>последовательных уровней</span>
             </div>
             {/* The program learners have (2026-10-04, launch audit): the first test
-                is level 4, the first practice with a report is level 9. These said
-                L2 and L3 — the 100-level plan. */}
+                is level 4, the first practice with a report is level 9. DD-365
+                (owner, 2026-10-08): «вместо L4 — первая проверка знаний ждёт вас
+                уже на 4 уровне, вместо L9 — практика начинается уже с 9 урока»;
+                set as sentences in their own type they «stood out and did not
+                stack with the other cells», so each is the rail's own two tiers:
+                the level as the lit figure, the owner's words as the caption
+                that continues it («4 | уровень, на котором…»). */}
+            {/* DD-368 (owner, 2026-10-08): «1 финальный экзамен», «20 домашних
+                заданий с индивидуальным фидбеком» — the owner's facts and
+                words, in the rail's own two tiers. */}
             <div>
-              <strong>L4</strong>
-              <span>первая проверка знаний</span>
+              <strong>1</strong>
+              <span>финальный экзамен</span>
             </div>
             <div>
-              <strong>L9</strong>
-              <span>первая практика и разбор</span>
+              <strong>20</strong>
+              <span>домашних заданий с индивидуальным фидбеком</span>
             </div>
           </div>
         </section>
@@ -163,39 +164,56 @@ export function PublicHomeScreen({
           <div className="shell recognition__grid">
             <div className="section-intro" data-reveal>
               <p className="eyebrow eyebrow--dark">От чужого ответа — к собственному решению</p>
+              {/* DD-366 (owner, 2026-10-08): «связать между собой логически,
+                  чтобы человеку было понятно, что чтобы зарабатывать, ему
+                  нужно самому разбираться, как правильно торговать, и что
+                  инструментом, который показан, мы помогаем делать это и даём
+                  ему этот инструмент». The headline is the stake; the ladder
+                  under it says the chain in three rungs, the last one naming
+                  the tool the device on the right shows. */}
               <h2 className="display display--section">
-                На рынке решение нельзя полностью делегировать.
+                Чтобы зарабатывать, нужно самому понимать, как торговать.
               </h2>
-              <p className="lead">
-                Можно изучать чужие разборы, стратегии и мнения. Но действовать приходится вам — и
-                понимать, на чём основано ваше решение.
-              </p>
+              {/* DD-367 (owner, 2026-10-08: «в нашем стиле, добавить брендинга»):
+                  the rungs stand on the page's spine — numbered Ink discs on
+                  one line, like the cycle's nodes — and the last one carries
+                  the tool's chip, which leads to the deck where it is L5. */}
+              <ol className="ladder" aria-label="Почему решение должно быть вашим и что для этого даёт ATA">
+                <li>
+                  <h3>Чужой ответ — не ваше понимание.</h3>
+                  <p>Разборы, сигналы и прогнозы можно изучать, но действуете и отвечаете за результат вы.</p>
+                </li>
+                <li>
+                  <h3>Правильно торговать — значит входить по основанию.</h3>
+                  <p>
+                    Не по ощущению: до входа, словами, что должно произойти, чтобы вы вошли, — и
+                    держаться этого в сделке.
+                  </p>
+                </li>
+                <li>
+                  <h3>Для этого ATA даёт инструмент.</h3>
+                  <p>
+                    Trade Card открывается на уровне 5: основание называется до входа, а после
+                    открытия сделки карточка уже не меняется.
+                  </p>
+                  <a className="ladder__chip" href="#tools">
+                    Trade Card · уровень 5
+                  </a>
+                </li>
+              </ol>
             </div>
 
             <div className="reframe" data-reveal>
-              {/* Phones only (CSS): stacked, the device needs its two words —
-                  what recedes and what is written. DD-342. */}
-              <p className="reframe__caption" aria-hidden="true">Чужие ответы</p>
-              {/* OTHERS' ANSWERS, SAID (2026-10-04, owner: «тут нужен хай фай»).
-                  Six pale pills only named the kinds of answer. Each is now a
-                  line someone else said — what a review, a signal, a forecast
-                  actually hands you — in the page's ink, fading as it recedes.
-                  None of them is the learner's reason: that is written in the
-                  card the line leads to. */}
-              <ul className="source-cloud" aria-label="Чужие ответы">
-                {OTHERS_ANSWERS.map((item) => (
-                  <li className="src" key={item.kind}>
-                    <span className="src__kind">{item.kind}</span>
-                    <span className="src__said">{item.said}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="reframe__axis" aria-hidden="true" />
-              <p className="reframe__caption reframe__caption--own" aria-hidden="true">Ваше решение</p>
+              {/* The card's one word (DD-367: the six replies that used to stand
+                  before it are gone — owner: «это давай уберем»): where the
+                  learner's own basis lives — in the tool ATA gives. */}
+              <p className="reframe__caption" aria-hidden="true">
+                Ваше основание — в инструменте ATA
+              </p>
 
               {/* The same object, now determinate — in the Trade Card, where
                   the product holds it. decision-window.tsx */}
-              <DecisionWindow />
+              <DecisionWindow action={account} />
             </div>
           </div>
         </section>
@@ -262,12 +280,16 @@ export function PublicHomeScreen({
           <div className="shell">
             <div className="review-proof__heading" data-reveal>
               <div>
-                <p className="eyebrow">Главное доказательство · проверка работы</p>
+                {/* The qualifier the lead used to carry (review is on the
+                    designated levels, not every level) lives in the label
+                    since DD-369 — visible copy, not a footnote. */}
+                <p className="eyebrow">Главное доказательство · проверка работы на предусмотренных уровнях</p>
                 <h2 className="display display--section">Пройдено — ещё не значит освоено.</h2>
               </div>
+              {/* DD-369 (owner, 2026-10-08): the owner's sentence. */}
               <p className="lead">
-                На предусмотренных уровнях работа проходит полный цикл: первая версия, разбор
-                человеком, исправление и принятие.
+                Каждый ученик ATA проходит полный цикл обучения с персональным фидбеком на каждом
+                этапе.
               </p>
             </div>
 
@@ -287,16 +309,31 @@ export function PublicHomeScreen({
           <div className="shell">
             <div className="section-intro section-intro--wide" data-reveal>
               <p className="eyebrow eyebrow--dark">Подходит ли вам ATA</p>
-              <h2 className="display display--section">
-                Право сказать «не сейчас» тоже создаёт доверие.
-              </h2>
+              {/* DD-371 (owner, 2026-10-08): the question in the owner's words,
+                  the lead their sentence; the «not now» group first, with four
+                  reasons in their words. */}
+              <h2 className="display display--section">Почему ATA может быть не для меня?</h2>
               <p className="lead">
-                ATA может подойти тем, кто хочет понимать основания собственного решения и готов
+                ATA создана для тех, кто может понимать основания собственного решения и готов
                 проверять качество своей работы.
               </p>
             </div>
 
             <div className="fit__columns">
+              <article data-reveal>
+                <p className="micro-label">Лучше не начинать сейчас, если вы</p>
+                <h3>Ищете быстрый или гарантированный результат.</h3>
+                <ul className="plain-list">
+                  <li>хотите получать только сигналы или копировать сделки;</li>
+                  <li>
+                    не готовы обучаться, воспринимать экспертное мнение и совершенствоваться в том,
+                    на что тратите время;
+                  </li>
+                  <li>не готовы брать на себя ответственность за свои решения;</li>
+                  <li>пытаетесь компенсировать прошлые потери.</li>
+                </ul>
+              </article>
+
               <article data-reveal>
                 <p className="micro-label">ATA может подойти, если вы</p>
                 <h3>Хотите выстроить собственное понимание.</h3>
@@ -306,18 +343,6 @@ export function PublicHomeScreen({
                   <li>цените последовательность и обратную связь;</li>
                   <li>хотите лучше понимать собственные решения;</li>
                   <li>можете выделять время на самостоятельную работу.</li>
-                </ul>
-              </article>
-
-              <article data-reveal>
-                <p className="micro-label">Лучше не начинать сейчас, если вы</p>
-                <h3>Ищете быстрый или гарантированный результат.</h3>
-                <ul className="plain-list">
-                  <li>хотите получать только сигналы или копировать сделки;</li>
-                  <li>не готовы проходить проверки и исправлять работу;</li>
-                  <li>ожидаете пассивного решения без обучения;</li>
-                  <li>пытаетесь немедленно компенсировать прошлые потери;</li>
-                  <li>планируете использовать деньги для обязательных расходов.</li>
                 </ul>
               </article>
             </div>
@@ -338,14 +363,42 @@ export function PublicHomeScreen({
               </p>
             </div>
 
+            {/* THE BOUNDARY CARD (DD-372, owner 2026-10-08: «сделать сильно
+                интереснее, анимации, акценты и текста улучшить, довести до
+                продакшен хай фай»). Five lines that used to only deny now
+                each say what ATA is instead — the denial muted with its
+                cross, the answer in full light with a Signal dot. The rows
+                come in one after another when the card is reached, and the
+                card wears the hero frame's corners — since DD-373 at its own
+                opposite corners, one top-left, one bottom-right. «прибыл»
+                stays the page's one allowed use (the honesty test counts it). */}
             <div className="not-list" data-reveal>
+              <span className="frame-mark" aria-hidden="true">
+                <i />
+                <i />
+              </span>
               <p className="micro-label">ATA — это не</p>
-              <ul>
-                <li>сигнальный сервис;</li>
-                <li>копирование сделок;</li>
-                <li>торговый терминал;</li>
-                <li>управление капиталом;</li>
-                <li>обещание прибыли.</li>
+              <ul className="contrast">
+                <li>
+                  <span className="contrast__not">сигнальный сервис</span>
+                  <span className="contrast__but">а платформа, специализированная на обучении правильному принятию решений</span>
+                </li>
+                <li>
+                  <span className="contrast__not">копирование сделок</span>
+                  <span className="contrast__but">а возможность самостоятельно находить и понимать, когда время открывать сделку</span>
+                </li>
+                <li>
+                  <span className="contrast__not">торговый терминал</span>
+                  <span className="contrast__but">а среда, где решение готовится до входа</span>
+                </li>
+                <li>
+                  <span className="contrast__not">управление капиталом</span>
+                  <span className="contrast__but">а дисциплина ваших решений</span>
+                </li>
+                <li>
+                  <span className="contrast__not">обещание прибыли</span>
+                  <span className="contrast__but">а проверяемая работа и эффективная обратная связь</span>
+                </li>
               </ul>
             </div>
 

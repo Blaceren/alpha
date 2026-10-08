@@ -48,7 +48,7 @@ export function generateMetadata(): Metadata {
     url: `${indexing.origin}${OG_IMAGE.path}`,
     width: OG_IMAGE.width,
     height: OG_IMAGE.height,
-    alt: "Alpha Trade Academy — Возможности не приходят с готовыми ответами.",
+    alt: "Alpha Trade Academy · ATA — инновационная платформа обучения трейдингу.",
   };
   return {
     title: TITLE,

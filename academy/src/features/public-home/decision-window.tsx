@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DECISION_FIELD, DECISION_STRONG } from "@/features/public-home/review-data";
 
 /**
@@ -14,8 +15,13 @@ import { DECISION_FIELD, DECISION_STRONG } from "@/features/public-home/review-d
  * The same string as the hero's unfinished field and the evidence's V2, kept
  * in `review-data.ts`; the tests hold that it is one string. Static markup:
  * the sequence (chips, axis, the writing) is CSS on the reframe's `is-visible`.
+ *
+ * Under the window, since DD-366 (owner, 2026-10-08: «мы помогаем делать это
+ * и даём ему этот инструмент»): the sentence that says the tool is the
+ * learner's, and the page's one action for it — «Начать путь» for a guest,
+ * «Перейти в Академию» for a member (`action`, the hero's own pair).
  */
-export function DecisionWindow() {
+export function DecisionWindow({ action }: { action: { readonly href: string; readonly label: string } }) {
   return (
     <div className="decision" data-frame-stage="set">
       <div className="pw pw--decide" aria-label="Окно продукта: Trade Card, основание входа записано до сделки">
@@ -56,9 +62,15 @@ export function DecisionWindow() {
         </div>
       </div>
       <p className="decision__statement">
-        Собственное решение — не чужой вывод. Это действие, основание которого вы можете
-        объяснить.
+        Этот инструмент вы получаете в ATA и учитесь им пользоваться на своих сделках: сначала
+        основание — потом сделка. Так собственное решение становится привычкой.
       </p>
+      <Link className="button button--dark decision__action" href={action.href}>
+        {action.label}
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M4 10h11M11 6l4 4-4 4" />
+        </svg>
+      </Link>
     </div>
   );
 }

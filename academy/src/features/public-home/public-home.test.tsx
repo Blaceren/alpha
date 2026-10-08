@@ -109,10 +109,16 @@ describe("Public Home — architecture", () => {
     }
   });
 
-  it("opens on the opportunity, not on a negated category", () => {
+  it("opens on what ATA is, not on a negated category", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const h1 = container.querySelector("h1") as HTMLElement;
-    expect(text(h1)).toBe("Возможности не приходят с готовыми ответами.");
+    // DD-364 (owner, 2026-10-08): the headline names the platform.
+    expect(text(h1)).toBe("ATA — инновационная платформа обучения трейдингу.");
+    // The line under it no longer points back at a headline that is gone
+    // («Рынок — одна из таких сред» followed «Возможности не приходят…»).
+    const definition = container.querySelector(".hero__definition") as HTMLElement;
+    expect(text(definition)).toMatch(/^Здесь вы последовательно учитесь понимать ситуацию на рынке,/);
+    expect(text(container)).not.toContain("одна из таких сред");
     // The page used to open by defining itself against a competitor category.
     // An argument against others leaves no room for the learner's own agency.
     expect(text(container)).not.toContain("Не ещё один источник информации");
@@ -192,7 +198,8 @@ describe("Public Home — the claim never outruns the product", () => {
     const mechanism = text(container.querySelector("#mechanism") as HTMLElement);
     const review = text(container.querySelector("#review") as HTMLElement);
     expect(mechanism).toContain("На предусмотренных уровнях");
-    expect(review).toContain("На предусмотренных уровнях");
+    // In #review the qualifier is the section's label since DD-369 (the lead is the owner's sentence).
+    expect(review.toLowerCase()).toContain("на предусмотренных уровнях");
   });
 
   it("never claims review happens on every level", () => {
@@ -812,7 +819,7 @@ describe("Public Home — stylesheet holds its contract", () => {
   it("plays each motion sequence once and settles inside a second", () => {
     // The three sequences ride `is-visible`, run with `both`, and nothing loops.
     for (const trigger of [
-      ".ph .reframe.is-visible .source-cloud > li",
+      ".ph .section-intro.is-visible .ladder > li",
       ".ph .learning-loop.is-visible::before",
       '.ph .evidence-track > li.is-visible[data-frame-stage="v2"] .evidence__object--corrected',
     ]) {
@@ -1206,13 +1213,17 @@ describe("Public Home — the phone composition (DD-342)", () => {
     expect(narrow).toMatch(/\.ph \.trail__button \{[^}]*min-height:\s*44px/);
   });
 
-  it("says the two words of «многое → одно» when it stands in a column, to the eye only", () => {
+  it("says the card's one word on every width, to the eye only (DD-367)", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const captions = Array.from(container.querySelectorAll(".reframe__caption"));
-    expect(captions.map((c) => c.textContent)).toEqual(["Чужие ответы", "Ваше решение"]);
+    expect(captions.map((c) => text(c as HTMLElement).trim())).toEqual(["Ваше основание — в инструменте ATA"]);
     for (const caption of captions) expect(caption).toHaveAttribute("aria-hidden", "true");
-    expect(rules).toMatch(/\n\.ph \.reframe__caption \{\s*display:\s*none;\s*\}/);
-    expect(media("max-width: 920px")).toMatch(/\.ph \.reframe__caption \{[^}]*display:\s*block/);
+    expect(rules).toMatch(/\n\.ph \.reframe__caption \{\s*display:\s*block;/);
+    // The six replies that stood before the card are gone (owner, 2026-10-08: «это давай уберем»).
+    expect(container.querySelector("#decide .source-cloud")).toBeNull();
+    expect(container.querySelector("#decide .reframe__axis")).toBeNull();
+    expect(text(container)).not.toContain("Чужие ответы");
+    expect(rules).not.toContain("source-cloud");
   });
 
   it("makes the cycle a spine on a phone: the objects go, the line runs behind the nodes", () => {
@@ -1392,5 +1403,330 @@ describe("Public Home — the Entry Checklist example is the tool's own seven co
     expect(text(window)).toContain("7 / 7");
     expect(text(window)).toContain("среда, график и сделка");
     expect(window.querySelector(".pw-check__item em")).toBeNull();
+  });
+});
+
+/* DD-364 (2026-10-08), the owner: «тут меняем на АТА - инновационная платформа обучения
+   трейдингу». The headline's longest word is long, and beside the film its column is narrow. */
+describe("Public Home — the headline names the platform and fits every width (DD-364)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("is set smaller only beside the film, so it reads in three lines there", () => {
+    // Base (wider than 1180, beside the film): at most 63px, «ATA — инновационная» on one line.
+    expect(css).toMatch(/\n\.ph \.display--hero \{\s*max-width: 760px;\s*font-size: clamp\(52px, 4\.4vw, 63px\);\s*\}/);
+    // Up to 1180 the headline has the whole row and keeps its old size.
+    const wholeRow = css.search(/@media \(max-width: 1180px\) \{[^@]*?\.ph \.display--hero \{\s*font-size: clamp\(56px, 5\.4vw, 82px\);\s*\}/);
+    const phone = css.search(/\.ph \.display--hero \{\s*font-size: clamp\(44px, 14vw, 64px\);/);
+    const narrowPhone = css.search(/@media \(max-width: 359px\) \{\s*\.ph \.display--hero \{\s*font-size: 13\.2vw;\s*\}\s*\}/);
+    expect(wholeRow, "the 1180 rule restoring the old size").toBeGreaterThan(-1);
+    expect(phone, "the phone rule").toBeGreaterThan(-1);
+    expect(narrowPhone, "the 359 rule keeping «инновационная» inside a 320px phone's gutter").toBeGreaterThan(-1);
+    // Same specificity everywhere, so the narrower rule must come later in the file.
+    expect(wholeRow).toBeLessThan(phone);
+    expect(phone).toBeLessThan(narrowPhone);
+  });
+
+  it("does not leave the line under it ending on a lone word", () => {
+    expect(css).toMatch(/\n\.ph \.hero__definition \{[^}]*text-wrap: pretty;/);
+  });
+});
+
+/* DD-365 (2026-10-08), the owner, on the facts rail under the first screen: «L4 и L9 визуально
+   меняем и говорим вместо L4 - первая проверка знаний ждет вас уже на 4 уровне, вместо L9 -
+   Практика начинается уже с 9 урока». Set as sentences in their own type (15px, primary, the
+   level lit inline) they «stood out and did not stack with the other cells of the block» — so
+   every cell is the rail's own two tiers: a lit figure and a muted caption that continues it. */
+describe("Public Home — the facts rail: four cells of one kind (DD-365, words DD-368)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("gives every cell a lit figure and a caption, the levels as plain numbers", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const rail = container.querySelector(".hero__facts") as HTMLElement;
+    const cells = Array.from(rail.children) as HTMLElement[];
+    expect(cells).toHaveLength(4);
+    for (const cell of cells) {
+      expect(cell.className).toBe("");
+      expect(Array.from(cell.children).map((child) => child.tagName)).toEqual(["STRONG", "SPAN"]);
+    }
+    // DD-368 (owner, 2026-10-08): the last two are «1 финальный экзамен» and
+    // «20 домашних заданий с индивидуальным фидбеком».
+    expect(cells.map((cell) => text(cell.querySelector("strong") as HTMLElement))).toEqual(["20", "100", "1", "20"]);
+    expect(cells.map((cell) => text(cell.querySelector("span") as HTMLElement))).toEqual([
+      "модулей",
+      "последовательных уровней",
+      "финальный экзамен",
+      "домашних заданий с индивидуальным фидбеком",
+    ]);
+    expect(text(rail)).not.toMatch(/\bL4\b|\bL9\b/);
+  });
+
+  it("styles no cell apart from the others", () => {
+    expect(css).not.toContain("fact-line");
+    expect(css).toMatch(/\n\.ph \.hero__facts span \{[^}]*text-wrap: pretty;/);
+  });
+});
+
+/* DD-366 (2026-10-08), the owner, on #decide: «этому блоку нужен очень сильный хай фай, нужно
+   связать между собой логически так, чтобы человеку было понятно, что чтобы зарабатывать, ему
+   нужно самому разбираться, как правильно торговать, и что инструментом, который показан, мы
+   помогаем делать это и даём ему этот инструмент». */
+describe("Public Home — #decide says its chain in words and ends in the tool (DD-366)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("opens on the stake and climbs three rungs to the tool", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const section = container.querySelector("#decide") as HTMLElement;
+    expect(text(section.querySelector("h2") as HTMLElement).trim()).toBe(
+      "Чтобы зарабатывать, нужно самому понимать, как торговать.",
+    );
+    const rungs = Array.from(section.querySelectorAll(".ladder > li")) as HTMLElement[];
+    expect(rungs.map((rung) => text(rung.querySelector("h3") as HTMLElement).trim())).toEqual([
+      "Чужой ответ — не ваше понимание.",
+      "Правильно торговать — значит входить по основанию.",
+      "Для этого ATA даёт инструмент.",
+    ]);
+    expect(text(rungs[2] as HTMLElement)).toContain("Trade Card открывается на уровне 5");
+    // The ladder stands where the lead stood; the section has no lead now.
+    expect(section.querySelector(".section-intro .lead")).toBeNull();
+    // Nothing promises a result: the words are about understanding and responsibility.
+    expect(text(section)).not.toMatch(/гарант|доход|прибыл|\$|%\s*в месяц/i);
+  });
+
+  it("says under the card that the tool is the learner's, and offers the one action", () => {
+    const guest = render(<PublicHomeScreen authenticated={false} />).container;
+    const statement = guest.querySelector("#decide .decision__statement") as HTMLElement;
+    expect(text(statement)).toContain("Этот инструмент вы получаете в ATA");
+    const action = guest.querySelector("#decide .decision__action") as HTMLAnchorElement;
+    expect(action).not.toBeNull();
+    expect(action.getAttribute("href")).toBe("/register");
+    expect(text(action).trim()).toBe("Начать путь");
+  });
+
+  it("sends a member to the Academy from the same line", () => {
+    const { container } = render(<PublicHomeScreen authenticated={true} />);
+    const action = container.querySelector("#decide .decision__action") as HTMLAnchorElement;
+    expect(action).not.toBeNull();
+    expect(action.getAttribute("href")).toBe("/home");
+    expect(text(action).trim()).toBe("Перейти в Академию");
+  });
+
+  it("stands the rungs on the page's spine: numbered Ink discs on one line, the tool's chip on the last (DD-367)", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const ladder = container.querySelector("#decide .ladder") as HTMLElement;
+    expect(ladder.tagName).toBe("OL");
+    // The node is the cycle's: an Ink disc, the number in Signal mono, drawn by CSS from the order.
+    expect(css).toMatch(/\n\.ph \.ladder > li::before \{[^}]*border: 1\.5px solid var\(--signal-400\);[^}]*background: var\(--ink-950\);\s*color: var\(--signal-400\);\s*font-family: var\(--font-data\);[^}]*content: "0" counter\(rung\);/);
+    expect(css).toMatch(/\n\.ph \.ladder > li::after \{[^}]*width: 1px;\s*background: rgba\(11, 13, 10, 0\.32\);/);
+    expect(css).toMatch(/\n\.ph \.section-intro\.is-visible \.ladder > li \{\s*animation: ph-reply-in-down 420ms var\(--ease\) both;/);
+    // The last rung carries the tool's chip, which leads to the deck where Trade Card is L5.
+    const chips = Array.from(ladder.querySelectorAll(".ladder__chip")) as HTMLAnchorElement[];
+    expect(chips).toHaveLength(1);
+    expect(chips[0]!.closest("li")).toBe(ladder.lastElementChild);
+    expect(text(chips[0]!).trim()).toBe("Trade Card · уровень 5");
+    expect(chips[0]!.getAttribute("href")).toBe("#tools");
+    expect(css).toMatch(/\n\.ph \.ladder__chip \{[^}]*background: var\(--ink-950\);\s*color: var\(--signal-400\);\s*font-family: var\(--font-data\);/);
+  });
+
+  it("keeps the window's demonstration badge legible on the lime section", () => {
+    // The Signal-surface badge colours are Ink; in a product window the bar is dark.
+    expect(css).toMatch(/\n\.ph \.surface--signal \.pw \.demo-badge,\s*\.ph \.surface--signal-deep \.pw \.demo-badge \{\s*border-color: var\(--line-dark\);\s*color: var\(--text-on-dark-muted\);/);
+  });
+
+  it("offers the action as the page's own dark pill, not a bare line", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const action = container.querySelector("#decide .decision__action") as HTMLAnchorElement;
+    expect(action.classList.contains("button")).toBe(true);
+    expect(action.classList.contains("button--dark")).toBe(true);
+    expect(action.querySelector("svg")).not.toBeNull();
+    // Its own rule places it and moves the arrow; the pill's text and shape come from `.button`.
+    expect(css).not.toMatch(/\n\.ph \.decision__action \{[^}]*(color|font-size|text-decoration):/);
+  });
+});
+
+/* DD-369 (2026-10-08), the owner, on #review: the lead is their sentence; «нужно, чтобы интуитивно
+   было понятно, что кнопки снизу нужно нажимать … добавить подсветку, которая будет аккуратно идти
+   слева направо»; «в конце сделать хай-фай продакшн всего блока». */
+describe("Public Home — #review says its strip is a control (DD-369)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("opens with the owner's sentence and keeps the qualifier in the label", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const review = container.querySelector("#review") as HTMLElement;
+    expect(text(review.querySelector(".lead") as HTMLElement).trim()).toBe(
+      "Каждый ученик ATA проходит полный цикл обучения с персональным фидбеком на каждом этапе.",
+    );
+    expect(text(review.querySelector(".eyebrow") as HTMLElement)).toContain("на предусмотренных уровнях");
+    expect(text(review)).not.toContain("разбор человеком");
+  });
+
+  it("tells the visitor to press a stage, right above the strip, and only where the strip is", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const hint = container.querySelector("#review .evidence__hint") as HTMLElement;
+    expect(text(hint).trim()).toBe("Нажмите на этап, чтобы увидеть его в окне");
+    expect(hint.nextElementSibling?.classList.contains("evidence-track")).toBe(true);
+    // The deck's hint language: a Signal dot before the line.
+    expect(css).toMatch(/\n\.ph \.evidence__hint::before \{[^}]*background: var\(--signal-400\);/);
+    // A narrow screen has the stepper instead: the hint goes with the strip.
+    expect(css).toMatch(/@media \(max-width: 1040px\) \{[^@]*\.ph \.review \.evidence-track,\s*\.ph \.evidence__hint \{\s*display: none;/);
+  });
+
+  it("numbers the four cards in the stepper's mono, lit as far as the state on show, without touching their words", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const titles = Array.from(container.querySelectorAll("#review .evidence-track h3")).map((h) => text(h as HTMLElement));
+    expect(titles).toEqual(["Работа отправлена", "Получен разбор", "Замечание исправлено", "Работа принята"]);
+    expect(css).toMatch(/\n\.ph \.review \.evidence-track \{[^}]*counter-reset: stage;/);
+    expect(css).toMatch(/\n\.ph \.review \.evidence-track > li \{[^}]*counter-increment: stage;/);
+    expect(css).toMatch(/\n\.ph \.review \.evidence-track h3::before \{[^}]*font-family: var\(--font-data\);[^}]*content: "0" counter\(stage\);/);
+    expect(css).toMatch(/\n\.ph \.review \.evidence-track > li\.is-active h3::before \{\s*color: var\(--signal-400\);/);
+  });
+
+  it("passes a band of light over the strip from left to right, once, inside the page's motion budget", () => {
+    expect(css).toMatch(/\n\.ph \.review \.evidence-track \{[^}]*position: relative;/);
+    const band = /\n\.ph \.review \.evidence-track::after \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(band).toMatch(/pointer-events: none;/);
+    expect(band).toMatch(/opacity: 0;/);
+    expect(band).toMatch(/linear-gradient\(90deg/);
+    expect(css).toMatch(/\n\.ph \.review \.evidence-track\.is-visible::after \{\s*animation: ph-sweep 900ms var\(--ease\) 150ms both;/);
+    const frames = /@keyframes ph-sweep \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+    expect(frames).toMatch(/0% \{\s*transform: translateX\(-110%\);\s*opacity: 0;/);
+    expect(frames).toMatch(/100% \{\s*transform: translateX\(330%\);\s*opacity: 0;/);
+  });
+});
+
+/* DD-370 (2026-10-08), the owner, on #product: «Не витрина контента. Последовательная работа.» →
+   «ATA обучает последовательной работе»; «в первых 5 кружках меняем L1, L2, L3, L4 на точки, как в
+   самом первом пункте, только точки должны немного увеличиваться от 1 до 5 пункта». */
+describe("Public Home — the route opens on five growing dots (DD-370)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("says what ATA teaches in the route's heading", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const title = container.querySelector("#product .route__title") as HTMLElement;
+    expect(text(title).trim()).toBe("ATA обучает последовательной работе.");
+    expect(text(container)).not.toContain("Не витрина контента");
+  });
+
+  it("writes no code in the first four nodes or the level-4 node, and keeps the tools' codes", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const first = Array.from(container.querySelectorAll("#product .route__start .rstart__node")) as HTMLElement[];
+    expect(first).toHaveLength(4);
+    for (const node of first) expect(text(node).trim()).toBe("");
+    const home = container.querySelector("#product #route-step-home .rstep__node, #product [data-route-step=\"home\"] .rstep__node") as HTMLElement;
+    expect(home).not.toBeNull();
+    expect(home.classList.contains("rstep__node--dot")).toBe(true);
+    expect(text(home).trim()).toBe("");
+    const tools = Array.from(container.querySelectorAll("#product .route__list--tools .rstep__node")).map((n) => text(n as HTMLElement).trim());
+    expect(tools).toEqual(["L5", "L9", "L13", "L13", "L24", "L28"]);
+  });
+
+  it("grows the dots from the first step to the fifth, on wide screens and on phones", () => {
+    const sizes = (block: string) =>
+      [1, 2, 3, 4].map((n) => Number(new RegExp(`\\.ph \\.route__start > li:nth-child\\(${n}\\) \\{ --dot: (\\d+)px; \\}`).exec(block)?.[1]));
+    const wide = sizes(css);
+    expect(wide).toEqual([10, 13, 16, 19]);
+    expect(css).toMatch(/\n\.ph \.rstart__node::after \{\s*width: var\(--dot, 10px\);\s*height: var\(--dot, 10px\);[^}]*background: var\(--signal-400\);/);
+    expect(css).toMatch(/\n\.ph \.rstep__node--dot::after \{\s*width: 24px;\s*height: 24px;/);
+    // The fifth is the level node: a Signal dot in a tinted ring, not a filled disc with a code.
+    expect(css).toMatch(/\n\.ph \.rstep\.is-active \.rstep__node\.rstep__node--dot \{\s*background: #222916;\s*color: var\(--signal-400\);/);
+    const phone = /@media \(max-width: 920px\) \{([\s\S]*?)\n\}/.exec(css.slice(css.indexOf(".ph .route__steps {\n    padding-bottom: 40px;") - 2000))?.[1] ?? "";
+    expect(sizes(phone)).toEqual([9, 12, 15, 18]);
+    expect(phone).toMatch(/\.ph \.rstep__node--dot::after \{\s*width: 21px;\s*height: 21px;/);
+  });
+});
+
+/* DD-371 (2026-10-08), the owner, on #fit: the heading «Право сказать «не сейчас» тоже создаёт
+   доверие.» → «Почему АТА может быть не для меня ?»; the lead → «АТА создана для тех кто может понимать
+   основания собственного решения и готов проверять качество своей работы»; the two groups swapped;
+   four reasons «not now» in the owner's words, the money one removed. */
+describe("Public Home — #fit asks the owner's question and opens on «not now» (DD-371)", () => {
+  it("has the question, the owner's lead, and the groups in the owner's order", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const fit = container.querySelector("#fit") as HTMLElement;
+    expect(text(fit.querySelector("h2") as HTMLElement).trim()).toBe("Почему ATA может быть не для меня?");
+    expect(text(fit.querySelector(".lead") as HTMLElement).trim()).toBe(
+      "ATA создана для тех, кто может понимать основания собственного решения и готов проверять качество своей работы.",
+    );
+    const groups = Array.from(fit.querySelectorAll(".fit__columns > article")) as HTMLElement[];
+    expect(groups.map((g) => text(g.querySelector(".micro-label") as HTMLElement).trim())).toEqual([
+      "Лучше не начинать сейчас, если вы",
+      "ATA может подойти, если вы",
+    ]);
+    const notNow = Array.from(groups[0]!.querySelectorAll("li")).map((li) => text(li).trim());
+    expect(notNow).toEqual([
+      "хотите получать только сигналы или копировать сделки;",
+      "не готовы обучаться, воспринимать экспертное мнение и совершенствоваться в том, на что тратите время;",
+      "не готовы брать на себя ответственность за свои решения;",
+      "пытаетесь компенсировать прошлые потери.",
+    ]);
+    expect(text(fit)).not.toContain("обязательных расходов");
+    expect(text(fit)).not.toContain("Право сказать");
+    const may = Array.from(groups[1]!.querySelectorAll("li")).map((li) => text(li).trim());
+    expect(may).toHaveLength(5);
+    expect(may[0]).toBe("не являетесь профессиональным трейдером;");
+  });
+});
+
+/* DD-372 (2026-10-08), the owner, on the «ATA — это не» card: «тут сделать сильно интереснее,
+   анимации, акценты и текста улучшить, довести до продакшен хай фай». */
+describe("Public Home — the boundary card says what ATA is instead (DD-372)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("pairs every denial with what ATA is instead, and keeps the page's one «прибыл»", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const card = container.querySelector("#boundaries .not-list") as HTMLElement;
+    expect(text(card.querySelector(".micro-label") as HTMLElement).trim()).toBe("ATA — это не");
+    const rows = Array.from(card.querySelectorAll(".contrast > li")) as HTMLElement[];
+    expect(rows.map((r) => text(r.querySelector(".contrast__not") as HTMLElement).trim())).toEqual([
+      "сигнальный сервис",
+      "копирование сделок",
+      "торговый терминал",
+      "управление капиталом",
+      "обещание прибыли",
+    ]);
+    const answers = rows.map((r) => text(r.querySelector(".contrast__but") as HTMLElement).trim());
+    // DD-373: the owner's wording for the first, second and last answers.
+    expect(answers).toEqual([
+      "а платформа, специализированная на обучении правильному принятию решений",
+      "а возможность самостоятельно находить и понимать, когда время открывать сделку",
+      "а среда, где решение готовится до входа",
+      "а дисциплина ваших решений",
+      "а проверяемая работа и эффективная обратная связь",
+    ]);
+    // Every answer is a positive claim about the learner's own work, never an outcome.
+    for (const answer of answers) expect(answer).not.toMatch(/прибыл|доход|заработ|гарант/);
+    // The hero frame's corners, on the card.
+    expect(card.querySelector(":scope > .frame-mark")).not.toBeNull();
+  });
+
+  it("sets the denial muted behind its cross and the answer lit behind a Signal dot, and moves once inside the budget", () => {
+    expect(css).toMatch(/\n\.ph \.not-list \{[^}]*align-self: start;/);
+    // DD-373: the corners at the card's own opposite corners — the mark spans the card.
+    expect(css).toMatch(/\n\.ph \.not-list \.frame-mark \{\s*inset: 12px;\s*width: auto;\s*height: auto;\s*\}/);
+    expect(css).toMatch(/\n\.ph \.contrast__not::before \{[^}]*font-family: var\(--font-data\);[^}]*content: "×";/);
+    expect(css).toMatch(/\n\.ph \.contrast__but::before \{[^}]*background: var\(--signal-400\);/);
+    expect(css).toMatch(/\n\.ph \.not-list\.is-visible \.contrast li \{\s*animation: ph-reply-in-down 360ms var\(--ease\) both;/);
+    expect(css).toMatch(/\n\.ph \.not-list\.is-visible \.contrast__but::before \{\s*animation: ph-dot-pop 260ms var\(--ease\) both;/);
+    const delays = Array.from(css.matchAll(/\.not-list\.is-visible \.contrast li:nth-child\((\d)\) \.contrast__but::before \{ animation-delay: (\d+)ms; \}/g)).map((m) => Number(m[2]));
+    expect(delays).toEqual([200, 310, 420, 530, 640]);
+    // In the column the two halves stack.
+    expect(css).toMatch(/@media \(max-width: 680px\) \{[^@]*\.ph \.contrast li \{\s*grid-template-columns: 1fr;/);
   });
 });
