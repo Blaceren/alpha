@@ -348,6 +348,11 @@ export function ReviewWindow() {
       </div>
 
       {/* ---------------------------------------------------------- the strip */}
+      {/* DD-369 (owner, 2026-10-08: «нужно, чтобы интуитивно было понятно,
+          что кнопки снизу нужно нажимать»): the strip says so in a line, as
+          the tools deck does above its rail; CSS keeps it with the strip (a
+          narrow screen has the stepper instead). */}
+      <p className="evidence__hint">Нажмите на этап, чтобы увидеть его в окне</p>
       <ol
         className="evidence-track"
         data-evidence

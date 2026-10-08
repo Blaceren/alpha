@@ -280,12 +280,16 @@ export function PublicHomeScreen({
           <div className="shell">
             <div className="review-proof__heading" data-reveal>
               <div>
-                <p className="eyebrow">Главное доказательство · проверка работы</p>
+                {/* The qualifier the lead used to carry (review is on the
+                    designated levels, not every level) lives in the label
+                    since DD-369 — visible copy, not a footnote. */}
+                <p className="eyebrow">Главное доказательство · проверка работы на предусмотренных уровнях</p>
                 <h2 className="display display--section">Пройдено — ещё не значит освоено.</h2>
               </div>
+              {/* DD-369 (owner, 2026-10-08): the owner's sentence. */}
               <p className="lead">
-                На предусмотренных уровнях работа проходит полный цикл: первая версия, разбор
-                человеком, исправление и принятие.
+                Каждый ученик ATA проходит полный цикл обучения с персональным фидбеком на каждом
+                этапе.
               </p>
             </div>
 

@@ -198,7 +198,8 @@ describe("Public Home — the claim never outruns the product", () => {
     const mechanism = text(container.querySelector("#mechanism") as HTMLElement);
     const review = text(container.querySelector("#review") as HTMLElement);
     expect(mechanism).toContain("На предусмотренных уровнях");
-    expect(review).toContain("На предусмотренных уровнях");
+    // In #review the qualifier is the section's label since DD-369 (the lead is the owner's sentence).
+    expect(review.toLowerCase()).toContain("на предусмотренных уровнях");
   });
 
   it("never claims review happens on every level", () => {
@@ -1548,5 +1549,58 @@ describe("Public Home — #decide says its chain in words and ends in the tool (
     expect(action.querySelector("svg")).not.toBeNull();
     // Its own rule places it and moves the arrow; the pill's text and shape come from `.button`.
     expect(css).not.toMatch(/\n\.ph \.decision__action \{[^}]*(color|font-size|text-decoration):/);
+  });
+});
+
+/* DD-369 (2026-10-08), the owner, on #review: the lead is their sentence; «нужно, чтобы интуитивно
+   было понятно, что кнопки снизу нужно нажимать … добавить подсветку, которая будет аккуратно идти
+   слева направо»; «в конце сделать хай-фай продакшн всего блока». */
+describe("Public Home — #review says its strip is a control (DD-369)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("opens with the owner's sentence and keeps the qualifier in the label", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const review = container.querySelector("#review") as HTMLElement;
+    expect(text(review.querySelector(".lead") as HTMLElement).trim()).toBe(
+      "Каждый ученик ATA проходит полный цикл обучения с персональным фидбеком на каждом этапе.",
+    );
+    expect(text(review.querySelector(".eyebrow") as HTMLElement)).toContain("на предусмотренных уровнях");
+    expect(text(review)).not.toContain("разбор человеком");
+  });
+
+  it("tells the visitor to press a stage, right above the strip, and only where the strip is", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const hint = container.querySelector("#review .evidence__hint") as HTMLElement;
+    expect(text(hint).trim()).toBe("Нажмите на этап, чтобы увидеть его в окне");
+    expect(hint.nextElementSibling?.classList.contains("evidence-track")).toBe(true);
+    // The deck's hint language: a Signal dot before the line.
+    expect(css).toMatch(/\n\.ph \.evidence__hint::before \{[^}]*background: var\(--signal-400\);/);
+    // A narrow screen has the stepper instead: the hint goes with the strip.
+    expect(css).toMatch(/@media \(max-width: 1040px\) \{[^@]*\.ph \.review \.evidence-track,\s*\.ph \.evidence__hint \{\s*display: none;/);
+  });
+
+  it("numbers the four cards in the stepper's mono, lit as far as the state on show, without touching their words", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const titles = Array.from(container.querySelectorAll("#review .evidence-track h3")).map((h) => text(h as HTMLElement));
+    expect(titles).toEqual(["Работа отправлена", "Получен разбор", "Замечание исправлено", "Работа принята"]);
+    expect(css).toMatch(/\n\.ph \.review \.evidence-track \{[^}]*counter-reset: stage;/);
+    expect(css).toMatch(/\n\.ph \.review \.evidence-track > li \{[^}]*counter-increment: stage;/);
+    expect(css).toMatch(/\n\.ph \.review \.evidence-track h3::before \{[^}]*font-family: var\(--font-data\);[^}]*content: "0" counter\(stage\);/);
+    expect(css).toMatch(/\n\.ph \.review \.evidence-track > li\.is-active h3::before \{\s*color: var\(--signal-400\);/);
+  });
+
+  it("passes a band of light over the strip from left to right, once, inside the page's motion budget", () => {
+    expect(css).toMatch(/\n\.ph \.review \.evidence-track \{[^}]*position: relative;/);
+    const band = /\n\.ph \.review \.evidence-track::after \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(band).toMatch(/pointer-events: none;/);
+    expect(band).toMatch(/opacity: 0;/);
+    expect(band).toMatch(/linear-gradient\(90deg/);
+    expect(css).toMatch(/\n\.ph \.review \.evidence-track\.is-visible::after \{\s*animation: ph-sweep 900ms var\(--ease\) 150ms both;/);
+    const frames = /@keyframes ph-sweep \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+    expect(frames).toMatch(/0% \{\s*transform: translateX\(-110%\);\s*opacity: 0;/);
+    expect(frames).toMatch(/100% \{\s*transform: translateX\(330%\);\s*opacity: 0;/);
   });
 });
