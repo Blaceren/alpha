@@ -1045,24 +1045,121 @@ html.ph-smooth-scroll {
   margin-top: 32px;
 }
 
+/* THE BOUNDARY CARD (DD-372, owner 2026-10-08: «сделать сильно интереснее,
+   анимации, акценты и текста улучшить»). Five lines of denial became five
+   contrasts: what ATA is not, muted behind its cross, and what it is instead,
+   in full light behind a Signal dot. The card wears the hero frame's corners
+   and stands at the top of its column instead of stretching to the intro's
+   height. When it is reached the rows come in one after another and each
+   answer's dot pops once — inside the page's motion budget. */
 .ph .not-list {
+  position: relative;
+  align-self: start;
   padding: 34px;
   border: 1px solid var(--line-dark);
   border-radius: 22px;
   background: rgba(243, 244, 239, 0.035);
 }
 
-.ph .not-list ul {
-  margin: 34px 0 0;
+.ph .not-list .frame-mark {
+  top: 26px;
+  right: 26px;
+}
+
+.ph .not-list .micro-label {
+  padding-right: 72px;
+}
+
+.ph .contrast {
+  margin: 30px 0 0;
   padding: 0;
   list-style: none;
 }
 
-.ph .not-list li {
-  padding: 12px 0;
+.ph .contrast li {
+  display: grid;
+  grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+  gap: 8px 22px;
+  align-items: baseline;
+  padding: 13px 0;
   border-top: 1px solid var(--line-dark);
-  color: var(--text-on-dark-muted);
 }
+
+.ph .contrast__not {
+  position: relative;
+  padding-left: 22px;
+  color: var(--text-on-dark-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.ph .contrast__not::before {
+  position: absolute;
+  top: 0;
+  left: 1px;
+  color: rgba(243, 244, 239, 0.4);
+  font-family: var(--font-data);
+  font-size: 13px;
+  line-height: 1.45;
+  content: "×";
+}
+
+.ph .contrast__but {
+  position: relative;
+  padding-left: 22px;
+  color: var(--text-on-dark);
+  font-size: 15px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.ph .contrast__but::before {
+  position: absolute;
+  top: 0.5em;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--signal-400);
+  box-shadow: 0 0 10px rgba(199, 247, 109, 0.5);
+  content: "";
+}
+
+@keyframes ph-dot-pop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  70% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.ph .not-list.is-visible .contrast li {
+  animation: ph-reply-in-down 360ms var(--ease) both;
+}
+
+.ph .not-list.is-visible .contrast li:nth-child(2) { animation-delay: 110ms; }
+.ph .not-list.is-visible .contrast li:nth-child(3) { animation-delay: 220ms; }
+.ph .not-list.is-visible .contrast li:nth-child(4) { animation-delay: 330ms; }
+.ph .not-list.is-visible .contrast li:nth-child(5) { animation-delay: 440ms; }
+
+.ph .not-list.is-visible .contrast__but::before {
+  animation: ph-dot-pop 260ms var(--ease) both;
+}
+
+.ph .not-list.is-visible .contrast li:nth-child(1) .contrast__but::before { animation-delay: 200ms; }
+.ph .not-list.is-visible .contrast li:nth-child(2) .contrast__but::before { animation-delay: 310ms; }
+.ph .not-list.is-visible .contrast li:nth-child(3) .contrast__but::before { animation-delay: 420ms; }
+.ph .not-list.is-visible .contrast li:nth-child(4) .contrast__but::before { animation-delay: 530ms; }
+.ph .not-list.is-visible .contrast li:nth-child(5) .contrast__but::before { animation-delay: 640ms; }
 
 .ph .environment-note {
   display: grid;
@@ -1267,6 +1364,15 @@ html.ph-smooth-scroll {
  * stands before the 1180px block so that the narrower blocks after it still
  * win. */
 @media (max-width: 1340px) {
+  /* The boundary card's column is 360–432px from here down to 921: each
+     contrast stacks its two halves (DD-372). Below 920 the card has the
+     whole row and the halves sit side by side again; under 680 they stack
+     for good. */
+  .ph .contrast li {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
   /* Two rows of three. One line cannot serve two rows, so each cell carries
      its own piece of the row's line: from the node of the first cell to the
      node of the last. */
@@ -4602,6 +4708,11 @@ html.ph-smooth-scroll {
   .ph .review .evidence-track > li:hover .evidence__button {
     color: var(--signal-300);
   }
+
+  /* The boundary card's answers brighten under the pointer (DD-372). */
+  .ph .contrast li:hover .contrast__but {
+    color: var(--signal-300);
+  }
 }
 
 .ph .review .evidence-track > li.is-active:hover::after,
@@ -5137,6 +5248,11 @@ html.ph-smooth-scroll {
   .ph .boundaries__grid,
   .ph .faq__grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ph .contrast li {
+    grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+    gap: 8px 22px;
   }
 
   /* The decision window is not the route's sticky window: it holds one card
@@ -5991,8 +6107,22 @@ html.ph-smooth-scroll {
     gap: 36px;
   }
 
-  .ph .not-list ul {
+  .ph .contrast {
     margin-top: 20px;
+  }
+
+  .ph .contrast li {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 11px 0;
+  }
+
+  .ph .contrast__not {
+    font-size: 13px;
+  }
+
+  .ph .contrast__but {
+    font-size: 14px;
   }
 
   .ph .faq__grid {

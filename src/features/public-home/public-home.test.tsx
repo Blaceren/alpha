@@ -1680,3 +1680,50 @@ describe("Public Home — #fit asks the owner's question and opens on «not now�
     expect(may[0]).toBe("не являетесь профессиональным трейдером;");
   });
 });
+
+/* DD-372 (2026-10-08), the owner, on the «ATA — это не» card: «тут сделать сильно интереснее,
+   анимации, акценты и текста улучшить, довести до продакшен хай фай». */
+describe("Public Home — the boundary card says what ATA is instead (DD-372)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("pairs every denial with what ATA is instead, and keeps the page's one «прибыл»", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const card = container.querySelector("#boundaries .not-list") as HTMLElement;
+    expect(text(card.querySelector(".micro-label") as HTMLElement).trim()).toBe("ATA — это не");
+    const rows = Array.from(card.querySelectorAll(".contrast > li")) as HTMLElement[];
+    expect(rows.map((r) => text(r.querySelector(".contrast__not") as HTMLElement).trim())).toEqual([
+      "сигнальный сервис",
+      "копирование сделок",
+      "торговый терминал",
+      "управление капиталом",
+      "обещание прибыли",
+    ]);
+    const answers = rows.map((r) => text(r.querySelector(".contrast__but") as HTMLElement).trim());
+    expect(answers).toEqual([
+      "а обучение самостоятельному решению",
+      "а собственное основание каждой сделки",
+      "а среда, где решение готовится до входа",
+      "а дисциплина ваших решений",
+      "а проверяемая работа и честная обратная связь",
+    ]);
+    // Every answer is a positive claim about the learner's own work, never an outcome.
+    for (const answer of answers) expect(answer).not.toMatch(/прибыл|доход|заработ|гарант/);
+    // The hero frame's corners, on the card.
+    expect(card.querySelector(":scope > .frame-mark")).not.toBeNull();
+  });
+
+  it("sets the denial muted behind its cross and the answer lit behind a Signal dot, and moves once inside the budget", () => {
+    expect(css).toMatch(/\n\.ph \.not-list \{[^}]*align-self: start;/);
+    expect(css).toMatch(/\n\.ph \.contrast__not::before \{[^}]*font-family: var\(--font-data\);[^}]*content: "×";/);
+    expect(css).toMatch(/\n\.ph \.contrast__but::before \{[^}]*background: var\(--signal-400\);/);
+    expect(css).toMatch(/\n\.ph \.not-list\.is-visible \.contrast li \{\s*animation: ph-reply-in-down 360ms var\(--ease\) both;/);
+    expect(css).toMatch(/\n\.ph \.not-list\.is-visible \.contrast__but::before \{\s*animation: ph-dot-pop 260ms var\(--ease\) both;/);
+    const delays = Array.from(css.matchAll(/\.not-list\.is-visible \.contrast li:nth-child\((\d)\) \.contrast__but::before \{ animation-delay: (\d+)ms; \}/g)).map((m) => Number(m[2]));
+    expect(delays).toEqual([200, 310, 420, 530, 640]);
+    // In the column the two halves stack.
+    expect(css).toMatch(/@media \(max-width: 680px\) \{[^@]*\.ph \.contrast li \{\s*grid-template-columns: 1fr;/);
+  });
+});

@@ -363,14 +363,41 @@ export function PublicHomeScreen({
               </p>
             </div>
 
+            {/* THE BOUNDARY CARD (DD-372, owner 2026-10-08: «сделать сильно
+                интереснее, анимации, акценты и текста улучшить, довести до
+                продакшен хай фай»). Five lines that used to only deny now
+                each say what ATA is instead — the denial muted with its
+                cross, the answer in full light with a Signal dot. The rows
+                come in one after another when the card is reached, and the
+                card wears the hero frame's corners. «прибыл» stays the page's
+                one allowed use (the honesty test counts it). */}
             <div className="not-list" data-reveal>
+              <span className="frame-mark" aria-hidden="true">
+                <i />
+                <i />
+              </span>
               <p className="micro-label">ATA — это не</p>
-              <ul>
-                <li>сигнальный сервис;</li>
-                <li>копирование сделок;</li>
-                <li>торговый терминал;</li>
-                <li>управление капиталом;</li>
-                <li>обещание прибыли.</li>
+              <ul className="contrast">
+                <li>
+                  <span className="contrast__not">сигнальный сервис</span>
+                  <span className="contrast__but">а обучение самостоятельному решению</span>
+                </li>
+                <li>
+                  <span className="contrast__not">копирование сделок</span>
+                  <span className="contrast__but">а собственное основание каждой сделки</span>
+                </li>
+                <li>
+                  <span className="contrast__not">торговый терминал</span>
+                  <span className="contrast__but">а среда, где решение готовится до входа</span>
+                </li>
+                <li>
+                  <span className="contrast__not">управление капиталом</span>
+                  <span className="contrast__but">а дисциплина ваших решений</span>
+                </li>
+                <li>
+                  <span className="contrast__not">обещание прибыли</span>
+                  <span className="contrast__but">а проверяемая работа и честная обратная связь</span>
+                </li>
               </ul>
             </div>
 
