@@ -1212,13 +1212,20 @@ describe("Public Home — the phone composition (DD-342)", () => {
     expect(narrow).toMatch(/\.ph \.trail__button \{[^}]*min-height:\s*44px/);
   });
 
-  it("says the two words of «многое → одно» when it stands in a column, to the eye only", () => {
+  it("says the two words of «многое → одно» on every width, to the eye only (DD-366)", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const captions = Array.from(container.querySelectorAll(".reframe__caption"));
-    expect(captions.map((c) => c.textContent)).toEqual(["Чужие ответы", "Ваше решение"]);
+    expect(captions.map((c) => text(c as HTMLElement).trim())).toEqual([
+      "Чужие ответы",
+      "Ваше основание — в инструменте ATA",
+    ]);
     for (const caption of captions) expect(caption).toHaveAttribute("aria-hidden", "true");
-    expect(rules).toMatch(/\n\.ph \.reframe__caption \{\s*display:\s*none;\s*\}/);
-    expect(media("max-width: 920px")).toMatch(/\.ph \.reframe__caption \{[^}]*display:\s*block/);
+    // Shown everywhere: a row of its own above the device beside the film-wide
+    // layout, in source order in the column.
+    expect(rules).toMatch(/\n\.ph \.reframe__caption \{\s*display:\s*block;/);
+    expect(rules).toMatch(/\n\.ph \.reframe > \.reframe__caption \{\s*grid-column:\s*1;\s*grid-row:\s*1;/);
+    expect(rules).toMatch(/\n\.ph \.reframe > \.reframe__caption--own \{\s*grid-column:\s*3;/);
+    expect(media("max-width: 920px")).toMatch(/\.ph \.reframe > \.decision \{[^}]*grid-column:\s*auto;\s*grid-row:\s*auto;/);
   });
 
   it("makes the cycle a spine on a phone: the objects go, the line runs behind the nodes", () => {
@@ -1462,5 +1469,60 @@ describe("Public Home — the facts rail: four cells of one kind (DD-365)", () =
   it("styles no cell apart from the others", () => {
     expect(css).not.toContain("fact-line");
     expect(css).toMatch(/\n\.ph \.hero__facts span \{[^}]*text-wrap: pretty;/);
+  });
+});
+
+/* DD-366 (2026-10-08), the owner, on #decide: «этому блоку нужен очень сильный хай фай, нужно
+   связать между собой логически так, чтобы человеку было понятно, что чтобы зарабатывать, ему
+   нужно самому разбираться, как правильно торговать, и что инструментом, который показан, мы
+   помогаем делать это и даём ему этот инструмент». */
+describe("Public Home — #decide says its chain in words and ends in the tool (DD-366)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("opens on the stake and climbs three rungs to the tool", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const section = container.querySelector("#decide") as HTMLElement;
+    expect(text(section.querySelector("h2") as HTMLElement).trim()).toBe(
+      "Чтобы зарабатывать, нужно самому понимать, как торговать.",
+    );
+    const rungs = Array.from(section.querySelectorAll(".ladder > li")) as HTMLElement[];
+    expect(rungs.map((rung) => text(rung.querySelector("h3") as HTMLElement).trim())).toEqual([
+      "Чужой ответ — не ваше понимание.",
+      "Правильно торговать — значит входить по основанию.",
+      "Для этого ATA даёт инструмент.",
+    ]);
+    expect(text(rungs[2] as HTMLElement)).toContain("Trade Card открывается на уровне 5");
+    // The ladder stands where the lead stood; the section has no lead now.
+    expect(section.querySelector(".section-intro .lead")).toBeNull();
+    // Nothing promises a result: the words are about understanding and responsibility.
+    expect(text(section)).not.toMatch(/гарант|доход|прибыл|\$|%\s*в месяц/i);
+  });
+
+  it("says under the card that the tool is the learner's, and offers the one action", () => {
+    const guest = render(<PublicHomeScreen authenticated={false} />).container;
+    const statement = guest.querySelector("#decide .decision__statement") as HTMLElement;
+    expect(text(statement)).toContain("Этот инструмент вы получаете в ATA");
+    const action = guest.querySelector("#decide .decision__action") as HTMLAnchorElement;
+    expect(action).not.toBeNull();
+    expect(action.getAttribute("href")).toBe("/register");
+    expect(text(action).trim()).toBe("Начать путь");
+  });
+
+  it("sends a member to the Academy from the same line", () => {
+    const { container } = render(<PublicHomeScreen authenticated={true} />);
+    const action = container.querySelector("#decide .decision__action") as HTMLAnchorElement;
+    expect(action).not.toBeNull();
+    expect(action.getAttribute("href")).toBe("/home");
+    expect(text(action).trim()).toBe("Перейти в Академию");
+  });
+
+  it("draws the ladder on the device's own line and keeps its motion inside the page's budget", () => {
+    expect(css).toMatch(/\n\.ph \.ladder > li::after \{[^}]*width: 1px;\s*background: rgba\(11, 13, 10, 0\.32\);/);
+    expect(css).toMatch(/\n\.ph \.ladder > li:last-child::before \{[^}]*box-shadow: 0 0 0 3px rgba\(11, 13, 10, 0\.14\);/);
+    expect(css).toMatch(/\n\.ph \.section-intro\.is-visible \.ladder > li \{\s*animation: ph-reply-in-down 420ms var\(--ease\) both;/);
+    expect(css).toMatch(/\n\.ph \.decision__action \{[^}]*min-height: 44px;/);
   });
 });

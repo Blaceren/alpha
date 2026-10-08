@@ -273,6 +273,15 @@ html.ph-smooth-scroll {
   font-size: clamp(50px, 6vw, 86px);
 }
 
+/* DD-366: #decide's intro is the narrow column of a two-column grid (452px
+   at 1440), and its headline is a sentence of seven words: at the section
+   size it ran to seven lines, one word each. Up to 68px it is four lines and
+   the column stands as tall as the card beside it. Below 1180 the grid is
+   one column and the headline takes the section size again. */
+.ph .recognition .display--section {
+  font-size: clamp(44px, 4.8vw, 68px);
+}
+
 .ph .eyebrow,
 .ph .micro-label {
   color: var(--text-on-dark-muted);
@@ -649,7 +658,109 @@ html.ph-smooth-scroll {
 .ph .reframe {
   display: grid;
   grid-template-columns: minmax(200px, 0.62fr) 44px minmax(300px, 1.38fr);
+  /* DD-366: a row of the device's two words above the device itself. */
+  grid-template-rows: auto auto;
   align-items: center;
+}
+
+.ph .reframe > .reframe__caption {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+}
+
+.ph .reframe > .reframe__caption--own {
+  grid-column: 3;
+}
+
+.ph .reframe > .source-cloud {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.ph .reframe > .reframe__axis {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.ph .reframe > .decision {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+/* THE LADDER (DD-366, owner 2026-10-08: «связать между собой логически …
+   что чтобы зарабатывать, ему нужно самому разбираться … и что инструментом,
+   который показан, мы помогаем делать это и даём ему этот инструмент»).
+   Three rungs under the headline, on one thin line like the device's axis:
+   the stake, what trading right means, the tool ATA gives for it. The last
+   rung's node is ringed — it is the one that reaches the card on the right. */
+.ph .ladder {
+  display: grid;
+  gap: 22px;
+  max-width: 540px;
+  margin: 34px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ph .ladder > li {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding-left: 28px;
+}
+
+.ph .ladder > li::before {
+  position: absolute;
+  top: 10px;
+  left: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-950);
+  content: "";
+}
+
+.ph .ladder > li::after {
+  position: absolute;
+  top: 23px;
+  bottom: -22px;
+  left: 6px;
+  width: 1px;
+  background: rgba(11, 13, 10, 0.32);
+  content: "";
+}
+
+.ph .ladder > li:last-child::after {
+  display: none;
+}
+
+.ph .ladder > li:last-child::before {
+  top: 9px;
+  left: 2px;
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 0 3px rgba(11, 13, 10, 0.14);
+}
+
+.ph .ladder h3 {
+  margin: 0;
+  color: var(--ink-950);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
+  text-wrap: balance;
+}
+
+.ph .ladder p {
+  max-width: 46ch;
+  margin: 0;
+  color: rgba(11, 13, 10, 0.72);
+  font-size: 15px;
+  line-height: 1.52;
+  text-wrap: pretty;
 }
 
 /* OTHERS' ANSWERS, SAID (2026-10-04, owner: «тут нужен хай фай»). Each kind of
@@ -1272,6 +1383,11 @@ html.ph-smooth-scroll {
     grid-template-columns: 1fr;
   }
 
+  /* One column: #decide's headline has the whole row and the section size (DD-366). */
+  .ph .recognition .display--section {
+    font-size: clamp(50px, 6vw, 86px);
+  }
+
   .ph .hero {
     padding-top: 160px;
   }
@@ -1401,7 +1517,19 @@ html.ph-smooth-scroll {
 
   .ph .reframe {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
     gap: 34px;
+  }
+
+  /* One column: the words, the stack, the axis, the words, the card — in
+     source order, no placed cells (DD-366). */
+  .ph .reframe > .reframe__caption,
+  .ph .reframe > .reframe__caption--own,
+  .ph .reframe > .source-cloud,
+  .ph .reframe > .reframe__axis,
+  .ph .reframe > .decision {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .ph .reframe__axis {
@@ -1509,7 +1637,8 @@ html.ph-smooth-scroll {
     line-height: 0.98;
   }
 
-  .ph .display--section {
+  .ph .display--section,
+  .ph .recognition .display--section {
     font-size: clamp(42px, 12.3vw, 58px);
   }
 
@@ -3992,9 +4121,18 @@ html.ph-smooth-scroll {
   animation: ph-write 540ms steps(30, end) 300ms both;
 }
 
-.ph .reframe.is-visible .decision__statement {
+.ph .reframe.is-visible .decision__statement,
+.ph .reframe.is-visible .decision__action {
   animation: ph-appear 240ms var(--ease) 720ms both;
 }
+
+/* The ladder's rungs come down one after another with the intro (DD-366). */
+.ph .section-intro.is-visible .ladder > li {
+  animation: ph-reply-in-down 420ms var(--ease) both;
+}
+
+.ph .section-intro.is-visible .ladder > li:nth-child(2) { animation-delay: 90ms; }
+.ph .section-intro.is-visible .ladder > li:nth-child(3) { animation-delay: 180ms; }
 
 /* --- the cycle (#mechanism) -------------------------------------------- */
 
@@ -4694,11 +4832,45 @@ html.ph-smooth-scroll {
 }
 
 .ph .decision__statement {
-  max-width: 44ch;
+  max-width: 48ch;
   margin: 18px 0 0;
   color: rgba(11, 13, 10, 0.72);
   font-size: 14px;
   line-height: 1.55;
+  text-wrap: pretty;
+}
+
+/* The one action of the section (DD-366): a line with the hero's arrow, not
+   a third pill on the page. */
+.ph .decision__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 6px;
+  color: var(--ink-950);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.ph .decision__action svg {
+  width: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+  transition: transform 180ms var(--ease);
+}
+
+.ph .decision__action:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ph .decision__action:hover svg {
+  transform: translateX(3px);
 }
 
 @media (max-width: 920px) {
@@ -5349,9 +5521,23 @@ html.ph-smooth-scroll {
  * screens are untouched.
  * ====================================================================== */
 
-/* --- «многое → одно» says its two words when it stands in a column ------- */
+/* --- «многое → одно» says its two words on every width (DD-366; until then
+   only in a column, DD-342): what recedes, and where the learner's own basis
+   lives — in the tool ATA gives. */
 .ph .reframe__caption {
-  display: none;
+  display: block;
+  margin: 0 0 14px;
+  color: rgba(11, 13, 10, 0.62);
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.ph .reframe__caption--own {
+  color: var(--ink-950);
 }
 
 /* --- the tools deck: a card per tool, under the rail of their levels ---- */
@@ -5407,20 +5593,9 @@ html.ph-smooth-scroll {
     font-size: 11px;
   }
 
+  /* In the column the grid's gap spaces the words from what they name. */
   .ph .reframe__caption {
-    display: block;
     margin: 0;
-    color: rgba(11, 13, 10, 0.62);
-    font-family: var(--font-data);
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    line-height: 1.4;
-    text-transform: uppercase;
-  }
-
-  .ph .reframe__caption--own {
-    color: var(--ink-950);
   }
 
   .ph .route {
@@ -5703,6 +5878,19 @@ html.ph-smooth-scroll {
 
   .ph .reframe__axis {
     height: 32px;
+  }
+
+  .ph .ladder {
+    gap: 18px;
+    margin-top: 26px;
+  }
+
+  .ph .ladder h3 {
+    font-size: 20px;
+  }
+
+  .ph .ladder p {
+    font-size: 14px;
   }
 
 

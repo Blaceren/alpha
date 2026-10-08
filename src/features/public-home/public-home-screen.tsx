@@ -172,18 +172,42 @@ export function PublicHomeScreen({
           <div className="shell recognition__grid">
             <div className="section-intro" data-reveal>
               <p className="eyebrow eyebrow--dark">От чужого ответа — к собственному решению</p>
+              {/* DD-366 (owner, 2026-10-08): «связать между собой логически,
+                  чтобы человеку было понятно, что чтобы зарабатывать, ему
+                  нужно самому разбираться, как правильно торговать, и что
+                  инструментом, который показан, мы помогаем делать это и даём
+                  ему этот инструмент». The headline is the stake; the ladder
+                  under it says the chain in three rungs, the last one naming
+                  the tool the device on the right shows. */}
               <h2 className="display display--section">
-                На рынке решение нельзя полностью делегировать.
+                Чтобы зарабатывать, нужно самому понимать, как торговать.
               </h2>
-              <p className="lead">
-                Можно изучать чужие разборы, стратегии и мнения. Но действовать приходится вам — и
-                понимать, на чём основано ваше решение.
-              </p>
+              <ul className="ladder" aria-label="Почему решение должно быть вашим и что для этого даёт ATA">
+                <li>
+                  <h3>Чужой ответ — не ваше понимание.</h3>
+                  <p>Разборы, сигналы и прогнозы можно изучать, но действуете и отвечаете за результат вы.</p>
+                </li>
+                <li>
+                  <h3>Правильно торговать — значит входить по основанию.</h3>
+                  <p>
+                    Не по ощущению: до входа, словами, что должно произойти, чтобы вы вошли, — и
+                    держаться этого в сделке.
+                  </p>
+                </li>
+                <li>
+                  <h3>Для этого ATA даёт инструмент.</h3>
+                  <p>
+                    Trade Card открывается на уровне 5: основание называется до входа, а после
+                    открытия сделки карточка уже не меняется.
+                  </p>
+                </li>
+              </ul>
             </div>
 
             <div className="reframe" data-reveal>
-              {/* Phones only (CSS): stacked, the device needs its two words —
-                  what recedes and what is written. DD-342. */}
+              {/* The device's two words, on every width since DD-366 (until
+                  then phones only, DD-342): what recedes, and where the
+                  learner's own basis lives — in the tool ATA gives. */}
               <p className="reframe__caption" aria-hidden="true">Чужие ответы</p>
               {/* OTHERS' ANSWERS, SAID (2026-10-04, owner: «тут нужен хай фай»).
                   Six pale pills only named the kinds of answer. Each is now a
@@ -200,11 +224,13 @@ export function PublicHomeScreen({
                 ))}
               </ul>
               <div className="reframe__axis" aria-hidden="true" />
-              <p className="reframe__caption reframe__caption--own" aria-hidden="true">Ваше решение</p>
+              <p className="reframe__caption reframe__caption--own" aria-hidden="true">
+                Ваше основание — в инструменте ATA
+              </p>
 
               {/* The same object, now determinate — in the Trade Card, where
                   the product holds it. decision-window.tsx */}
-              <DecisionWindow />
+              <DecisionWindow action={account} />
             </div>
           </div>
         </section>
