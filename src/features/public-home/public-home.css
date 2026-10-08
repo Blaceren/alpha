@@ -2400,12 +2400,37 @@ html.ph-smooth-scroll {
   font-size: 10px;
 }
 
-.ph .rstart--origin .rstart__node::after {
-  width: 10px;
-  height: 10px;
+/* DD-370 (owner, 2026-10-08: «в первых 5 кружках меняем L1, L2, L3, L4 на
+   точки, как в самом первом пункте, только точки должны немного увеличиваться
+   от 1 до 5 пункта»). The four first steps and the level-4 node below them are
+   dots: a Signal disc in each ring, a little larger at every step — the first
+   steps are a run-up, not a list of codes. */
+.ph .rstart__node::after {
+  width: var(--dot, 10px);
+  height: var(--dot, 10px);
   border-radius: 50%;
   background: var(--signal-400);
   content: "";
+}
+
+.ph .route__start > li:nth-child(1) { --dot: 10px; }
+.ph .route__start > li:nth-child(2) { --dot: 13px; }
+.ph .route__start > li:nth-child(3) { --dot: 16px; }
+.ph .route__start > li:nth-child(4) { --dot: 19px; }
+
+.ph .rstep__node--dot::after {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+/* The fifth dot's ring is the level node's, but it does not fill: the dot is
+   the mark, Signal in a tinted ring, with the node's glow. */
+.ph .rstep.is-active .rstep__node.rstep__node--dot {
+  background: #222916;
+  color: var(--signal-400);
 }
 
 .ph .rstart h3 {
@@ -3722,6 +3747,17 @@ html.ph-smooth-scroll {
     width: 38px;
     height: 38px;
     font-size: 11px;
+  }
+
+  /* 28px rings: the dots a step smaller (DD-370). */
+  .ph .route__start > li:nth-child(1) { --dot: 9px; }
+  .ph .route__start > li:nth-child(2) { --dot: 12px; }
+  .ph .route__start > li:nth-child(3) { --dot: 15px; }
+  .ph .route__start > li:nth-child(4) { --dot: 18px; }
+
+  .ph .rstep__node--dot::after {
+    width: 21px;
+    height: 21px;
   }
 
   .ph .rstep {

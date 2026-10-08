@@ -1604,3 +1604,47 @@ describe("Public Home — #review says its strip is a control (DD-369)", () => {
     expect(frames).toMatch(/100% \{\s*transform: translateX\(330%\);\s*opacity: 0;/);
   });
 });
+
+/* DD-370 (2026-10-08), the owner, on #product: «Не витрина контента. Последовательная работа.» →
+   «ATA обучает последовательной работе»; «в первых 5 кружках меняем L1, L2, L3, L4 на точки, как в
+   самом первом пункте, только точки должны немного увеличиваться от 1 до 5 пункта». */
+describe("Public Home — the route opens on five growing dots (DD-370)", () => {
+  const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+
+  it("says what ATA teaches in the route's heading", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const title = container.querySelector("#product .route__title") as HTMLElement;
+    expect(text(title).trim()).toBe("ATA обучает последовательной работе.");
+    expect(text(container)).not.toContain("Не витрина контента");
+  });
+
+  it("writes no code in the first four nodes or the level-4 node, and keeps the tools' codes", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const first = Array.from(container.querySelectorAll("#product .route__start .rstart__node")) as HTMLElement[];
+    expect(first).toHaveLength(4);
+    for (const node of first) expect(text(node).trim()).toBe("");
+    const home = container.querySelector("#product #route-step-home .rstep__node, #product [data-route-step=\"home\"] .rstep__node") as HTMLElement;
+    expect(home).not.toBeNull();
+    expect(home.classList.contains("rstep__node--dot")).toBe(true);
+    expect(text(home).trim()).toBe("");
+    const tools = Array.from(container.querySelectorAll("#product .route__list--tools .rstep__node")).map((n) => text(n as HTMLElement).trim());
+    expect(tools).toEqual(["L5", "L9", "L13", "L13", "L24", "L28"]);
+  });
+
+  it("grows the dots from the first step to the fifth, on wide screens and on phones", () => {
+    const sizes = (block: string) =>
+      [1, 2, 3, 4].map((n) => Number(new RegExp(`\\.ph \\.route__start > li:nth-child\\(${n}\\) \\{ --dot: (\\d+)px; \\}`).exec(block)?.[1]));
+    const wide = sizes(css);
+    expect(wide).toEqual([10, 13, 16, 19]);
+    expect(css).toMatch(/\n\.ph \.rstart__node::after \{\s*width: var\(--dot, 10px\);\s*height: var\(--dot, 10px\);[^}]*background: var\(--signal-400\);/);
+    expect(css).toMatch(/\n\.ph \.rstep__node--dot::after \{\s*width: 24px;\s*height: 24px;/);
+    // The fifth is the level node: a Signal dot in a tinted ring, not a filled disc with a code.
+    expect(css).toMatch(/\n\.ph \.rstep\.is-active \.rstep__node\.rstep__node--dot \{\s*background: #222916;\s*color: var\(--signal-400\);/);
+    const phone = /@media \(max-width: 920px\) \{([\s\S]*?)\n\}/.exec(css.slice(css.indexOf(".ph .route__steps {\n    padding-bottom: 40px;") - 2000))?.[1] ?? "";
+    expect(sizes(phone)).toEqual([9, 12, 15, 18]);
+    expect(phone).toMatch(/\.ph \.rstep__node--dot::after \{\s*width: 21px;\s*height: 21px;/);
+  });
+});
