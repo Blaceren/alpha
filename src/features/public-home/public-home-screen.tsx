@@ -147,15 +147,19 @@ export function PublicHomeScreen({
               <span>последовательных уровней</span>
             </div>
             {/* The program learners have (2026-10-04, launch audit): the first test
-                is level 4, the first practice with a report is level 9. These said
-                L2 and L3 — the 100-level plan. */}
-            <div>
-              <strong>L4</strong>
-              <span>первая проверка знаний</span>
+                is level 4, the first practice with a report is level 9. DD-365
+                (owner, 2026-10-08): «L4 и L9 визуально меняем» — no more «L4» with
+                a caption; the owner's own sentences, each with its level as the
+                cell's one lit figure. */}
+            <div className="fact-line">
+              <p>
+                Первая проверка знаний ждёт вас уже на <strong>4</strong> уровне.
+              </p>
             </div>
-            <div>
-              <strong>L9</strong>
-              <span>первая практика и разбор</span>
+            <div className="fact-line">
+              <p>
+                Практика начинается уже с <strong>9</strong> урока.
+              </p>
             </div>
           </div>
         </section>

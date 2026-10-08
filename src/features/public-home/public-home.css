@@ -603,6 +603,26 @@ html.ph-smooth-scroll {
   font-size: 12px;
 }
 
+/* DD-365 (owner, 2026-10-08): the rail's last two cells are sentences, not
+   «L4» with a caption. The level stays the cell's one lit figure — the same
+   face and colour as «20» and «100» — set inside the sentence, so the four
+   cells keep one rhythm while the right half reads as a promise. */
+.ph .hero__facts .fact-line p {
+  margin: 0;
+  color: var(--text-on-dark);
+  font-size: 15px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.ph .hero__facts .fact-line strong {
+  margin: 0 0.04em;
+  font-size: 1.6em;
+  /* an inline figure larger than its line: no line-height of its own, so the
+     line box stays the sentence's */
+  line-height: 0;
+}
+
 .ph .recognition,
 .ph .tools,
 .ph .faq {
@@ -5684,6 +5704,10 @@ html.ph-smooth-scroll {
   .ph .hero__facts span {
     font-size: 12px;
     line-height: 1.35;
+  }
+
+  .ph .hero__facts .fact-line p {
+    font-size: 14px;
   }
 
   /* --- #decide: the replies, two to a row ------------------------------- */
