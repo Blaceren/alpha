@@ -580,9 +580,14 @@ html.ph-smooth-scroll {
 .ph .hero__facts div {
   display: grid;
   min-height: 118px;
-  align-content: center;
+  /* DD-365: the figures of a row sit on one line. Centred content put a cell
+     with a two-line caption 11px higher than its neighbours; now every cell
+     starts at the top, with the padding the centred one-line cells had
+     (figure at 28px, caption at 70px), and a two-line caption still fits
+     the 118px. */
+  align-content: start;
   gap: 6px;
-  padding: 22px 28px;
+  padding: 28px 28px 15px;
   border-right: 1px solid var(--line-dark);
 }
 
@@ -601,26 +606,11 @@ html.ph-smooth-scroll {
 .ph .hero__facts span {
   color: var(--text-on-dark-muted);
   font-size: 12px;
-}
-
-/* DD-365 (owner, 2026-10-08): the rail's last two cells are sentences, not
-   «L4» with a caption. The level stays the cell's one lit figure — the same
-   face and colour as «20» and «100» — set inside the sentence, so the four
-   cells keep one rhythm while the right half reads as a promise. */
-.ph .hero__facts .fact-line p {
-  margin: 0;
-  color: var(--text-on-dark);
-  font-size: 15px;
-  line-height: 1.45;
+  /* DD-365: the last two captions are a clause each, two lines beside the
+     film — set tight, so a two-line cell stays the rail's 118px, and never
+     ending on a lone word. */
+  line-height: 1.35;
   text-wrap: pretty;
-}
-
-.ph .hero__facts .fact-line strong {
-  margin: 0 0.04em;
-  font-size: 1.6em;
-  /* an inline figure larger than its line: no line-height of its own, so the
-     line box stays the sentence's */
-  line-height: 0;
 }
 
 .ph .recognition,
@@ -5704,10 +5694,6 @@ html.ph-smooth-scroll {
   .ph .hero__facts span {
     font-size: 12px;
     line-height: 1.35;
-  }
-
-  .ph .hero__facts .fact-line p {
-    font-size: 14px;
   }
 
   /* --- #decide: the replies, two to a row ------------------------------- */

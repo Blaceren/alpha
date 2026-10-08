@@ -148,18 +148,19 @@ export function PublicHomeScreen({
             </div>
             {/* The program learners have (2026-10-04, launch audit): the first test
                 is level 4, the first practice with a report is level 9. DD-365
-                (owner, 2026-10-08): «L4 и L9 визуально меняем» — no more «L4» with
-                a caption; the owner's own sentences, each with its level as the
-                cell's one lit figure. */}
-            <div className="fact-line">
-              <p>
-                Первая проверка знаний ждёт вас уже на <strong>4</strong> уровне.
-              </p>
+                (owner, 2026-10-08): «вместо L4 — первая проверка знаний ждёт вас
+                уже на 4 уровне, вместо L9 — практика начинается уже с 9 урока»;
+                set as sentences in their own type they «stood out and did not
+                stack with the other cells», so each is the rail's own two tiers:
+                the level as the lit figure, the owner's words as the caption
+                that continues it («4 | уровень, на котором…»). */}
+            <div>
+              <strong>4</strong>
+              <span>уровень, на котором вас уже ждёт первая проверка знаний</span>
             </div>
-            <div className="fact-line">
-              <p>
-                Практика начинается уже с <strong>9</strong> урока.
-              </p>
+            <div>
+              <strong>9</strong>
+              <span>урок, с которого уже начинается практика</span>
             </div>
           </div>
         </section>

@@ -1429,32 +1429,38 @@ describe("Public Home — the headline names the platform and fits every width (
   });
 });
 
-/* DD-365 (2026-10-08), the owner, on the facts rail under the first screen: «этот блок нужно
-   выразить немного по другому. L4 и L9 визуально меняем и говорим вместо L4 - первая проверка
-   знаний ждет вас уже на 4 уровне, вместо L9 - Практика начинается уже с 9 урока». */
-describe("Public Home — the facts rail's last two cells are sentences (DD-365)", () => {
+/* DD-365 (2026-10-08), the owner, on the facts rail under the first screen: «L4 и L9 визуально
+   меняем и говорим вместо L4 - первая проверка знаний ждет вас уже на 4 уровне, вместо L9 -
+   Практика начинается уже с 9 урока». Set as sentences in their own type (15px, primary, the
+   level lit inline) they «stood out and did not stack with the other cells of the block» — so
+   every cell is the rail's own two tiers: a lit figure and a muted caption that continues it. */
+describe("Public Home — the facts rail: four cells of one kind (DD-365)", () => {
   const css = readFileSync(join(process.cwd(), "src/features/public-home/public-home.css"), "utf8").replace(
     /\/\*[\s\S]*?\*\//g,
     "",
   );
 
-  it("keeps the two figures and turns the two level marks into the owner's sentences", () => {
+  it("gives every cell a lit figure and a caption, the levels as plain numbers", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const rail = container.querySelector(".hero__facts") as HTMLElement;
     const cells = Array.from(rail.children) as HTMLElement[];
     expect(cells).toHaveLength(4);
-    expect(cells.slice(0, 2).map((cell) => text(cell.querySelector("strong") as HTMLElement))).toEqual(["20", "100"]);
-    const lines = cells.slice(2) as [HTMLElement, HTMLElement];
-    for (const cell of lines) expect(cell.classList.contains("fact-line")).toBe(true);
-    expect(text(lines[0])).toBe("Первая проверка знаний ждёт вас уже на 4 уровне.");
-    expect(text(lines[1])).toBe("Практика начинается уже с 9 урока.");
-    // The level is the cell's one lit figure, set inside the sentence.
-    expect(lines.map((cell) => text(cell.querySelector("p > strong") as HTMLElement))).toEqual(["4", "9"]);
+    for (const cell of cells) {
+      expect(cell.className).toBe("");
+      expect(Array.from(cell.children).map((child) => child.tagName)).toEqual(["STRONG", "SPAN"]);
+    }
+    expect(cells.map((cell) => text(cell.querySelector("strong") as HTMLElement))).toEqual(["20", "100", "4", "9"]);
+    expect(cells.map((cell) => text(cell.querySelector("span") as HTMLElement))).toEqual([
+      "модулей",
+      "последовательных уровней",
+      "уровень, на котором вас уже ждёт первая проверка знаний",
+      "урок, с которого уже начинается практика",
+    ]);
     expect(text(rail)).not.toMatch(/\bL4\b|\bL9\b/);
   });
 
-  it("sets the sentence in the page's text and the figure in the display face, inside the line", () => {
-    expect(css).toMatch(/\n\.ph \.hero__facts \.fact-line p \{[^}]*font-size: 15px;[^}]*text-wrap: pretty;/);
-    expect(css).toMatch(/\n\.ph \.hero__facts \.fact-line strong \{[^}]*font-size: 1\.6em;[^}]*line-height: 0;/);
+  it("styles no cell apart from the others", () => {
+    expect(css).not.toContain("fact-line");
+    expect(css).toMatch(/\n\.ph \.hero__facts span \{[^}]*text-wrap: pretty;/);
   });
 });
