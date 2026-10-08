@@ -1,4 +1,4 @@
-# SIGNAL_CATALOG.md — Alfa Trade Academy CRM
+# SIGNAL_CATALOG.md — Alpha Trade Academy CRM
 
 > Phase 0.5 · Каталог сигналов с конфигурируемыми пороговыми значениями. Единый источник правды для сигналов.
 > Пороги — стартовые mock-значения (DECISIONS D-04), **конфигурируемы, не hardcode в UI**.

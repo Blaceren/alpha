@@ -9,6 +9,7 @@
 import type { AcademyLevelType } from "@/lib/curriculum/level-type";
 import type { AcademyCompletionMethod } from "@/lib/curriculum/completion-method";
 import type { AcademyLevelState, AcademyLockReason } from "@/lib/curriculum/progress-state";
+import type { AcademyLevelKind } from "@/lib/curriculum/level-kind";
 
 export type AcademyCurriculumSummary = {
   curriculumCode: string;
@@ -84,6 +85,20 @@ export type AcademyLevelSummary = {
   shortDescription: string | null;
   learningObjective: string;
   typeInfo: { type: AcademyLevelType; label: string; isCheckpoint: boolean; isExternal: boolean; supported: boolean };
+  /**
+   * PROGRAM STRUCTURE (2026-10-02) — what the program's author calls this level
+   * («урок», «задание», «отчёт», «практика», «точка сборки»), or null when the
+   * published version does not say. Presentation only; see `level-kind.ts`.
+   */
+  kind: AcademyLevelKind | null;
+  /** The word shown beside the level number: the kind's, else the type's. */
+  kindLabel: string;
+  /**
+   * The published program defines this level and has not opened it yet — its
+   * lesson is still being produced. Such a level is always `locked`, and it is
+   * the one lock that is nobody's to lift from this side of the screen.
+   */
+  inProduction: boolean;
   state: AcademyLevelState;
   lockReason: AcademyLockReason | null;
   stateLabel: string;
@@ -132,6 +147,12 @@ export type AcademyModuleSummary = {
   description: string | null;
   learningObjective: string;
   status: string;
+  /**
+   * The chapter this module belongs to, when the published program has
+   * chapters. Null for a program without them — never synthesised from the
+   * module number.
+   */
+  chapter: { number: number; title: string } | null;
   levels: AcademyLevelSummary[];
   progress: { total: number; completed: number };
 };
@@ -142,6 +163,11 @@ export type AcademyProgressSummary = {
   nextAvailableLevelCode: string | null;
   completedLevels: number;
   totalLevels: number;
+  /**
+   * How many of `totalLevels` are open to be taken. Equal to `totalLevels` for
+   * a program published whole; smaller while its tail is still in production.
+   */
+  openLevels: number;
   xp: { available: false } | { available: true; currentXp: number; nextLevelRequiredXp: number | null; xpRemaining: number };
   updatedAt: string | null;
 };
@@ -157,13 +183,25 @@ export type AcademyProgressSummary = {
  * "the video is being prepared".
  */
 export type AcademyLessonMedia = {
-  /** Absolute https source, straight from the published content asset. */
+  /**
+   * The source handed to <video>: an absolute https URL from a published
+   * content asset, or a path under `/media/` on the Academy's own origin from
+   * the lesson media registry. Nothing else passes `backend-dto.ts`.
+   */
   src: string;
   mimeType: string;
-  /** Absolute https poster image, or null when the curriculum supplies none. */
+  /** Poster image under the same two rules, or null when none is supplied. */
   poster: string | null;
   durationSeconds: number | null;
   captions: ReadonlyArray<{ src: string; srcLang: string; label: string }>;
+  /** Set by the server when the deployment serves media from another origin (the CDN). */
+  crossOrigin?: "anonymous";
+  /**
+   * The lesson line's points: where the answer to each question of the level's
+   * test is taught. Empty for a lesson without a test, or a Backend that does
+   * not send them.
+   */
+  markers: ReadonlyArray<{ questionNumber: number; seconds: number }>;
 };
 
 /**

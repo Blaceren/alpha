@@ -10,6 +10,8 @@
  */
 import type { ReactNode } from "react";
 import { ChevronDown, Info } from "lucide-react";
+import { PayoutField } from "../components/payout-field";
+import { digitsOnly, moneyOnly } from "../model/numeric-input";
 import { FieldError } from "../trade-card/trade-card-parts";
 import {
   RISK_LIMITS,
@@ -54,7 +56,6 @@ export function RiskParams({
 }) {
   const described = (field: RiskField) => (errors[field] ? errorId(field) : undefined);
   const invalid = (field: RiskField) => (errors[field] ? true : undefined);
-  const change = (field: RiskField) => (event: { target: { value: string } }) => onChange(field, event.target.value);
   return (
     <section className="tc-section rk-params" aria-labelledby="rk-params-title">
       <div className="tc-section__head">
@@ -79,7 +80,7 @@ export function RiskParams({
               inputMode="decimal"
               autoComplete="off"
               value={draft.capital}
-              onChange={change("capital")}
+              onChange={(event) => onChange("capital", moneyOnly(event.target.value))}
               disabled={disabled}
               aria-invalid={invalid("capital")}
               aria-describedby={[described("capital"), "rk-capital-note"].filter(Boolean).join(" ")}
@@ -92,29 +93,14 @@ export function RiskParams({
           </p>
         </div>
 
-        <div className="tc-field">
-          <label className="tc-label" htmlFor={riskFieldId("payoutPercent")}>
-            Payout
-          </label>
-          <span className="tc-affix" data-side="end">
-            <input
-              id={riskFieldId("payoutPercent")}
-              className="tc-input"
-              type="text"
-              inputMode="numeric"
-              autoComplete="off"
-              value={draft.payoutPercent}
-              onChange={change("payoutPercent")}
-              disabled={disabled}
-              aria-invalid={invalid("payoutPercent")}
-              aria-describedby={described("payoutPercent")}
-            />
-            <span className="tc-affix__mark" aria-hidden="true">
-              %
-            </span>
-          </span>
-          <FieldError id={errorId("payoutPercent")} message={errors.payoutPercent} />
-        </div>
+        <PayoutField
+          id={riskFieldId("payoutPercent")}
+          errorId={errorId("payoutPercent")}
+          value={draft.payoutPercent}
+          onChange={(value) => onChange("payoutPercent", value)}
+          disabled={disabled}
+          error={errors.payoutPercent}
+        />
 
         <div className="tc-field">
           <label className="tc-label" htmlFor={riskFieldId("dailyLimitPercent")}>
@@ -128,7 +114,7 @@ export function RiskParams({
               inputMode="numeric"
               autoComplete="off"
               value={draft.dailyLimitPercent}
-              onChange={change("dailyLimitPercent")}
+              onChange={(event) => onChange("dailyLimitPercent", digitsOnly(event.target.value, 3))}
               disabled={disabled}
               aria-invalid={invalid("dailyLimitPercent")}
               aria-describedby={described("dailyLimitPercent")}

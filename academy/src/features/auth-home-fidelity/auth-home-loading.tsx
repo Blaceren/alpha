@@ -8,6 +8,7 @@ import {
   POSTURE_LABEL,
 } from "@/features/auth-home-fidelity/auth-home-state";
 import "@/features/auth-home-fidelity/auth-home-fidelity.css";
+import "@/features/auth-home-fidelity/home-hifi.css";
 
 /**
  * 11 — LOADING PRESENCE. Honest busy semantics, and no answer pretending to be
@@ -36,13 +37,18 @@ export function AuthHomeLoadingField() {
     return () => clearTimeout(timer);
   }, []);
 
+  /* Inside the filled page's own column (2026-10-03), where the greeting will
+     be: the field alone, no frame and no placeholder for what is not known. */
   return (
+    <div className="hm hm--pending">
+    <div className="hm-now">
     <div className="ahm">
       <div className="home-field" data-posture="LOADING" data-state="LOADING_INITIAL" aria-busy="true">
         <div className="home-field__inner">
           <div className="home-rail">
             <h1 className="home-identity">
-              Главная<span className="home-identity__role">текущий приоритет</span>
+              <span className="home-identity__surface">Главная</span>
+              <span className="home-identity__role">текущий приоритет</span>
             </h1>
             <p className="home-posture">{POSTURE_LABEL.LOADING}</p>
           </div>
@@ -53,6 +59,8 @@ export function AuthHomeLoadingField() {
           </div>
         </div>
       </div>
+    </div>
+    </div>
     </div>
   );
 }

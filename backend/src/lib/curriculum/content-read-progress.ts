@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient, type UserLessonProgress } from "@prisma/client";
 import { z } from "zod";
 import {
+  isCurriculumV2AssessmentEnabled,
   isCurriculumV2ContentEnabled,
   isCurriculumV2EnrollmentEnabled,
   isCurriculumV2ReadEnabled,
@@ -14,6 +15,12 @@ import {
   contentLocalizationPayloadSchema,
   normalizedLocaleSchema,
 } from "./content-schemas";
+import {
+  effectiveVideoDurationSeconds,
+  loadLessonMedia,
+  mergeLessonMedia,
+  type LessonMediaEntry,
+} from "./lesson-media";
 import { resolveUserCurriculumLevelStates } from "./level-state";
 import { resolveUserCurriculumContext } from "./resolver";
 
@@ -72,7 +79,26 @@ export type SafeResolvedContent = {
       transcript: string | null;
       body: z.infer<typeof contentLocalizationPayloadSchema>["body"];
     };
-    assets: Array<z.infer<typeof contentAssetPayloadSchema>>;
+    /**
+     * The content version's own assets and, since 2026-10-02, the lesson's
+     * current media from the registry (`lesson-media.ts`). A registry entry has
+     * the same shape; its `url` is a path on the Academy's own origin rather
+     * than an absolute address.
+     */
+    assets: Array<z.infer<typeof contentAssetPayloadSchema> | LessonMediaEntry>;
+    /**
+     * LESSON MARKERS (2026-10-02, the lesson hi-fi). Where in the lesson's video
+     * the answer to each question of the level's test is taught — the same
+     * second the test's разбор offers as «пересмотреть с …» — so the player's
+     * timeline can carry the four points before the first attempt.
+     *
+     * The question's NUMBER and that second, nothing else: no prompt, no option,
+     * no key. Empty when the level has no published test of its own, its
+     * questions name no seconds, or assessments are switched off. Markers are a
+     * hint on a timeline, so anything inconsistent about the test yields none
+     * rather than taking the lesson's content down with it.
+     */
+    questionMarkers: Array<{ questionNumber: number; rewatchFromSeconds: number }>;
   };
   progress: SafeLessonProgress | null;
 };
@@ -171,6 +197,7 @@ type ResolvedScope = {
   enrollmentId: number;
   enrollmentStatus: "active" | "completed";
   curriculumVersionId: number;
+  curriculumCode: string;
   level: {
     id: number;
     levelNumber: number;
@@ -265,6 +292,7 @@ async function resolveScopeWithin(
     enrollmentId: context.enrollment.id,
     enrollmentStatus: context.enrollment.status as "active" | "completed",
     curriculumVersionId: context.curriculumVersion.id,
+    curriculumCode: context.curriculumVersion.code,
     level: {
       id: level.id,
       levelNumber: level.levelNumber,
@@ -289,8 +317,76 @@ async function loadBoundContent(tx: TransactionClient, scope: ResolvedScope) {
           assets: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
         },
       },
+      // Only what the lesson markers need: never a prompt, an option or the key.
+      assessmentVersion: {
+        select: {
+          id: true,
+          levelDefinitionId: true,
+          curriculumVersionId: true,
+          status: true,
+          publishedAt: true,
+          questions: {
+            where: { status: "active" },
+            select: { questionNumber: true, rewatchFromSeconds: true },
+            orderBy: [{ questionNumber: "asc" }, { id: "asc" }],
+          },
+        },
+      },
     },
   });
+}
+
+/**
+ * The lesson markers of a bound test (see `SafeResolvedContent.content.questionMarkers`).
+ *
+ * The same checks the assessment runtime makes before it serves a question —
+ * this level, this version, published — and none of the failures it raises: a
+ * test that would not be served yields no markers, and the lesson reads as it
+ * did without them.
+ */
+export function lessonQuestionMarkers(
+  scope: { level: { id: number }; curriculumVersionId: number },
+  assessment:
+    | {
+        id: number;
+        levelDefinitionId: number;
+        curriculumVersionId: number;
+        status: string;
+        publishedAt: Date | null;
+        questions: Array<{ questionNumber: number; rewatchFromSeconds: number | null }>;
+      }
+    | null
+    | undefined,
+  assessmentsEnabled: boolean,
+): Array<{ questionNumber: number; rewatchFromSeconds: number }> {
+  if (!assessmentsEnabled || !assessment) return [];
+  if (
+    assessment.levelDefinitionId !== scope.level.id ||
+    assessment.curriculumVersionId !== scope.curriculumVersionId ||
+    assessment.status !== "published" ||
+    !assessment.publishedAt
+  ) {
+    return [];
+  }
+  const markers: Array<{ questionNumber: number; rewatchFromSeconds: number }> = [];
+  const seen = new Set<number>();
+  for (const question of assessment.questions) {
+    const seconds = question.rewatchFromSeconds;
+    if (
+      seconds === null ||
+      !Number.isSafeInteger(seconds) ||
+      seconds < 0 ||
+      seconds > MAX_PLAYBACK_WITHOUT_DURATION ||
+      !Number.isSafeInteger(question.questionNumber) ||
+      question.questionNumber < 1 ||
+      seen.has(question.questionNumber)
+    ) {
+      continue;
+    }
+    seen.add(question.questionNumber);
+    markers.push({ questionNumber: question.questionNumber, rewatchFromSeconds: seconds });
+  }
+  return markers;
 }
 
 function validateBoundContent(
@@ -430,6 +526,18 @@ async function resolveContentWithin(
     progress = mapLessonProgress(progressRow, sectionCodes);
     if (!progress) return { kind: "corrupt", reason: "lesson_progress_corrupt" };
   }
+  const contentAssets = parsedAssets
+    .map((item) => item.success ? item.data : neverValue())
+    .filter((asset) => asset.locale === null || asset.locale === locale.data);
+  // LESSON MEDIA. The lesson's current video, poster and captions, read from
+  // the registry on the same snapshot. A lesson with no registry rows gets
+  // exactly the assets it always got.
+  const media = await loadLessonMedia(tx, {
+    curriculumCode: scope.curriculumCode,
+    levelStableCode: scope.level.stableCode,
+    locale: locale.data,
+    sortOrderFrom: contentAssets.reduce((highest, asset) => Math.max(highest, asset.sortOrder), -1) + 1,
+  });
   const safe: SafeResolvedContent = {
     level: {
       levelNumber: scope.level.levelNumber,
@@ -441,12 +549,15 @@ async function resolveContentWithin(
     },
     content: {
       versionNumber: content.versionNumber,
-      videoDurationSeconds: content.videoDurationSeconds,
+      videoDurationSeconds: effectiveVideoDurationSeconds(content.videoDurationSeconds, media),
       publishedAt: safeDate(content.publishedAt!),
       localization: parsedLocalization.data,
-      assets: parsedAssets
-        .map((item) => item.success ? item.data : neverValue())
-        .filter((asset) => asset.locale === null || asset.locale === locale.data),
+      assets: mergeLessonMedia(contentAssets, media),
+      questionMarkers: lessonQuestionMarkers(
+        scope,
+        checked.content.assessmentVersion,
+        isCurriculumV2AssessmentEnabled(),
+      ),
     },
     progress,
   };

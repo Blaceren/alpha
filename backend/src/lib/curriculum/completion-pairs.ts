@@ -40,11 +40,43 @@ export function completionPair(type: string, completionMethod: string): Curricul
 export const PRODUCTION_COMPLETION_PAIRS = {
   level_completion: ["lesson:lesson", "lesson:manual"],
   assessment_pass: ["lesson:assessment_pass", "final_exam:assessment_pass"],
-  report_approval: ["report:report_approval"],
+  // PROGRAM STRUCTURE (2026-10-02). `report:formal_check` is a report nobody
+  // reviews by hand: the platform accepts it at submission when every required
+  // field is filled, and the learner compares their own wording with a sample.
+  // Same owner, a different PROOF — see `isFormallyAcceptedReportPair` below and
+  // `assertReportApprovalProof` in `completion.ts`.
+  report_approval: ["report:report_approval", "report:formal_check"],
   mentor_completion: ["mentor_review:mentor_review"],
   checkpoint_verification: ["financial_checkpoint:balance_check"],
   pocket_registration_postback: ["external_event:pocket_postback"],
 } as const satisfies Record<string, readonly CurriculumCompletionPair[]>;
+
+/**
+ * PROGRAM STRUCTURE — the two ways a report level is accepted.
+ *
+ * `report_approval`  a mentor or an admin claims the submission and scores it
+ *                    against the rubric; the level waits in `pending_review`.
+ * `formal_check`     «Ручной проверки нет. Система проверяет формально»: the
+ *                    submission itself is the acceptance. Nothing waits for a
+ *                    person, so nothing is ever claimable or rejectable.
+ *
+ * Both are REPORT levels and share the form, the drafts and the revisions. What
+ * differs is who says yes, and that difference is decided HERE, from the
+ * level's own definition, never from a request.
+ */
+export const REPORT_COMPLETION_METHODS = ["report_approval", "formal_check"] as const;
+
+export function isReportCompletionPair(type: string, completionMethod: string): boolean {
+  return (
+    type === "report" &&
+    (REPORT_COMPLETION_METHODS as readonly string[]).includes(completionMethod)
+  );
+}
+
+/** Is this the report pair the platform accepts without a human review? */
+export function isFormallyAcceptedReportPair(type: string, completionMethod: string): boolean {
+  return type === "report" && completionMethod === "formal_check";
+}
 
 /**
  * A8 — the STAGING-ONLY attestation owners.
@@ -217,7 +249,8 @@ export function isProtectedAuthorityPair(
  *
  * Today this resolves to exactly:
  *   lesson:lesson · lesson:manual · lesson:assessment_pass ·
- *   final_exam:assessment_pass · report:report_approval · mentor_review:mentor_review
+ *   final_exam:assessment_pass · report:report_approval · report:formal_check ·
+ *   mentor_review:mentor_review
  */
 export const ADMIN_CORRECTABLE_COMPLETION_PAIRS: ReadonlySet<CurriculumCompletionPair> =
   new Set(

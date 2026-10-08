@@ -66,6 +66,18 @@ describe("completion method — the truth matrix", () => {
     );
   });
 
+  it("names the two methods of the 30-level program, and neither borrows a mentor", () => {
+    // `lesson:lesson` — a lesson with no test; `report:formal_check` — a report
+    // the platform accepts by itself. Both had fallen to «Не определён».
+    expect(mapCompletionMethod("lesson")).toBe("lesson");
+    expect(mapCompletionMethod("formal_check")).toBe("formal-report");
+    expect(completionMethodLabel(mapCompletionMethod("lesson"))).toBe("Просмотр урока");
+    const formal = completionMethodLabel(mapCompletionMethod("formal_check"));
+    expect(formal).toBe("Отчёт, проверка автоматическая");
+    expect(formal).not.toMatch(/ментор|наставник/i);
+    expect(formal).not.toBe(completionMethodLabel(mapCompletionMethod("report_approval")));
+  });
+
   it("fails closed on an unknown method, and never guesses from the type", () => {
     expect(mapCompletionMethod("some_future_method")).toBe("unsupported");
     expect(completionMethodLabel("some_future_method")).toBe(COMPLETION_METHOD_LABEL.unsupported);
@@ -82,8 +94,8 @@ describe("completion method — the truth matrix", () => {
 
   it("covers the method vocabulary exhaustively, with no machine value showing", () => {
     const methods: AcademyCompletionMethod[] = [
-      "external-event", "assessment", "report", "checkpoint",
-      "manual", "mentor-review", "unsupported",
+      "external-event", "assessment", "report", "formal-report", "checkpoint",
+      "manual", "lesson", "mentor-review", "unsupported",
     ];
     expect(Object.keys(COMPLETION_METHOD_LABEL).sort()).toEqual([...methods].sort());
     for (const m of methods) {
@@ -210,12 +222,19 @@ describe("one dictionary, three surfaces", () => {
   });
 
   it("binds all three consumers to the same helper", () => {
-    expect(src(DETAIL)).toContain("completionMethodLabel(summary.completionMethod)");
+    /* Lesson hi-fi (DD-336): the level page no longer prints the label in a
+       table; it reads the method as a fact under the title — from the SAME
+       module, through its second, learner-worded dictionary. */
+    expect(src(DETAIL)).toContain("completionMethodFact(summary.completionMethod)");
+    expect(src(DETAIL)).toMatch(/import \{[^}]*completionMethodFact[^}]*\} from "@\/lib\/curriculum\/completion-method"/);
     expect(src(API)).toContain("completionMethodLabel(summary.completionMethod)");
     expect(src(HOME)).toContain("completionMethodLabel(level.completionMethod)");
-    for (const f of [DETAIL, HOME, API]) {
+    for (const f of [HOME, API]) {
       expect(src(f)).toMatch(/import \{[^}]*completionMethodLabel[^}]*\} from "@\/lib\/curriculum\/completion-method"/);
     }
+    // The page restates neither vocabulary.
+    expect(src(DETAIL)).not.toContain("COMPLETION_METHOD_FACT");
+    expect(src(DETAIL)).not.toContain("тест после урока");
   });
 
   it("leaves no surface still rendering the type-derived label", () => {
@@ -228,46 +247,76 @@ describe("one dictionary, three surfaces", () => {
 });
 
 describe("XP is a secondary metric", () => {
+  /* Lesson hi-fi (DD-336): the table of parameters is gone. XP is one fact in
+     the line under the title — after the video's length and the method, never
+     leading. Since 2026-10-06 (DD-348, owner: «сделать подсвечивание +xp») it
+     is the one lit chip of that line; the line's other facts stay quiet. */
   const detail = src(DETAIL);
-  const meta = detail.slice(
-    detail.indexOf('<dl className="ax-lvlmeta">'),
-    detail.indexOf("</dl>", detail.indexOf('<dl className="ax-lvlmeta">')),
-  );
+  const factsAt = detail.indexOf("export function levelFacts");
+  const facts = detail.slice(factsAt, detail.indexOf("\n}\n", factsAt));
 
-  /** The XP note itself — not merely the first `.ax-lvlsec__note` in the file. */
-  const xpNote = (() => {
-    const at = detail.indexOf("Опыт за уровень");
-    expect(at, "the XP note is missing").toBeGreaterThan(-1);
-    const open = detail.lastIndexOf("<p ", at);
-    return detail.slice(open, detail.indexOf("</p>", at));
-  })();
-
-  it("is out of the row of equal leading parameters", () => {
-    expect(meta).not.toContain("Опыт за уровень");
-    expect(meta).not.toContain("xpReward");
-    // The condition that actually closes the level leads that row.
-    expect(meta).toContain("<dt>Способ завершения</dt>");
+  it("is out of any row of leading parameters: there is no such row", () => {
+    expect(factsAt, "levelFacts is missing").toBeGreaterThan(-1);
+    expect(detail).not.toContain('<dl className="ax-lvlmeta">');
+    // The method comes before it in the line.
+    expect(facts.indexOf("completionMethodFact(summary")).toBeLessThan(facts.indexOf("summary.xpReward > 0"));
   });
 
-  it("is still shown, in the section's own quiet note", () => {
-    expect(detail).toMatch(
-      /<p className="ax-lvlsec__note">\s*Опыт за уровень: \{summary\.xpReward > 0 \? `\+\$\{summary\.xpReward\} XP` : "—"\}/,
-    );
+  it("is still shown, as the server's value, only when there is any", () => {
+    expect(facts).toMatch(/if \(summary\.xpReward > 0\) facts\.push\(`\+\$\{summary\.xpReward\} XP`\);/);
   });
 
   it("keeps the server value and appears exactly once", () => {
-    // The file passes `xpReward` to LevelMentorReview as well, so a whole-file
-    // count would measure the wrong thing. What must appear once is the DISPLAYED
-    // value: one label, and one guard-plus-value inside the note that renders it.
-    expect((xpNote.match(/summary\.xpReward/g) ?? []).length).toBe(2);
-    expect(xpNote).toContain('className="ax-lvlsec__note"');
-    expect((detail.match(/Опыт за уровень/g) ?? []).length).toBe(1);
+    expect((detail.match(/ XP`/g) ?? []).length).toBe(1);
     // Never a literal: the number belongs to Backend.
     expect(detail).not.toMatch(/\+500 XP/);
     expect(detail).not.toMatch(/xpReward\s*=\s*\d/);
   });
 
-  it("carries no Signal, frame, icon or animation", () => {
-    expect(xpNote).not.toMatch(/signal|frame|icon|anim/i);
+  it("leaves the line's other facts without Signal, frame, icon or animation", () => {
+    const css = src("src/features/level-detail-fidelity/level-hifi.css");
+    const at = css.indexOf(".ld.ld--hifi .ld-fact {");
+    expect(at).toBeGreaterThan(-1);
+    const rule = css.slice(at, css.indexOf("}", at));
+    expect(rule).not.toMatch(/signal|border|anim|icon/i);
+  });
+
+  it("is lit — the owner's request of 2026-10-06 (DD-348): a Signal chip, no animation", () => {
+    const css = src("src/features/level-detail-fidelity/level-hifi.css");
+    const at = css.indexOf(".ld.ld--hifi .ld-fact--xp {");
+    expect(at).toBeGreaterThan(-1);
+    const rule = css.slice(at, css.indexOf("}", at));
+    expect(rule).toMatch(/var\(--signal\)/);
+    expect(rule).not.toMatch(/anim/i);
+    // The markup marks exactly the XP fact (and, since 2026-10-07, the video's length, which a phone hides).
+    expect(detail).toMatch(/fact\.endsWith\(" XP"\)\s*\?\s*"ld-fact ld-fact--xp"/);
+  });
+
+  it("the video's length is not said in the header on a phone or a tablet — the player shows it (owner 2026-10-07)", () => {
+    expect(detail).toMatch(/fact\.startsWith\("видео "\)\s*\?\s*"ld-fact ld-fact--video"/);
+    const css = src("src/features/level-detail-fidelity/level-hifi.css");
+    expect(css).toMatch(/@media \(max-width: 899px\) \{\s*\.ld\.ld--hifi \.ld-fact--video \{\s*display: none;/);
+    // The desktop keeps it: no rule outside that block hides it.
+    expect(css.match(/\.ld-fact--video/g)?.length).toBe(1);
+  });
+});
+
+
+describe("the lesson header shares one corner (DD-350, owner 2026-10-06: «одинаковые углы закругления»)", () => {
+  const css = src("src/features/level-detail-fidelity/level-hifi.css");
+  const rule = (selector: string) => {
+    const at = css.indexOf(`${selector} {`);
+    expect(at, selector).toBeGreaterThan(-1);
+    return css.slice(at, css.indexOf("}", at));
+  };
+
+  it("the plate and the rail: the same radius", () => {
+    expect(rule(".ld.ld--hifi .ld-plate")).toContain("border-radius: var(--hf-radius-window)");
+    expect(rule(".ld.ld--hifi .ax-lvlhead > .ld-facts")).toContain("border-radius: var(--hf-radius-window)");
+  });
+
+  it("the state mark and the XP chip inside it: one smaller radius", () => {
+    expect(rule(".ld.ld--hifi .ld-fact--xp")).toContain("border-radius: 8px");
+    expect(rule(".ld.ld--hifi .ax-lvlhead > .ld-facts .ax-mark")).toContain("border-radius: 8px");
   });
 });

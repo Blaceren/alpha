@@ -1,5 +1,5 @@
 /*
- * PROVISIONAL semantic design tokens — Alfa Trade Academy CRM.
+ * PROVISIONAL semantic design tokens — Alpha Trade Academy CRM.
  * No confirmed brand book yet (docs/DECISIONS.md), so these are neutral,
  * professional, operational values. Colors are stored as HSL channels so
  * Tailwind's `hsl(var(--token) / <alpha-value>)` opacity utilities work.

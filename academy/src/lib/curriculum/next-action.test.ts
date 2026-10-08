@@ -38,6 +38,9 @@ function level(over: Partial<AcademyLevelSummary> & { order: number }): AcademyL
       isExternal: method === "external-event",
       supported: true,
     },
+    kind: over.kind ?? null,
+    kindLabel: over.kindLabel ?? "Урок",
+    inProduction: over.inProduction ?? false,
     state: over.state ?? "available",
     lockReason: over.lockReason ?? null,
     stateLabel: over.stateLabel ?? "Доступен",
@@ -62,6 +65,7 @@ function view(levels: AcademyLevelSummary[], currentCode?: string | null): Acade
     description: null,
     learningObjective: "цель модуля",
     status: "published",
+    chapter: null,
     levels,
     progress: { total: levels.length, completed: levels.filter((l) => l.state === "completed").length },
   };
@@ -76,6 +80,7 @@ function view(levels: AcademyLevelSummary[], currentCode?: string | null): Acade
       nextAvailableLevelCode: null,
       completedLevels: mod.progress.completed,
       totalLevels: 100,
+      openLevels: 100,
       xp: { available: false },
       updatedAt: null,
     },
@@ -278,6 +283,73 @@ describe("deriveNextAction — fail-closed and edges", () => {
   it("the current level wins over the next available level", () => {
     const v = view([level({ order: 5, state: "in_progress" }), level({ order: 6, state: "available" })], "v2.l005");
     expect(deriveNextAction(v).level?.order).toBe(5);
+  });
+});
+
+/**
+ * PROGRAM STRUCTURE (2026-10-02) — the three situations the 30-level program
+ * brought that this derivation had no sentence for.
+ */
+describe("deriveNextAction — the 30-level program", () => {
+  it("a lesson without a test is an action, and says there is no test", () => {
+    const fresh = deriveNextAction(view([level({ order: 1, state: "available", completionMethod: "lesson" })]));
+    expect(fresh.kind).toBe("start-lesson");
+    expect(fresh.posture).toBe("act");
+    expect(fresh.explanation).toMatch(/нет проверки знаний/);
+    expect(fresh.ctaLabel).not.toBeNull();
+
+    const begun = deriveNextAction(view([level({ order: 1, state: "in_progress", completionMethod: "lesson" })]));
+    expect(begun.kind).toBe("continue-lesson");
+    expect(begun.posture).toBe("act");
+  });
+
+  it("a report nobody reviews never names a mentor, in any of its states", () => {
+    const base = level({ order: 9, state: "in_progress", completionMethod: "formal-report" });
+    for (const reportState of [undefined, "available", "draft", "rejected", "approved"] as const) {
+      const a = deriveNextAction(view([base]), { reportState });
+      expect(a.kind).toBe("submit-report");
+      expect(a.posture).toBe("act");
+      expect(`${a.title} ${a.explanation}`).not.toMatch(/наставник[а-я]* (читает|вернул|проверяет)|на проверку наставнику/i);
+    }
+    expect(deriveNextAction(view([base])).explanation).toMatch(/автоматически/);
+    expect(deriveNextAction(view([base]), { reportState: "draft" }).title).toBe("Допишите и отправьте отчёт");
+  });
+
+  it("when every open level is finished, the answer is that — not «закрыт» and not «программа пройдена»", () => {
+    const levels = [
+      level({ order: 1, state: "completed" }),
+      level({ order: 2, state: "completed" }),
+      level({ order: 3, state: "locked", lockReason: "inactive", inProduction: true, routeAccessible: false }),
+      level({ order: 4, state: "locked", lockReason: "inactive", inProduction: true, routeAccessible: false }),
+    ];
+    const a = deriveNextAction(view(levels, "v2.l003"));
+    expect(a.kind).toBe("open-levels-complete");
+    expect(a.posture).toBe("done");
+    expect(a.title).toBe("Открытые уровни пройдены");
+    expect(a.explanation).toContain("2 из 4");
+    // The unopened lesson is not named as the thing to do.
+    expect(a.level).toBeNull();
+    expect(a.href).toBe("/path");
+  });
+
+  it("an unopened current level with open work still outstanding is NOT a congratulation", () => {
+    // Cannot happen under a published version (closed levels are its tail), so
+    // if it ever does, the surface must not declare the open part finished.
+    const levels = [
+      level({ order: 1, state: "available" }),
+      level({ order: 2, state: "locked", lockReason: "inactive", inProduction: true, routeAccessible: false }),
+    ];
+    const a = deriveNextAction(view(levels, "v2.l002"));
+    expect(a.kind).toBe("blocked");
+    expect(a.explanation).toMatch(/готовится/);
+  });
+
+  it("a level in production explains itself as being prepared", () => {
+    const t = explainLevelState(
+      level({ order: 15, state: "locked", lockReason: "inactive", inProduction: true, routeAccessible: false }),
+    );
+    expect(t).toMatch(/готовится/);
+    expect(t).not.toMatch(/недоступен|заблокирован/i);
   });
 });
 

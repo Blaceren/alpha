@@ -1,6 +1,6 @@
 # IMPLEMENTATION_STATUS
 
-Актуальный статус реализации Alfa Trade Academy Web V2.
+Актуальный статус реализации Alpha Trade Academy Web V2.
 
 **Дата:** 2026-07-13
 **Текущая фаза:** D0 / D0.1 завершены → **D1A — Application Foundation & Art-Direction Board** (выполнен)

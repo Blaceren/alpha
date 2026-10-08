@@ -13,6 +13,7 @@ import type {
   ReportRubricVersion,
 } from "@prisma/client";
 import { Prisma } from "@prisma/client";
+import { isReportCompletionPair } from "@/lib/curriculum/completion-pairs";
 import { CURRICULUM_AUDIT_ACTIONS } from "@/lib/curriculum/constants";
 import { ReportDomainError, isReportDomainError } from "@/lib/curriculum/report-errors";
 import {
@@ -134,8 +135,8 @@ async function loadReportLevel(levelDefinitionId: number, tx: DbClient) {
   const level = await tx.levelDefinition.findUnique({ where: { id: levelDefinitionId }, include: { curriculumVersion: true } });
   if (!level) throw new ReportDomainError("REPORT_LEVEL_NOT_FOUND", "level does not exist");
   assertParentDraft(level.curriculumVersion.status);
-  if (level.type !== "report" || level.completionMethod !== "report_approval") {
-    throw new ReportDomainError("REPORT_LEVEL_TYPE_INVALID", "report authoring requires a report/report_approval level");
+  if (!isReportCompletionPair(level.type, level.completionMethod)) {
+    throw new ReportDomainError("REPORT_LEVEL_TYPE_INVALID", "report authoring requires a report level completed by report_approval or formal_check");
   }
   return level;
 }
@@ -149,7 +150,7 @@ async function loadAssignment(id: number, tx: DbClient): Promise<AssignmentConte
     throw new ReportDomainError("REPORT_VERSION_MISMATCH", "assignment curriculum ownership is inconsistent");
   }
   assertParentDraft(assignment.levelDefinition.curriculumVersion.status);
-  if (assignment.levelDefinition.type !== "report" || assignment.levelDefinition.completionMethod !== "report_approval") {
+  if (!isReportCompletionPair(assignment.levelDefinition.type, assignment.levelDefinition.completionMethod)) {
     throw new ReportDomainError("REPORT_LEVEL_TYPE_INVALID", "assignment owner is not a report level");
   }
   return assignment;

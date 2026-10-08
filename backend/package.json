@@ -101,6 +101,9 @@
     "curriculum:overlay:import": "tsx scripts/curriculum/importEditorialOverlay.ts",
     "activation:manifest:prepare": "tsx scripts/curriculum/preparePreprodActivationManifest.ts",
     "activation:manifest:validate": "tsx scripts/curriculum/validatePreprodActivationManifest.ts",
+    "curriculum:funnel30:build": "tsx scripts/curriculum/buildFunnel30.ts",
+    "curriculum:funnel30:check": "tsx scripts/curriculum/buildFunnel30.ts --check",
+    "test:regression:curriculum-funnel30": "tsx scripts/regression/curriculumFunnel30Regression.ts",
     "curriculum:canonical100:build": "tsx scripts/curriculum/buildCanonical100.ts",
     "curriculum:canonical100:check": "tsx scripts/curriculum/buildCanonical100.ts --check",
     "curriculum:blueprint:extract": "tsx scripts/curriculum/extractVideoBlueprint.ts",
@@ -216,6 +219,7 @@
     "test:regression:tool-risk-plan": "tsx scripts/regression/toolRiskPlanRegression.ts",
     "test:regression:tool-entry-checklist": "tsx scripts/regression/toolEntryChecklistRegression.ts",
     "test:regression:tool-personal-stats": "tsx scripts/regression/toolPersonalStatsRegression.ts",
+    "test:regression:notifications-clear": "tsx scripts/regression/notificationsClearRegression.ts",
     "test:regression:news-calendar": "tsx scripts/regression/newsCalendarRegression.ts"
   },
   "dependencies": {

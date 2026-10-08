@@ -16,7 +16,7 @@ const STATS = {
     followed: { trades: 31, wins: 19, winRateBasisPoints: 6129 },
     broken: { trades: 7, wins: 2, winRateBasisPoints: 2857 },
   },
-  violations: { total: 3, items: [{ code: "no_reason", label: "Вход без записанной причины", count: 3 }] },
+  violations: { total: 3, items: [{ code: "no_reason", label: "Вход без записанного основания", count: 3 }] },
   preliminary: true,
   minSample: 50,
 };

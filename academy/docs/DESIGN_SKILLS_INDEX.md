@@ -1,6 +1,6 @@
 # DESIGN_SKILLS_INDEX
 
-Индекс дизайн-скиллов Alfa Trade Academy: базовые (general) + project-specific (ATA).
+Индекс дизайн-скиллов Alpha Trade Academy: базовые (general) + project-specific (ATA).
 **При конфликте project-specific ATA skills имеют приоритет** над generic-рекомендациями.
 
 Все ATA-скиллы установлены в `/.claude/skills/`. Базовые доступны через плагин `anthropic-skills`

@@ -19,6 +19,7 @@ class Redirect extends Error {
 class NotFound extends Error {}
 
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
   redirect: (to: string) => {
     throw new Redirect(to);
   },
@@ -259,14 +260,14 @@ describe("the state", () => {
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(earned), 12));
     render(await open("stats"));
     expect(screen.queryByText("stats-workspace")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Откроется на уровне 25" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Откроется после уровня 25" })).toBeInTheDocument();
   });
 
   it("locks the Entry Checklist until level 20 is completed", async () => {
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card", "tool.trading_journal", "tool.risk_calculator"]), 12));
     render(await open("entry-checklist"));
     expect(screen.queryByText("checklist-workspace")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Откроется на уровне 20" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Откроется после уровня 20" })).toBeInTheDocument();
   });
 
   it("locks the Risk Calculator until level 15 is completed", async () => {
@@ -274,7 +275,7 @@ describe("the state", () => {
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card", "tool.trading_journal"]), 12));
     render(await open("risk-calculator"));
     expect(screen.queryByText("risk-workspace")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Откроется на уровне 15" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Откроется после уровня 15" })).toBeInTheDocument();
   });
 
   it("locks the journal until level 10 is completed, whatever the read of it says", async () => {
@@ -282,7 +283,7 @@ describe("the state", () => {
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card"]), 9));
     render(await open("journal"));
     expect(screen.queryByText("journal-workspace")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Откроется на уровне 10" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Откроется после уровня 10" })).toBeInTheDocument();
   });
 
   it("opens the Trade Card when the Backend says it is unlocked", async () => {
@@ -298,29 +299,96 @@ describe("the state", () => {
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening([]), 2));
     render(await open("trade-card"));
     expect(screen.queryByText("trade-card-workspace")).toBeNull();
-    expect(screen.getByText("Закрыто · сейчас L3")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Откроется на уровне 5" })).toBeInTheDocument();
-    expect(screen.getByText("Инструмент появится после урока L5 «Жизненный цикл сделки».")).toBeInTheDocument();
+    expect(screen.getByText("Закрыто · вы на уровне 3")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Откроется после уровня 5" })).toBeInTheDocument();
+    expect(screen.getByText("Инструмент появится после урока 5 «Жизненный цикл сделки».")).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
     expect(screen.queryByText(/как будет выглядеть/i)).toBeNull();
     // The one next step.
     expect(screen.getByRole("link", { name: "Продолжить путь" })).toHaveAttribute("href", "/path");
   });
 
-  it("locks everything when the read fails, rather than guessing", async () => {
-    getCurriculumView.mockResolvedValue({ ok: false, error: {} });
+  /* 2026-10-02 — the 30-level program releases the same tools after other
+     levels, and none of them is a checkpoint. */
+  it("names the level the VERDICT gives, and what that level is in the learner's own program", async () => {
+    const access: AcademyToolAccess = {
+      total: 6,
+      unlockedCount: 1,
+      tools: [
+        { code: "tool.trade_card", unlocked: true, unlockLevel: 5 },
+        { code: "tool.trading_journal", unlocked: false, unlockLevel: 9 },
+        { code: "tool.risk_calculator", unlocked: false, unlockLevel: 13 },
+        { code: "tool.entry_checklist", unlocked: false, unlockLevel: 13 },
+        { code: "tool.personal_stats", unlocked: false, unlockLevel: 24 },
+        { code: "tool.news_calendar", unlocked: false, unlockLevel: 28 },
+      ],
+    };
+    const levels = Array.from({ length: 30 }, (_, index) => {
+      const order = index + 1;
+      return {
+        order,
+        title: order === 9 ? "Первые пять demo-сделок и разбор" : order === 24 ? "Своя статистика" : `Уровень ${order}`,
+        state: order <= 5 ? "completed" : "locked",
+        typeInfo: { type: order === 9 ? "report" : "lesson", isCheckpoint: false },
+        kind: order === 9 ? "report" : order === 24 ? "assembly" : "lesson",
+        inProduction: order >= 15,
+      };
+    });
+    getCurriculumView.mockResolvedValue({
+      ok: true,
+      view: { state: "enrolled", curriculum: {}, modules: [{ levels }], progress: {}, toolAccess: access },
+    });
+
+    render(await open("journal"));
+    // Level 9, not the catalogue's 10 — and a report, so not «контрольная точка».
+    expect(screen.getByRole("heading", { name: "Откроется после уровня 9" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Инструмент появится после уровня 9 «Первые пять demo-сделок и разбор»."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/контрольной точки/)).toBeNull();
+  });
+
+  it("says so when the level that releases a tool is itself not open yet", async () => {
+    const access: AcademyToolAccess = {
+      total: 1,
+      unlockedCount: 0,
+      tools: [{ code: "tool.personal_stats", unlocked: false, unlockLevel: 24 }],
+    };
+    const levels = [
+      { order: 14, title: "Четырнадцатый", state: "completed", typeInfo: { type: "lesson", isCheckpoint: false }, kind: "assembly", inProduction: false },
+      { order: 24, title: "Своя статистика", state: "locked", typeInfo: { type: "lesson", isCheckpoint: false }, kind: "assembly", inProduction: true },
+    ];
+    getCurriculumView.mockResolvedValue({
+      ok: true,
+      view: { state: "enrolled", curriculum: {}, modules: [{ levels }], progress: {}, toolAccess: access },
+    });
+    render(await open("stats"));
+    expect(
+      screen.getByText("Инструмент появится после уровня 24 «Своя статистика». Этот уровень ещё готовится."),
+    ).toBeInTheDocument();
+  });
+
+  it("opens nothing when the read fails — and says it failed, not «Закрыто» (2026-10-04)", async () => {
+    getCurriculumView.mockResolvedValue({ ok: false, error: { category: "BACKEND_UNAVAILABLE" } });
+    render(await open("trade-card"));
+    expect(screen.queryByText("trade-card-workspace")).toBeNull();
+    expect(screen.queryByText("Закрыто")).toBeNull();
+    expect(screen.getByText("Не удалось загрузить инструменты")).toBeInTheDocument();
+  });
+
+  it("still says «Закрыто» when the answer is about the learner (not enrolled)", async () => {
+    getCurriculumView.mockResolvedValue({ ok: false, error: { category: "NOT_ENROLLED" } });
     render(await open("trade-card"));
     expect(screen.queryByText("trade-card-workspace")).toBeNull();
     expect(screen.getByText("Закрыто")).toBeInTheDocument();
   });
 
-  it("explains a checkpoint tool in the presentation's words", async () => {
+  it("does not fall back to the old plan's checkpoint when the view does not describe the level (2026-10-04)", async () => {
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(["tool.trade_card"]), 8));
     render(await open("news"));
-    expect(screen.getByText("Закрыто · сейчас L9")).toBeInTheDocument();
-    expect(
-      screen.getByText("Инструмент появится после контрольной точки L30, когда будут пройдены уроки, на которые он опирается."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Закрыто · вы на уровне 9")).toBeInTheDocument();
+    expect(screen.getByText("Инструмент появится после уровня 30.")).toBeInTheDocument();
+    expect(screen.queryByText(/контрольной точки/)).toBeNull();
   });
 
   it("opens the News Calendar on an open verdict, with the server's read and the learner's day", async () => {
@@ -346,6 +414,6 @@ describe("the state", () => {
     getCurriculumView.mockResolvedValue(enrolled(toolAccessOpening(earned), 12));
     render(await open("news"));
     expect(screen.queryByText("news-workspace")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Откроется на уровне 30" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Откроется после уровня 30" })).toBeInTheDocument();
   });
 });

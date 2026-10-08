@@ -206,7 +206,7 @@ A level is complete when **all** of the following hold. Everything marked
 - [ ] section codes stable, unique, lowercase-kebab *(machine)*
 - [ ] risk callout present *(machine)*
 - [ ] no `TODO`, `TBD`, `FIXME`, `PLACEHOLDER`, `lorem ipsum`, «заглушка», «в разработке», «скоро будет», «готовится» *(machine)*
-- [ ] no «TradeQuest» anywhere — the product is **Alfa Trade Academy** *(machine)*
+- [ ] no «TradeQuest» anywhere — the product is **Alpha Trade Academy** *(machine)*
 - [ ] no HTML, no markdown links, no non-https URI schemes *(machine)*
 - [ ] every `assetCode` declared, of the right kind, with alt text where needed *(machine)*
 - [ ] every `toolCode` in the canonical vocabulary *(machine)*

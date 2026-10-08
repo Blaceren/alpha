@@ -12,6 +12,7 @@ import { render, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import ForgotPasswordPage from "@/app/forgot-password/page";
 import LoginPage from "@/app/login/page";
 import RegisterPage from "@/app/register/page";
 
@@ -23,8 +24,30 @@ vi.mock("@/config/academy-config", () => ({
   getAcademyConfig: () => ({ mode: "api", turnstileSiteKey: null, backendOrigin: "https://b.invalid", requestTimeoutMs: 1000 }),
 }));
 
+
+/* ACCOUNT RECOVERY made both pages async server components: they ask the
+   Backend what it can do before they offer anything that ends in an email. A
+   test resolves the page first, and the read is substituted — "cannot send
+   mail" by default, which is the state these guards were written for. */
+/* Signed out by default: the pages send a confirmed viewer onward (2026-10-04). */
+vi.mock("@/server/auth/server-session", () => ({
+  readServerSession: vi.fn(async () => ({ kind: "signed-out" })),
+}));
+vi.mock("@/server/auth/account-read", () => ({
+  readAccountCapabilities: vi.fn(async () => ({ passwordRecovery: false, emailVerification: false, emailChange: false })),
+  readRegistrationOpensLearning: vi.fn(async () => null),
+}));
+type PageComponent = () => Promise<React.ReactElement> | React.ReactElement;
+async function page(Page: PageComponent): Promise<React.ReactElement> {
+  return await Page();
+}
+
 const ROOT = process.cwd();
-const ACCEPTED_LOGO_SHA = "29e945f57aeafb3d";
+/* The accepted asset, with one line changed on the owner's word of 2026-10-03
+   (DD-341): its <title> spells the product «Alpha». The drawing is the accepted
+   one — the test below proves it against the hash it was accepted with. */
+const ACCEPTED_LOGO_SHA = "7b80daee8ad28bfc";
+const ACCEPTED_DRAWING_SHA = "29e945f57aeafb3d";
 
 function renderPage(node: React.ReactElement) {
   return render(node);
@@ -39,39 +62,39 @@ describe("the auth stage composition", () => {
     ["login", LoginPage, "Продолжить свой путь."],
     ["register", RegisterPage, "Начать путь."],
   ] as const) {
-    it(`${name} has exactly one main and one h1`, () => {
-      const { container } = renderPage(<Page />);
+    it(`${name} has exactly one main and one h1`, async () => {
+      const { container } = renderPage(await page(Page));
       expect(container.querySelectorAll("main")).toHaveLength(1);
       const h1s = container.querySelectorAll("h1");
       expect(h1s).toHaveLength(1);
       expect(h1s[0]?.textContent).toBe(heading);
     });
 
-    it(`${name} shows the mark as the asset of record, inside one link to /`, () => {
-      const { container } = renderPage(<Page />);
+    it(`${name} shows the mark as the asset of record, inside one link to /`, async () => {
+      const { container } = renderPage(await page(Page));
       const marks = container.querySelectorAll("a.auth__mark");
       expect(marks).toHaveLength(1);
       const link = marks[0] as HTMLAnchorElement;
       expect(link.getAttribute("href")).toBe("/");
-      expect(link.getAttribute("aria-label")).toBe("Alfa Trade Academy — на главную");
+      expect(link.getAttribute("aria-label")).toBe("Alpha Trade Academy — на главную");
       const img = link.querySelector("img");
       expect(img?.getAttribute("src")).toBe("/brand/ata-logo.svg");
       // decorative: the link carries the name, the image must not repeat it
       expect(img?.getAttribute("alt")).toBe("");
     });
 
-    it(`${name} no longer imitates the mark with text`, () => {
-      const { container } = renderPage(<Page />);
-      // the old `<p class="login-brand">Alfa Trade Academy</p>`
+    it(`${name} no longer imitates the mark with text`, async () => {
+      const { container } = renderPage(await page(Page));
+      // the old `<p class="login-brand">Alpha Trade Academy</p>`
       expect(container.querySelector(".login-brand")).toBeNull();
       const stray = [...container.querySelectorAll("p, span")].filter(
-        (e) => e.textContent?.trim() === "Alfa Trade Academy",
+        (e) => e.textContent?.trim() === "Alpha Trade Academy",
       );
       expect(stray, "no element may render the wordmark as text").toHaveLength(0);
     });
 
-    it(`${name} loads no remote asset`, () => {
-      const { container } = renderPage(<Page />);
+    it(`${name} loads no remote asset`, async () => {
+      const { container } = renderPage(await page(Page));
       const remote = [...container.querySelectorAll("[src],[href]")]
         .map((e) => e.getAttribute("src") ?? e.getAttribute("href"))
         .filter((u) => u && /^https?:\/\//.test(u));
@@ -82,6 +105,13 @@ describe("the auth stage composition", () => {
   it("the logo is the accepted asset, byte for byte", () => {
     const bytes = readFileSync(join(ROOT, "public", "brand", "ata-logo.svg"));
     expect(createHash("sha256").update(bytes).digest("hex").slice(0, 16)).toBe(ACCEPTED_LOGO_SHA);
+  });
+
+  it("only the logo's accessible name changed with the product's spelling", () => {
+    const text = readFileSync(join(ROOT, "public", "brand", "ata-logo.svg"), "utf8");
+    expect(text).toContain("<title id=\"title\">Логотип Alpha Trade Academy</title>");
+    const asAccepted = text.replace("Логотип Alpha Trade Academy", "Логотип Alfa Trade Academy");
+    expect(createHash("sha256").update(asAccepted).digest("hex").slice(0, 16)).toBe(ACCEPTED_DRAWING_SHA);
   });
 });
 
@@ -94,16 +124,16 @@ describe("the form contract is untouched", () => {
       labelled: !!i.labels?.length,
     }));
 
-  it("login keeps email and password, in order, with their autocomplete", () => {
-    const { container } = renderPage(<LoginPage />);
+  it("login keeps email and password, in order, with their autocomplete", async () => {
+    const { container } = renderPage(await page(LoginPage));
     expect(fields(container)).toEqual([
       { name: "email", type: "email", autocomplete: "username", labelled: true },
       { name: "password", type: "password", autocomplete: "current-password", labelled: true },
     ]);
   });
 
-  it("registration keeps its four fields, in order, with their autocomplete", () => {
-    const { container } = renderPage(<RegisterPage />);
+  it("registration keeps its four fields, in order, with their autocomplete", async () => {
+    const { container } = renderPage(await page(RegisterPage));
     expect(fields(container)).toEqual([
       { name: "email", type: "email", autocomplete: "email", labelled: true },
       { name: "name", type: "text", autocomplete: "nickname", labelled: true },
@@ -112,9 +142,9 @@ describe("the form contract is untouched", () => {
     ]);
   });
 
-  it("every field is bound to a real label, not a placeholder", () => {
+  it("every field is bound to a real label, not a placeholder", async () => {
     for (const Page of [LoginPage, RegisterPage]) {
-      const { container, unmount } = renderPage(<Page />);
+      const { container, unmount } = renderPage(await page(Page));
       for (const input of container.querySelectorAll("input")) {
         expect(input.labels?.length, input.getAttribute("name") ?? "").toBeGreaterThan(0);
         expect(input.labels?.[0]?.textContent?.trim()).toBeTruthy();
@@ -123,9 +153,9 @@ describe("the form contract is untouched", () => {
     }
   });
 
-  it("adds no password-reveal control, because none existed", () => {
+  it("adds no password-reveal control, because none existed", async () => {
     for (const Page of [LoginPage, RegisterPage]) {
-      const { container, unmount } = renderPage(<Page />);
+      const { container, unmount } = renderPage(await page(Page));
       const reveal = [...container.querySelectorAll("button")].filter((b) =>
         /показать|скрыть|reveal|show/i.test(b.textContent ?? "" + (b.getAttribute("aria-label") ?? "")),
       );
@@ -136,29 +166,92 @@ describe("the form contract is untouched", () => {
 });
 
 describe("the way between the two pages", () => {
-  it("login offers registration", () => {
-    const { container } = renderPage(<LoginPage />);
+  it("login offers registration", async () => {
+    const { container } = renderPage(await page(LoginPage));
     const alt = container.querySelector(".login-alt");
     expect(alt).not.toBeNull();
     const link = within(alt as HTMLElement).getByRole("link", { name: "Создать аккаунт" });
     expect(link.getAttribute("href")).toBe("/register");
   });
 
-  it("registration still offers login", () => {
-    const { container } = renderPage(<RegisterPage />);
+  it("registration still offers login", async () => {
+    const { container } = renderPage(await page(RegisterPage));
     const alt = container.querySelector(".register-alt");
     expect(alt).not.toBeNull();
     const link = within(alt as HTMLElement).getByRole("link", { name: "Войти" });
     expect(link.getAttribute("href")).toBe("/login");
   });
 
-  it("offers no password recovery, because no such route exists", () => {
+  /* ACCOUNT RECOVERY (2026-10-01). This guard used to say «offers no password
+     recovery, because no such route exists». The route exists now, and the rule
+     it protected is unchanged: a recovery that cannot deliver an email is not
+     offered. So the link follows the Backend's answer, in both directions. */
+  it("offers no password recovery where the deployment cannot send mail", async () => {
     for (const Page of [LoginPage, RegisterPage]) {
-      const { container, unmount } = renderPage(<Page />);
+      const { container, unmount } = renderPage(await page(Page));
       expect(container.textContent).not.toMatch(/Забыли пароль|Восстановить пароль/i);
       expect(container.querySelector('a[href*="forgot"], a[href*="reset"]')).toBeNull();
       unmount();
     }
+  });
+
+  it("offers it on login, and only there, where the Backend says a reset message can be sent", async () => {
+    const { readAccountCapabilities } = await import("@/server/auth/account-read");
+    const able = { passwordRecovery: true, emailVerification: true, emailChange: true };
+    vi.mocked(readAccountCapabilities).mockResolvedValueOnce(able);
+    const login = renderPage(await page(LoginPage));
+    const link = within(login.container).getByRole("link", { name: "Забыли пароль?" });
+    expect(link.getAttribute("href")).toBe("/forgot-password");
+    // Beside the password it is about: after the password field, before the submit.
+    const order = [...login.container.querySelectorAll('input[name="password"], a[href="/forgot-password"], button[type="submit"]')].map((el) => el.tagName);
+    expect(order).toEqual(["INPUT", "A", "BUTTON"]);
+    login.unmount();
+
+    vi.mocked(readAccountCapabilities).mockResolvedValueOnce(able);
+    const register = renderPage(await page(RegisterPage));
+    expect(register.container.querySelector('a[href*="forgot"], a[href*="reset"]')).toBeNull();
+    register.unmount();
+  });
+});
+
+describe("the registration page says what registration does here (2026-10-04)", () => {
+  it("where a new account starts the program, it says so — free, and the first level at once", async () => {
+    const { readRegistrationOpensLearning } = await import("@/server/auth/account-read");
+    vi.mocked(readRegistrationOpensLearning).mockResolvedValueOnce(true);
+    const { container, unmount } = renderPage(await page(RegisterPage));
+    expect(container.textContent).toContain("Регистрация бесплатная. Сразу после неё откроется первый уровень пути.");
+    expect(container.textContent).not.toContain("куратор");
+    unmount();
+  });
+
+  it("where the Backend does not say, or a curator enrols, the cautious line stays", async () => {
+    const { readRegistrationOpensLearning } = await import("@/server/auth/account-read");
+    for (const answer of [null, false]) {
+      vi.mocked(readRegistrationOpensLearning).mockResolvedValueOnce(answer);
+      const { container, unmount } = renderPage(await page(RegisterPage));
+      expect(container.textContent).toContain("Доступ к обучению открывает куратор.");
+      unmount();
+    }
+  });
+});
+
+describe("the reset request page says only what is true of this deployment", () => {
+  it("promises nothing where no mail can be sent: no form, and a lead that does not say «отправим»", async () => {
+    const { container } = renderPage(await page(ForgotPasswordPage));
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector('[data-role="recovery-unavailable"]')!.textContent).toContain("Пока недоступно");
+    expect(container.querySelector(".auth__lead")!.textContent).toBe("Пароль сбрасывается по ссылке из письма.");
+    expect(container.textContent).not.toMatch(/отправим/);
+    expect(within(container).getByRole("link", { name: "Вернуться ко входу" }).getAttribute("href")).toBe("/login");
+  });
+
+  it("asks for the address where a message can be sent", async () => {
+    const { readAccountCapabilities } = await import("@/server/auth/account-read");
+    vi.mocked(readAccountCapabilities).mockResolvedValueOnce({ passwordRecovery: true, emailVerification: true, emailChange: true });
+    const { container } = renderPage(await page(ForgotPasswordPage));
+    expect(container.querySelector("form")).not.toBeNull();
+    expect(container.querySelector('[data-role="recovery-unavailable"]')).toBeNull();
+    expect(container.querySelector(".auth__lead")!.textContent).toContain("мы отправим на неё ссылку");
   });
 });
 
@@ -214,11 +307,72 @@ describe("the stylesheet's own contract", () => {
        that the space around it contains its own overflow instead of handing it
        to the document. Removing this is how /login started scrolling sideways
        once the widget was added. */
-    const block = css.slice(css.indexOf(".auth .auth-captcha__frame"));
+    const block = css.slice(css.indexOf(".auth .auth-captcha__frame {"));
     const rule = block.slice(0, block.indexOf("}"));
-    expect(rule).toMatch(/overflow-x:\s*auto/);
     expect(rule).toMatch(/max-width:\s*100%/);
     expect(rule).toMatch(/min-width:\s*0/);
+    // Open, it scrolls inside itself; closed, it shows nothing to scroll.
+    const open = css.slice(css.indexOf(".auth .auth-captcha__frame[data-shown] {"));
+    expect(open.slice(0, open.indexOf("}"))).toMatch(/overflow-x:\s*auto/);
+  });
+
+  it("gives Cloudflare's box no room until it has something to ask", () => {
+    // Owner, 2026-10-02. The frame is closed by default — zero high — and
+    // opened by one attribute, which the widget sets when a press is asked for.
+    const block = css.slice(css.indexOf(".auth .auth-captcha__frame {"));
+    const closed = block.slice(0, block.indexOf("}"));
+    expect(closed).toMatch(/height:\s*0;/);
+    expect(closed).toMatch(/overflow:\s*hidden/);
+    const open = css.slice(css.indexOf(".auth .auth-captcha__frame[data-shown] {"));
+    const opened = open.slice(0, open.indexOf("}"));
+    expect(opened).toMatch(/height:\s*auto/);
+    expect(opened).toMatch(/margin-top:\s*8px/);
+    // The parts of the check are not spaced by a gap: one would be drawn
+    // around the closed frame, which is always in the page.
+    expect(css).toMatch(/\.auth \.auth-captcha \{ display: grid; gap: 0; min-width: 0; \}/);
+  });
+
+  it("never takes Cloudflare's frame out of the page", () => {
+    /*
+     * While nothing has to be pressed, Turnstile keeps its iframe rendered by
+     * itself — one fixed pixel — and that is how the check runs unseen. A
+     * `display: none` (or `visibility: hidden`, or `content-visibility`) on
+     * anything around it would stop the iframe being rendered. A stand with
+     * test keys cannot show the difference: a test key runs no real challenge.
+     * So the rule is pinned here, for every selector that names the frame or
+     * the element Turnstile is rendered into.
+     */
+    const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    const rules = [...bare.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selector]) => /auth-captcha__(frame|widget)/.test(selector ?? ""));
+    expect(rules.length).toBeGreaterThanOrEqual(2);
+    for (const [, selector, body] of rules) {
+      expect(body, selector).not.toMatch(/display:\s*none/);
+      expect(body, selector).not.toMatch(/visibility:\s*(hidden|collapse)/);
+      expect(body, selector).not.toMatch(/content-visibility/);
+    }
+    // Nor may the closed frame become the containing block of that fixed pixel
+    // and clip it: nothing that makes one is declared on it.
+    const block = bare.slice(bare.indexOf(".auth .auth-captcha__frame {"));
+    const closed = block.slice(0, block.indexOf("}"));
+    for (const property of ["transform", "filter", "perspective", "contain", "will-change", "backdrop-filter"]) {
+      expect(closed, property).not.toMatch(new RegExp(`(^|[\\s;])${property}\\s*:`));
+    }
+  });
+
+  it("marks the check with a ring that turns and a tick, never with the Signal", () => {
+    // The line and its mark, up to the rules of the retry link that follow them.
+    const start = css.indexOf(".auth .auth-captcha__status {");
+    const end = css.indexOf(".auth .auth-captcha__failure { display: grid");
+    expect(end).toBeGreaterThan(start);
+    const rules = css.slice(start, end).replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(rules).toContain(".auth .auth-captcha__status::before");
+    expect(rules).toContain("animation: auth-captcha-turn 900ms linear infinite");
+    expect(rules).toContain('.auth .auth-captcha[data-phase="passed"] .auth-captcha__status::before');
+    // The page's one Signal is its action. A check that passed is not an action.
+    expect(rules).not.toMatch(/signal/);
+    // Under a stated preference the ring stands still.
+    const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reduced.slice(0, reduced.indexOf("\n}"))).toContain(".auth .auth-captcha__status::before { animation: none; }");
   });
 
   it("keeps every control at a real target size", () => {

@@ -16,6 +16,23 @@ vi.mock("@/config/academy-config", () => ({
   getAcademyConfig: () => ({ mode: "api", turnstileSiteKey: null, backendOrigin: "https://b.invalid", requestTimeoutMs: 1000 }),
 }));
 
+/* ACCOUNT RECOVERY made both pages async server components: they ask the
+   Backend what it can do before they offer anything that ends in an email. A
+   test resolves the page first, and the read is substituted — "cannot send
+   mail" by default, which is the state these guards were written for. */
+/* Signed out by default: the pages send a confirmed viewer onward (2026-10-04). */
+vi.mock("@/server/auth/server-session", () => ({
+  readServerSession: vi.fn(async () => ({ kind: "signed-out" })),
+}));
+vi.mock("@/server/auth/account-read", () => ({
+  readAccountCapabilities: vi.fn(async () => ({ passwordRecovery: false, emailVerification: false, emailChange: false })),
+  readRegistrationOpensLearning: vi.fn(async () => null),
+}));
+type PageComponent = () => Promise<React.ReactElement> | React.ReactElement;
+async function page(Page: PageComponent): Promise<React.ReactElement> {
+  return await Page();
+}
+
 /**
  * ATA-AUTH-THRESHOLD-CONTINUITY-1 — the door reads like the house.
  *
@@ -36,7 +53,12 @@ const git = (...a: string[]) =>
 
 /** Everything that performs authentication. None of it may move. */
 const UNTOUCHED = [
-  "src/features/auth/login-form.tsx",
+  /* `login-form.tsx` is no longer frozen here: ACCOUNT RECOVERY (2026-10-01) was
+     authorised to add one prop and one link — «Забыли пароль?», rendered only
+     where the Backend can send a reset message. What authenticates is still
+     pinned, line by line, in the test below and in login-form.test.tsx; the
+     byte-identity of the whole file would now fail for the one reason that was
+     authorised. */
   /* `register-form.tsx` is no longer frozen here: ATA-PROFILE-FOUNDATION-1 was
      authorised to make the name required and to drop the password-composition
      copy, and register-form.test.tsx governs that file in detail — the DTO it
@@ -44,9 +66,23 @@ const UNTOUCHED = [
      Freezing it in two places would mean the looser of the two fails first, for
      the least informative reason. What it must NOT do is still asserted below,
      against the file as it stands. */
-  "src/features/auth/turnstile-widget.tsx",
+  /* `turnstile-widget.tsx` is no longer frozen here: the owner's review of
+     2026-10-02 («окно капчи слишком выделяется и не соответствует нам») was an
+     order to change what the visitor SEES of the check — the box is drawn only
+     when it has something to ask, in the page's one theme, and a line of the
+     form stands in its place. What the widget DOES is unchanged and is pinned in
+     detail by turnstile-widget.test.tsx: the script loaded once, the action
+     stamped, every token-destroying callback wired, a reset issuing a fresh
+     challenge, the instance removed on unmount, the token never persisted. The
+     assertion below still holds it to its error callback. */
   "src/features/auth/session-machine.ts",
-  "src/features/auth/session-provider.tsx",
+  /* `session-provider.tsx` is no longer frozen here: the owner's sign-in and
+     session audit (2026-10-07: «проверь какие потенциально баги могут быть в
+     нашей системе логина/сессий и устрани их») authorised one change — «Выйти»
+     returns to /login with a full load instead of a router transition, so no
+     page of the account stays in the app's memory for Back to bring out on a
+     shared computer. session-provider.test.tsx governs the file: the mutation
+     runs, the viewer is cleared, /login follows, drafts are never touched. */
   "src/features/auth/auth.css",
   /* `src/middleware.ts` is no longer frozen here. TOOLS-V2 NEWS (2026-09-21) was
      authorised to let anonymous visitors reach the public news pages and the
@@ -89,8 +125,8 @@ describe("the threshold composition", () => {
   ] as const;
 
   // 1 · 2
-  it.each(pages)("%s has exactly one h1, and it is the threshold line", (_n, Page, heading) => {
-    const { container } = render(<Page />);
+  it.each(pages)("%s has exactly one h1, and it is the threshold line", async (_n, Page, heading) => {
+    const { container } = render(await page(Page));
     const h1s = container.querySelectorAll("h1");
     expect(h1s).toHaveLength(1);
     expect(h1s[0]!.textContent).toBe(heading);
@@ -107,14 +143,15 @@ describe("the threshold composition", () => {
     expect(src("src/styles/fonts.css")).toContain('font-family:"ATA Source Serif 4"');
     expect(css).not.toContain("@font-face");
     expect(css).not.toContain("@import");
-    // And the face stays out of the authenticated product, which is what
-    // FONT_ROLES.publicDisplay actually forbids.
-    expect(src("src/design-system/typography/typography.ts")).toContain("Public Home ONLY");
+    // The face was Public Home's alone; since 2026-10-03 (DD-338, owner: «хай
+    // фай всего») the product's statements and titles speak in it too — and
+    // still never its body text, controls or numbers.
+    expect(src("src/design-system/typography/typography.ts")).toContain("Never body text, controls or numbers");
   });
 
   // 13
-  it.each(pages)("%s keeps its cross-link, worded as the action", (_n, Page, _h, _e, target) => {
-    const { container } = render(<Page />);
+  it.each(pages)("%s keeps its cross-link, worded as the action", async (_n, Page, _h, _e, target) => {
+    const { container } = render(await page(Page));
     const links = [...container.querySelectorAll("a")].map((a) => a.getAttribute("href"));
     expect(links).toContain(target);
     const text = container.textContent ?? "";
@@ -122,14 +159,14 @@ describe("the threshold composition", () => {
   });
 
   // 14
-  it.each(pages)("%s offers exactly one primary action", (_n, Page) => {
-    const { container } = render(<Page />);
+  it.each(pages)("%s offers exactly one primary action", async (_n, Page) => {
+    const { container } = render(await page(Page));
     expect(container.querySelectorAll('button[type="submit"]')).toHaveLength(1);
   });
 
   // 15 · 16
-  it.each(pages)("%s frames the real form, never an empty panel", (_n, Page) => {
-    const { container } = render(<Page />);
+  it.each(pages)("%s frames the real form, never an empty panel", async (_n, Page) => {
+    const { container } = render(await page(Page));
     const frame = container.querySelector(".auth__frame");
     expect(frame, "the frame is missing").not.toBeNull();
     expect(container.querySelectorAll(".auth__frame")).toHaveLength(1);
@@ -235,8 +272,8 @@ describe("the threshold composition", () => {
   });
 
   // 19 · 20 — asserted on the rendered page as well as by byte-identity above.
-  it.each(pages)("%s keeps its error and pending affordances", (_n, Page) => {
-    const { container } = render(<Page />);
+  it.each(pages)("%s keeps its error and pending affordances", async (_n, Page) => {
+    const { container } = render(await page(Page));
     const submit = container.querySelector('button[type="submit"]') as HTMLButtonElement;
     // Turnstile has not solved in a test environment, so the control is held —
     // which is the pending/disabled contract this phase must not weaken.
@@ -246,9 +283,9 @@ describe("the threshold composition", () => {
     expect((container.querySelector('input[name="password"]') as HTMLInputElement).type).toBe("password");
   });
 
-  it("keeps every visible label bound to its input", () => {
+  it("keeps every visible label bound to its input", async () => {
     for (const [, Page] of pages) {
-      const { container } = render(<Page />);
+      const { container } = render(await page(Page));
       for (const input of container.querySelectorAll("input:not([type=hidden])")) {
         const id = input.getAttribute("id");
         expect(id, "an input has no id to bind a label to").toBeTruthy();

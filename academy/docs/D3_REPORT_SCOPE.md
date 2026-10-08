@@ -287,7 +287,7 @@ trading terminal · document editor с сотней controls.
 
 **Сохранить:** deep navy · холодный синий · restrained green/cyan · один доминирующий рабочий объект ·
 строгая типографика · функциональная глубина · contextual metadata · спокойная плотность ·
-Learning Spine как связующий мотив (если уместен) · текущий shell Alfa Trade Academy.
+Learning Spine как связующий мотив (если уместен) · текущий shell Alpha Trade Academy.
 
 **Избегать:** glass blur · gradient glow · progress rings · confetti · gamification dominance ·
 большие декоративные hero · множество одинаковых cards · avatar наставника · countdown ·

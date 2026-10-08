@@ -32,6 +32,7 @@ import {
   isCurriculumLevelCompletionError,
   type CurriculumLevelCompletedResult,
 } from "@/lib/curriculum/completion";
+import { UNSAFE_TEXT } from "@/lib/text/unsafe-text";
 
 const MAX_INT = 2_147_483_647;
 const CLAIM_LEASE_MS = 60 * 60 * 1_000;
@@ -39,7 +40,7 @@ const MAX_TRANSACTION_ATTEMPTS = 3;
 const REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{7,127}$/;
 const STABLE_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const FINGERPRINT = /^sha256:[a-f0-9]{64}$/;
-const UNSAFE_TEXT = /<\/?[a-z][^>]*>|\bon[a-z]+\s*=|javascript\s*:|data\s*:/i;
+// One screen for every stored prose field: src/lib/text/unsafe-text.ts (2026-10-04).
 const REASSIGN_REASONS = [
   "reviewer_unavailable",
   "claim_stale",

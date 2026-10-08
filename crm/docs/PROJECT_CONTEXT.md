@@ -1,4 +1,4 @@
-# PROJECT_CONTEXT.md — Alfa Trade Academy CRM
+# PROJECT_CONTEXT.md — Alpha Trade Academy CRM
 
 > Phase 0 (обновлено в Phase 0.5) · Systematized product context. Документ фиксирует, **что** мы строим и **в каких границах**, до написания кода.
 > Статус: Архитектура принята; продуктовые решения зафиксированы в DECISIONS.md. Источник: Project Instructions + Project Context (synced 2026-07-12).
@@ -8,9 +8,9 @@
 
 ## 1. Резюме
 
-Alfa Trade Academy — образовательная платформа по трейдингу с последовательным маршрутом обучения (уровни → уроки → тесты → сценарии → практика → reports → mentor review), системой XP и финансовыми checkpoints, привязанными к реальному балансу торгового аккаунта в Pocket.
+Alpha Trade Academy — образовательная платформа по трейдингу с последовательным маршрутом обучения (уровни → уроки → тесты → сценарии → практика → reports → mentor review), системой XP и финансовыми checkpoints, привязанными к реальному балансу торгового аккаунта в Pocket.
 
-**Alfa Trade Academy CRM** — отдельное внутреннее приложение для сотрудников (retention, mentoring, support, moderation, analytics, product operations). Это **не** админ-панель для редактирования таблиц, а операционная система сопровождения пользователя: она отвечает на вопрос «кто требует внимания сегодня и что с этим делать».
+**Alpha Trade Academy CRM** — отдельное внутреннее приложение для сотрудников (retention, mentoring, support, moderation, analytics, product operations). Это **не** админ-панель для редактирования таблиц, а операционная система сопровождения пользователя: она отвечает на вопрос «кто требует внимания сегодня и что с этим делать».
 
 CRM разрабатывается **полностью отдельно** от основного продукта, на первом этапе — только на synthetic/mock data, без какого-либо доступа к production. Реальные данные подключаются позже через отдельный защищённый API, **без переписывания UI**.
 
@@ -112,7 +112,7 @@ Checkpoint проверяет **подтверждённый real balance Pocket
 ## 7. Границы и запреты первого этапа
 
 **Запрещено на Phase 0/первой стадии:**
-подключаться к backend или production database Alfa Trade Academy; использовать production users; отправлять реальные сообщения; менять реальные lifecycle/owner; инициировать финансовые операции; делать production deploy; выдавать frontend role fixture за production RBAC.
+подключаться к backend или production database Alpha Trade Academy; использовать production users; отправлять реальные сообщения; менять реальные lifecycle/owner; инициировать финансовые операции; делать production deploy; выдавать frontend role fixture за production RBAC.
 
 **Разрешено:** проектировать; работать с synthetic/mock data; строить UI и контракты. Все изменяющие действия в UI **явно** помечаются как mock/local.
 

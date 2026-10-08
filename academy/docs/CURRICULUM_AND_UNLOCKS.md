@@ -3,7 +3,7 @@
 Канонический источник: `les-prog.txt`.
 Этот документ не переписывает смысл программы. Он структурирует её в стабильные коды и фиксирует mapping уровней, checkpoints, tool unlocks, community unlocks, reports и mentor reviews.
 
-> Legacy note: в `les-prog.txt` встречается старое название **TradeQuest**. Во всех пользовательских текстах используется только **Alfa Trade Academy**. Смысл уроков сохранён без изменений.
+> Legacy note: в `les-prog.txt` встречается старое название **TradeQuest**. Во всех пользовательских текстах используется только **Alpha Trade Academy**. Смысл уроков сохранён без изменений.
 
 > Legacy note (D0.1): в `les-prog.txt` урок L1 назван «Подключение Pocket». По утверждённой продуктовой логике пользователь **не подключает и не связывает** аккаунт — это **регистрация**. Пользовательское название уровня — «Регистрация Pocket»; смысл урока не изменён. См. DD-175/DD-176.
 
@@ -52,7 +52,7 @@ Human-readable названия из `les-prog.txt` **не меняются**. �
 | Level | Code | Модуль | Название урока (canonical) | Тип | Артефакт | Mentor | Checkpoint $ | Unlock |
 |------:|------|--------|----------------------------|-----|----------|:------:|:-----------:|--------|
 | 1 | level.001 | module.01 Первое знакомство | Регистрация Pocket [^l1] | task | Pocket registration | — | — | — |
-| 2 | level.002 | module.01 | Как устроен Alfa Trade Academy | video+test | course mechanics test | — | — | — |
+| 2 | level.002 | module.01 | Как устроен Alpha Trade Academy | video+test | course mechanics test | — | — | — |
 | 3 | level.003 | module.01 | Первые пять demo-сделок | report | отчёт по 5 demo-сделкам | — | — | — |
 | 4 | level.004 | module.01 | Контрольная точка $50 | checkpoint | — | — | **$50** | rank.observer_1 · channel.start_questions |
 | 5 | level.005 | module.02 Как работает сделка | Жизненный цикл сделки | video+test | — | — | — | — |
@@ -280,5 +280,5 @@ L1 (Pocket registration), L3 (5 demo-сделок), L9 (checklist), L14 (Risk Pl
 - [x] Ни один threshold не выдуман.
 - [x] Ни один report не пропущен.
 - [x] Ни один обязательный mentor review не пропущен.
-- [x] Legacy «TradeQuest» заменён на «Alfa Trade Academy» во всех пользовательских формулировках; смысл уроков не изменён.
+- [x] Legacy «TradeQuest» заменён на «Alpha Trade Academy» во всех пользовательских формулировках; смысл уроков не изменён.
 - [x] Community unlocks: L4, L20, L35, L45, L85.

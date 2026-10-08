@@ -11,6 +11,7 @@ import {
   login,
   logout,
   resetCsrfTokenForTests,
+  SHARED_CSRF_COOKIE_NAME,
 } from "./auth-client";
 
 const TOKEN = "a".repeat(64);
@@ -154,6 +155,27 @@ describe("CSRF token", () => {
       const fetchImpl = vi.fn().mockResolvedValue(json(body));
       expect(await ensureCsrfToken({ fetchImpl }), JSON.stringify(body)).toBeNull();
     }
+  });
+
+  /* 2026-10-07 audit: a token held in one tab's memory went stale the moment
+     another tab fetched a pair, and every write from the first tab was refused. */
+  it("takes the token from the cookie every tab shares, at each use", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(json({ csrfToken: TOKEN }));
+    try {
+      expect(await ensureCsrfToken({ fetchImpl })).toBe(TOKEN);
+      const fromAnotherTab = "d".repeat(64);
+      document.cookie = `${SHARED_CSRF_COOKIE_NAME}=${fromAnotherTab}; path=/`;
+      expect(await ensureCsrfToken({ fetchImpl })).toBe(fromAnotherTab);
+      await expect(csrfHeaders({ fetchImpl })).resolves.toEqual({ [CSRF_HEADER_NAME]: fromAnotherTab });
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    } finally {
+      document.cookie = `${SHARED_CSRF_COOKIE_NAME}=; max-age=0; path=/`;
+    }
+  });
+
+  it("reads the cookie the server bridges onto this origin", async () => {
+    const { CSRF_COOKIE_NAME } = await import("@/server/set-cookie-bridge");
+    expect(SHARED_CSRF_COOKIE_NAME).toBe(CSRF_COOKIE_NAME);
   });
 
   it("discards the cached token after a successful login", async () => {

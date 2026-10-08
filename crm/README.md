@@ -1,8 +1,8 @@
-# Alfa Trade Academy CRM
+# Alpha Trade Academy CRM
 
-Отдельное внутреннее приложение для команды Alfa Trade Academy (retention, mentoring, support, operations). **Полностью самостоятельный проект.** На текущем этапе — только synthetic/mock data, без backend, базы данных, Pocket и production-интеграции.
+Отдельное внутреннее приложение для команды Alpha Trade Academy (retention, mentoring, support, operations). **Полностью самостоятельный проект.** На текущем этапе — только synthetic/mock data, без backend, базы данных, Pocket и production-интеграции.
 
-> **DEMO / MOCK MODE.** Приложение не подключается к production Alfa Trade Academy. Переключатель роли и «вход» — демонстрационные и **не являются production-безопасностью**.
+> **DEMO / MOCK MODE.** Приложение не подключается к production Alpha Trade Academy. Переключатель роли и «вход» — демонстрационные и **не являются production-безопасностью**.
 
 Статус реализации: **Phase 1B6 — Note Delete** поверх Phase 1B5-C (Note Visibility Change), Phase 1B5-B (Global Audit Workspace), Phase 1B4-E (Note Body Edit), Phase 1B4-D (Note Pin / Unpin), Phase 1B4-C (Primary Owner Assignment), Phase 1B4-B (Notes UI), Phase 1B4-A (mutation core), Phase 1B3 Today Workspace, Phase 1C User 360, Phase 1B2 Users workspace и Phase 1B1 mock-домена.
 
@@ -53,7 +53,7 @@ NEXT_PUBLIC_ENABLE_ROLE_SWITCH=true    # dev-only переключатель р�
 
 ## Отсутствие production-интеграции
 
-Проект не открывает и не меняет основной сайт Alfa Trade Academy, его backend, production-базу, Prisma-схему или Pocket. Никаких реальных пользовательских данных, Pocket payload, секретов или deploy. Интеграция позже — через отдельный защищённый API, без переписывания UI.
+Проект не открывает и не меняет основной сайт Alpha Trade Academy, его backend, production-базу, Prisma-схему или Pocket. Никаких реальных пользовательских данных, Pocket payload, секретов или deploy. Интеграция позже — через отдельный защищённый API, без переписывания UI.
 
 ## Структура проекта
 

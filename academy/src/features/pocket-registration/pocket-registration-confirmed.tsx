@@ -33,7 +33,7 @@ export function PocketRegistrationConfirmed({
         Регистрация в Pocket подтверждена
       </h2>
       <p className="pocket-reg__explain">
-        Pocket подтвердил твою регистрацию, и уровень закрылся автоматически.
+        Pocket подтвердил вашу регистрацию, и уровень завершился автоматически.
         Ничего отмечать вручную не нужно.
       </p>
       {nextLevelCode !== null ? (

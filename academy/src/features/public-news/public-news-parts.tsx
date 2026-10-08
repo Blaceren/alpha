@@ -25,7 +25,7 @@ export function PublicNewsHeader({ authenticated, current }: { authenticated: bo
   return (
     <header className="pn-header">
       <div className="shell pn-header__inner">
-        <Link className="wordmark" href="/" aria-label="Alfa Trade Academy — на главную">
+        <Link className="wordmark" href="/" aria-label="Alpha Trade Academy — на главную">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/ata-logo.svg" alt="" width={362} height={200} />
         </Link>
@@ -60,7 +60,7 @@ export function PublicNewsFooter() {
   return (
     <footer className="site-footer pn-footer">
       <div className="shell site-footer__grid">
-        <p>© {new Date().getFullYear()} Alfa Trade Academy</p>
+        <p>© {new Date().getFullYear()} Alpha Trade Academy</p>
         <p>Новости — учебный материал Академии: не торговый сигнал и не инвестиционная рекомендация.</p>
         <p className="site-footer__legal">Обучение и прохождение ATA не гарантируют финансовый результат.</p>
       </div>

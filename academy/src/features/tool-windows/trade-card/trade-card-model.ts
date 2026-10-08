@@ -12,6 +12,7 @@
  * trade and nothing else — no total, no P/L, no win rate (DD-303/DD-304). Amounts
  * travel as decimal strings ("8.00") and are computed in integer cents.
  */
+import { PAYOUT_MESSAGE, parsePayoutPercent } from "../model/numeric-input";
 
 /* ------------------------------------------------------------------ types */
 
@@ -131,12 +132,8 @@ export function draftOutcomes(draft: Pick<TradeCardDraft, "amount" | "payoutPerc
   return { ifRight: formatMinor(ifRightMinor), ifWrong: formatMinor(ifWrongMinor) };
 }
 
-function parsePayout(raw: string): number | null {
-  const trimmed = raw.trim().replace("%", "").trim();
-  if (!/^\d{1,3}$/.test(trimmed)) return null;
-  const value = Number(trimmed);
-  return value >= 1 && value <= 100 ? value : null;
-}
+/** A whole percent inside the tools' payout limits (`numeric-input.ts`), or null. */
+const parsePayout = parsePayoutPercent;
 
 /* ------------------------------------------------------------- the draft */
 
@@ -170,10 +167,10 @@ const MESSAGES: Record<DraftField, string> = {
   asset: "Выберите актив из списка.",
   direction: "Выберите направление: выше или ниже.",
   amount: "Сумма — число больше нуля, до двух знаков после точки.",
-  payoutPercent: "Payout — целое число от 1 до 100.",
+  payoutPercent: PAYOUT_MESSAGE,
   expiry: "Выберите экспирацию.",
   entryTime: "Время входа в формате ЧЧ:ММ.",
-  reason: `Запишите причину входа — от ${TRADE_CARD_LIMITS.reasonMin} символов.`,
+  reason: `Запишите основание входа — от ${TRADE_CARD_LIMITS.reasonMin} символов.`,
 };
 
 export function fieldMessage(field: DraftField): string {
@@ -200,7 +197,7 @@ export function validateDraft(
   const reason = draft.reason.trim();
   if (reason.length < TRADE_CARD_LIMITS.reasonMin) errors.reason = MESSAGES.reason;
   else if (reason.length > TRADE_CARD_LIMITS.reasonMax) {
-    errors.reason = `Причина — не длиннее ${TRADE_CARD_LIMITS.reasonMax} символов.`;
+    errors.reason = `Основание — не длиннее ${TRADE_CARD_LIMITS.reasonMax} символов.`;
   }
 
   if (Object.keys(errors).length > 0 || amountMinor === null || payout === null) return { ok: false, errors };

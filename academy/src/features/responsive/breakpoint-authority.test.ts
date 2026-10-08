@@ -245,6 +245,9 @@ type Allowed = {
  * with an empty reason and an entry naming the wrong side are all failures.
  */
 const ALLOWLIST: Allowed[] = [
+  { value: 359, side: "max-width", files: ["src/features/home/home.css", "src/features/public-home/public-home.css", "src/features/tool-windows/tool-windows.css"], role: "phone-trim",
+    surfaces: ["authenticated", "public-home"], disposition: "CONTENT_DRIVEN_KEEP",
+    why: "The narrowest phones (320): the phone top bar's section label no longer fits beside the bell, the avatar and «Выйти» and was cut to «ИНСТР…»; a tool's three-way choice gives each word 55px and «Прибыль» ran out of it. Both measured at 320, both fine at 360. Public Home's header, signed in, says «В Академию» instead of «Перейти в Академию» beside «Меню»: the pill's content is 269px at 320 and the full words need 299 (measured 2026-10-07), from 360 they fit." },
   { value: 380, side: "max-width", files: ["src/features/lesson/lesson.css"], role: "phone-trim",
     surfaces: ["authenticated"], disposition: "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
     why: "Within 20px of 360 and 400 doing similar padding work on different components; consolidation needs a visual pass on routes that require a session." },
@@ -254,7 +257,7 @@ const ALLOWLIST: Allowed[] = [
   { value: 400, side: "max-width", files: ["src/features/checkpoint/level-checkpoint.css", "src/features/lessons-library/lessons-library.css"], role: "phone-trim",
     surfaces: ["authenticated"], disposition: "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
     why: "Gate stack and library row; 10px from 390 and 20px from 380 and 420 with different owners." },
-  { value: 420, side: "max-width", files: ["src/features/assessment/assessment.css", "src/features/level-detail-fidelity/level-detail-fidelity.css"], role: "phone-trim",
+  { value: 420, side: "max-width", files: ["src/features/assessment/assessment.css", "src/features/level-detail-fidelity/level-detail-fidelity.css", "src/features/level-detail-fidelity/level-lesson.css"], role: "phone-trim",
     surfaces: ["authenticated"], disposition: "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
     why: "Same two consumer routes as 390 but a different component and only one shared property." },
   { value: 430, side: "max-width", files: ["src/features/auth/auth-stage.css"], role: "phone-trim",
@@ -287,7 +290,7 @@ const ALLOWLIST: Allowed[] = [
   { value: 767, side: "max-width", files: ["src/features/auth-home-fidelity/auth-home-fidelity.css"], role: "home-local",
     surfaces: ["authenticated"], disposition: "CONFLICTING_CASCADE",
     why: "Home declares its own ladder (--h-breakpoint-desktop 1023 / tablet 767 / mobile 599) as custom properties that a media prelude cannot read. Two of the three values contradict DESIGN_SYSTEM.md §6. Recorded, not resolved: fixing it means moving Home's field, which is a separate authorised change." },
-  { value: 860, side: "max-width", files: ["src/features/academy-experience/experience.css", "src/features/level-detail-fidelity/level-detail-fidelity.css"], role: "content-stack",
+  { value: 860, side: "max-width", files: ["src/features/academy-experience/experience.css", "src/features/level-detail-fidelity/level-detail-fidelity.css", "src/features/level-detail-fidelity/level-lesson.css"], role: "content-stack",
     surfaces: ["authenticated"], disposition: "NEAR_DUPLICATE_NEEDS_VISUAL_PROOF",
     why: "39px below the shell edge and doing structural work of its own; whether it can move onto 899 needs a rendered comparison on a route that requires a session." },
   { value: 899.98, side: "max-width", files: ["src/features/level-detail-fidelity/level-detail-fidelity.css"], role: "shell-desktop",
@@ -317,6 +320,12 @@ const ALLOWLIST: Allowed[] = [
   { value: 1339, side: "max-width", files: ["src/features/workspace-fidelity/workspace-fidelity.css"], role: "wide-reading",
     surfaces: ["authenticated"], disposition: "CONTENT_DRIVEN_KEEP",
     why: "Workspace column at its own measure, the counterpart of the 1560 opening below." },
+  { value: 1340, side: "max-width", files: ["src/features/public-home/public-home.css"], role: "public-home",
+    surfaces: ["public-home"], disposition: "CONTENT_DRIVEN_KEEP",
+    why: "The cycle goes six columns to three. Set by the product objects under each step, not by the shell: below a 1244px shell a column is under 190px and the longest action breaks into three lines (measured at 1280 on 2026-10-01, 177px columns). 1px from the workspace's 1339 by coincidence: different surface, different grid, opposite job." },
+  { value: 1403, side: "max-width", files: ["src/components/media/academy-video-player.css"], role: "wide-reading",
+    surfaces: ["shared"], disposition: "CONTENT_DRIVEN_KEEP",
+    why: "Where the docked lesson player leaves the corner for the strip: from 1404px the gutter beside the lesson page's 860px column holds a 240px picture with 16px of air on each side; below it the corner would cover the ends of the column's lines (the open item of DD-336, measured 900–1683px)." },
   { value: 1500, side: "min-width", files: ["src/features/reader-fidelity/reader-fidelity.css"], role: "wide-reading",
     surfaces: ["authenticated"], disposition: "CONTENT_DRIVEN_KEEP",
     why: "Reader takes the extra column only when there is genuinely room for it." },
@@ -411,11 +420,19 @@ describe("the canon is the document's, not this file's", () => {
     expect(e!.rules).toBeGreaterThan(0);
   });
 
-  it("the shell boundary is the most shared transition in the product", () => {
-    const shell = WIDTH_INVENTORY.get("min-width|900")!;
+  /* The shell's edge was the single most shared transition when the canon was
+     written. The product hi-fi (DD-338, 2026-10-03) gives every page its own
+     phone composition, so the phone's edge is now shared as widely; what still
+     holds is that these two canonical edges carry the product, and no other
+     width is consumed by more files than either of them. */
+  it("the shell boundary and the phone boundary are the most shared transitions in the product", () => {
+    const edges = ["min-width|900", "max-width|599"] as const;
+    for (const edge of edges) expect(WIDTH_INVENTORY.get(edge), edge).toBeTruthy();
     for (const [key, e] of WIDTH_INVENTORY) {
-      if (key === "min-width|900") continue;
-      expect(shell.files.size, `${key} is consumed by more files than the shell boundary`).toBeGreaterThanOrEqual(e.files.size);
+      if ((edges as readonly string[]).includes(key)) continue;
+      for (const edge of edges) {
+        expect(WIDTH_INVENTORY.get(edge)!.files.size, `${key} is consumed by more files than ${edge}`).toBeGreaterThanOrEqual(e.files.size);
+      }
     }
   });
 });

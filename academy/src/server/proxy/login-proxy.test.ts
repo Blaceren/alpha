@@ -101,14 +101,45 @@ describe("login proxy — route matrix", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("still exposes no operation beyond the six named ones", () => {
-    /* ATA-PROFILE-FOUNDATION-1 added `changePassword` and nothing else. The
-       count is the point of this test: an operation that is not named here
-       cannot be reached, so the adjacent Backend auth routes — verify-email,
-       resend-verification, session-status — stay unreachable from a browser. */
+  it("still exposes no operation beyond the named ones", () => {
+    /* ATA-PROFILE-FOUNDATION-1 added `changePassword`. ACCOUNT RECOVERY
+       (2026-10-01) added eight more — the reset, the confirmation of an address
+       and its change — each named, one method, one constant path. The LIST is
+       the point of this test: an operation that is not named here cannot be
+       reached, so `session-status` and every other adjacent Backend route stay
+       unreachable from a browser. */
     expect([...PROXY_OPERATIONS].sort()).toEqual(
-      ["changePassword", "csrf", "login", "logout", "register", "session"].sort(),
+      [
+        "account",
+        "changePassword",
+        "csrf",
+        "emailChangeCancel",
+        "emailChangeConfirm",
+        "emailChangeRequest",
+        "login",
+        "logout",
+        "passwordResetConfirm",
+        "passwordResetRequest",
+        "register",
+        "resendVerification",
+        "session",
+        "verifyEmail",
+      ].sort(),
     );
+    /* The only anonymous operation that raises a challenge claims its OWN
+       surface, so a login or registration token is refused for it. */
+    expect(PROXY_ALLOW_LIST.passwordResetRequest).toEqual({
+      method: "POST",
+      backendPath: "/api/auth/password-reset/request",
+      isLogin: false,
+      hasBody: true,
+      forwardClientIp: true,
+      authSurface: "academy_password_reset",
+    });
+    for (const op of ["passwordResetConfirm", "verifyEmail", "resendVerification", "emailChangeRequest", "emailChangeCancel", "emailChangeConfirm", "account"] as const) {
+      expect(PROXY_ALLOW_LIST[op].authSurface, op).toBeNull();
+      expect(PROXY_ALLOW_LIST[op].isLogin, op).toBe(false);
+    }
     /* The one addition is authenticated and raises no challenge: a wrong current
        password is a 400 from the route, never a 401 the shell would read as an
        expired session, and no Turnstile surface is claimed for it. */

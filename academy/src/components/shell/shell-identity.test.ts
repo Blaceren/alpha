@@ -102,7 +102,6 @@ describe("the shell's unread presence is not route-dependent", () => {
     { file: "src/features/academy-experience/path-screen.tsx", why: "no non-test importer: superseded by path-fidelity" },
     { file: "src/features/curriculum-api/api-screens.tsx", why: "no non-test importer anywhere in src; unreachable from any route" },
     { file: "src/features/curriculum-api/api-level-detail.tsx", why: "no non-test importer anywhere in src; unreachable from any route" },
-    { file: "src/app/(app)/support/page.tsx", why: "REACHABLE and diverging — recorded as SHELL-UNREAD-PRESENCE-SUPPORT-1. Support is an accepted surface; adding the mark changes what a learner with unread notifications sees there, which is the owner's call, not this phase's" },
     { file: "src/app/(app)/community/page.tsx", why: "Community is hidden by product decision; its shells are frozen with it" },
     { file: "src/app/(app)/community/[spaceCode]/page.tsx", why: "Community is hidden by product decision" },
     { file: "src/app/(app)/community/d/[discussionId]/page.tsx", why: "Community is hidden by product decision" },
@@ -174,7 +173,9 @@ describe("every live api route that shows the bell also passes the unread mark",
     { route: "/path/[levelCode]/workspace", shell: "src/features/workspace-fidelity/workspace-fidelity-screen.tsx" },
     { route: "/profile", shell: "src/app/(app)/profile/page.tsx" },
     { route: "/notifications", shell: "src/app/(app)/notifications/page.tsx" },
-    { route: "/support", shell: "src/app/(app)/support/page.tsx" },
+    /* Support is a part of the profile since 2026-10-03; /support only
+       redirects here. */
+    { route: "/profile/support", shell: "src/app/(app)/profile/support/page.tsx" },
     { route: "/tools", shell: "src/app/(app)/tools/page.tsx" },
     { route: "/tools/[slug]", shell: "src/app/(app)/tools/[slug]/page.tsx" },
   ];

@@ -30,6 +30,7 @@
 import { z } from "zod";
 import type { ToolRiskPlan } from "@prisma/client";
 import { ToolError } from "./errors";
+import { PAYOUT_PERCENT } from "./reference";
 import { formatMinor, parseAmountToMinor } from "./trade-card";
 
 export const RISK_CALCULATOR_TOOL_CODE = "tool.risk_calculator" as const;
@@ -129,7 +130,7 @@ export function riskNumbers(inputs: RiskInputs): RiskNumbers {
 
 const planSchema = z.strictObject({
   capital: z.string().max(20),
-  payoutPercent: z.number().int().min(1).max(100),
+  payoutPercent: z.number().int().min(PAYOUT_PERCENT.min).max(PAYOUT_PERCENT.max),
   riskPercent: z.number().int(),
   dailyLimitPercent: z.number().int().min(RISK_LIMITS.minDailyLimitPercent).max(RISK_LIMITS.maxDailyLimitPercent),
   scenario: z.string().max(RISK_LIMITS.maxTextLength * 2),

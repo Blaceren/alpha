@@ -2,9 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   changeJournalEntry,
   createJournalEntry,
+  deleteJournalEntry,
   fetchJournalPage,
   isJournalEntry,
   isJournalPage,
+  isJournalSummary,
   journalPagePath,
 } from "./journal-client";
 
@@ -110,6 +112,71 @@ describe("the Trading Journal client", () => {
     expect(JSON.parse(init.body)).toEqual(change);
   });
 
+  it("replaces an entry whole under the kind «entry», whichever source it came from", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(json({ csrfToken: "tok-3" }))
+      .mockResolvedValueOnce(json({ data: { entry: { ...ENTRY, amount: "5.00", editedAfterCard: true } } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await changeJournalEntry(ENTRY.id, { kind: "entry", ...MANUAL });
+    expect(result.ok && result.data.editedAfterCard).toBe(true);
+    const [path, init] = fetchMock.mock.calls[1]!;
+    expect(path).toBe(`/api/backend/tools/journal/${ENTRY.id}`);
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body)).toEqual({ kind: "entry", ...MANUAL });
+  });
+
+  it("deletes an entry with DELETE on its own path — a token, no body — and hands back the counts", async () => {
+    const summary = { total: 0, onPlan: 0, violated: 0, unmarked: 0, withoutConclusion: 0 };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(json({ csrfToken: "tok-4" }))
+      .mockResolvedValueOnce(json({ data: { deleted: { id: ENTRY.id }, summary } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(deleteJournalEntry(ENTRY.id)).resolves.toEqual({ ok: true, data: summary });
+    const [path, init] = fetchMock.mock.calls[1]!;
+    expect(path).toBe(`/api/backend/tools/journal/${ENTRY.id}`);
+    expect(init.method).toBe("DELETE");
+    expect(init.headers["x-csrf-token"]).toBe("tok-4");
+    expect(init.headers["content-type"]).toBeUndefined();
+    expect(init.body).toBeUndefined();
+  });
+
+  it("does not take an answer about another entry, or one without counts, for a delete", async () => {
+    const summary = { total: 3, onPlan: 1, violated: 1, unmarked: 1, withoutConclusion: 2 };
+    for (const data of [
+      { deleted: { id: "cm4j0urnal9999abcdefghij" }, summary },
+      { deleted: { id: ENTRY.id } },
+      { deleted: { id: ENTRY.id }, summary: { ...summary, total: -1 } },
+      { summary },
+    ]) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValueOnce(json({ csrfToken: "tok" })).mockResolvedValueOnce(json({ data })),
+      );
+      const result = await deleteJournalEntry(ENTRY.id);
+      expect(!result.ok && result.error.category, JSON.stringify(data)).toBe("MALFORMED_RESPONSE");
+    }
+  });
+
+  it("hands back the Backend's «not found» for a delete, and sends nothing without a token", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(json({ csrfToken: "tok" }))
+        .mockResolvedValueOnce(json({ error: "JOURNAL_ENTRY_NOT_FOUND" }, 404)),
+    );
+    const gone = await deleteJournalEntry(ENTRY.id);
+    expect(!gone.ok && gone.error.code).toBe("JOURNAL_ENTRY_NOT_FOUND");
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(json({ error: "UNAUTHENTICATED" }, 401));
+    vi.stubGlobal("fetch", fetchMock);
+    const refused = await deleteJournalEntry(ENTRY.id);
+    expect(refused.ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("hands back the Backend's code and the refused field", async () => {
     vi.stubGlobal(
       "fetch",
@@ -135,6 +202,12 @@ describe("the Trading Journal client", () => {
     expect(isJournalEntry({ ...ENTRY, result: "draw" })).toBe(false);
     expect(isJournalEntry({ ...ENTRY, planFollowed: "yes" })).toBe(false);
     expect(isJournalEntry({ ...ENTRY, violations: [1] })).toBe(false);
+    // The mark of an entry corrected after its card: a boolean, or — from an older Backend — absent.
+    expect(isJournalEntry({ ...ENTRY, editedAfterCard: true })).toBe(true);
+    expect(isJournalEntry({ ...ENTRY, editedAfterCard: false })).toBe(true);
+    expect(isJournalEntry({ ...ENTRY, editedAfterCard: "yes" })).toBe(false);
+    expect(isJournalSummary(PAGE.summary)).toBe(true);
+    expect(isJournalSummary({ ...PAGE.summary, unmarked: undefined })).toBe(false);
     expect(isJournalPage(PAGE)).toBe(true);
     expect(isJournalPage({ ...PAGE, filter: "mine" })).toBe(false);
     expect(isJournalPage({ ...PAGE, summary: { ...PAGE.summary, total: 1.5 } })).toBe(false);

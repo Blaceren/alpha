@@ -144,7 +144,7 @@ describe("unlock mapping", () => {
 });
 
 describe("naming rules", () => {
-  it("no user-facing string contains TradeQuest or Alpha Trade", () => {
+  it("no user-facing string contains TradeQuest or the retired spelling «Alfa»", () => {
     const strings: string[] = [];
     for (const mod of CURRICULUM.modules) {
       strings.push(mod.title, mod.description);
@@ -159,13 +159,14 @@ describe("naming rules", () => {
     }
     for (const s of strings) {
       expect(s).not.toMatch(/tradequest/i);
-      expect(s).not.toMatch(/alpha\s*trade/i);
+      // The product is Alpha Trade Academy (owner, 2026-10-03); «Alfa» is the retired spelling.
+      expect(s).not.toMatch(/alfa\s*trade/i);
     }
   });
 
-  it("the product name appears only as Alfa Trade Academy", () => {
+  it("the product name appears only as Alpha Trade Academy", () => {
     const l2 = CURRICULUM.levels[1];
-    expect(l2?.title).toBe("Как устроен Alfa Trade Academy");
+    expect(l2?.title).toBe("Как устроен Alpha Trade Academy");
   });
 
   it("threshold formatting is deterministic", () => {

@@ -314,6 +314,291 @@ describe("the authenticated route group", () => {
   "src/server/curriculum/server-read.ts",
   "src/server/learner-ops/server-read.ts",
   "src/server/notifications/unread-presence.ts",
+  /* ACCOUNT RECOVERY (owner, 2026-10-01: «сброс пароля / восстановление пароля,
+     подтверждение и смена почты»). The request for a reset link and the three
+     pages a link from an email opens — outside the route group, on the auth
+     stage; their forms; the browser client, the link-token reader and the
+     shapes they share; the server reads of the Backend's capabilities and of
+     the learner's own address; eight named proxy operations and their routes;
+     the capability-gated «Забыли пароль?» on the login form; and the profile's
+     email row, which acts only where the Backend can send mail and is unchanged
+     everywhere else (PREPROD among them). */
+  "src/app/(app)/profile/page.tsx",
+  "src/app/api/backend/auth/email-change/confirm/route.ts",
+  "src/app/api/backend/auth/password-reset/confirm/route.ts",
+  "src/app/api/backend/auth/password-reset/request/route.ts",
+  "src/app/api/backend/auth/resend-verification/route.ts",
+  "src/app/api/backend/auth/verify-email/route.ts",
+  "src/app/api/backend/profile/account/route.ts",
+  "src/app/api/backend/profile/email-change/cancel/route.ts",
+  "src/app/api/backend/profile/email-change/route.ts",
+  "src/app/confirm-email/page.tsx",
+  "src/app/forgot-password/page.tsx",
+  "src/app/reset-password/page.tsx",
+  "src/app/verify-email/page.tsx",
+  "src/features/auth/forgot-password-form.tsx",
+  "src/features/auth/link-confirmation.tsx",
+  "src/features/auth/login-form.tsx",
+  "src/features/auth/reset-password-form.tsx",
+  "src/lib/account/account-client.ts",
+  "src/lib/account/account-types.ts",
+  "src/lib/account/link-token.ts",
+  "src/lib/auth/turnstile.ts",
+  "src/server/auth/account-read.ts",
+  "src/server/proxy/auth-surface.ts",
+  /* The owner's review of 2026-10-02. The tools' own date, time and payout
+     fields — three components, the panel they share and the three models they
+     stand on — in place of the browser's date and time inputs and of a text
+     field that took any character. And the check on the sign-in pages: the
+     widget now asks Cloudflare to draw its box only when it has something to
+     ask, and the test double grew the two callbacks that say when. None of it
+     is a page, a route or a loading boundary. */
+  "src/features/auth/turnstile-widget.tsx",
+  "src/features/tool-windows/components/date-field.tsx",
+  "src/features/tool-windows/components/payout-field.tsx",
+  "src/features/tool-windows/components/picker-panel.ts",
+  "src/features/tool-windows/components/time-field.tsx",
+  "src/features/tool-windows/model/calendar.ts",
+  "src/features/tool-windows/model/numeric-input.ts",
+  "src/features/tool-windows/model/time-input.ts",
+  "src/test/turnstile-double.ts",
+  /* The owner's bug of 2026-10-02: after an in-page link (`/#review`) and a
+     way out («Войти»), Back changed the address and left the screen where it
+     was. The browser's entry for an in-page link carries no state and the
+     router ignores it. One component that draws nothing hands such entries to
+     the router; it stands in the root layout because every page can be the one
+     the link is on, or the one Back is pressed from. */
+  "src/app/layout.tsx",
+  "src/components/navigation/history-entry-sync.tsx",
+  /* THE 30-LEVEL PROGRAM (owner, 2026-10-02: «внедряем первые 30 настоящих
+     уровней … плеер так же добавляй уже … стилизируй его если надо под наш
+     дизайн»). The read model's new facts — chapters, the author's kind of a
+     level, levels defined and not open yet, two completion methods, the test's
+     разбор — and the surfaces that say them: the level page becomes a lesson
+     page (video, the lesson's own text, one task at a time, the tool a level
+     opens), the test explains a wrong answer and sends the learner to the
+     second of the video, the report is a list of records the platform accepts
+     by itself, the registration level settles a registration that came first,
+     Path draws chapters and the end of what is open, and the player is in the
+     product's language and can be asked for a second. Two routes: the lesson
+     media the Academy serves to a learner the Backend would give the lesson to,
+     and the registration check. None of it is a loading boundary. */
+  "src/app/api/backend/exchange/registration/check/route.ts",
+  "src/app/media/[...path]/route.ts",
+  "src/components/media/academy-video-player.tsx",
+  "src/features/academy-experience/level-completion.tsx",
+  "src/features/assessment/assessment-machine.ts",
+  "src/features/assessment/level-assessment.tsx",
+  "src/features/lesson-media/lesson-playback.ts",
+  "src/features/level-detail-fidelity/level-detail-fidelity.css",
+  "src/features/level-detail-fidelity/level-lesson-shape.ts",
+  "src/features/level-detail-fidelity/level-lesson-text.tsx",
+  "src/features/level-detail-fidelity/level-lesson.css",
+  "src/features/level-detail-fidelity/level-unlocks.tsx",
+  "src/features/level-start/level-start.tsx",
+  "src/features/manual-completion/level-manual-completion.tsx",
+  "src/features/path-fidelity/path-fidelity-view.tsx",
+  "src/features/path-fidelity/path-state.ts",
+  "src/features/pocket-registration/pocket-registration-confirmed.tsx",
+  "src/features/pocket-registration/pocket-registration.tsx",
+  "src/features/report/components/validation-summary.tsx",
+  "src/features/report/level-report.tsx",
+  "src/features/report/report-definition.ts",
+  "src/features/report/report-machine.ts",
+  "src/features/report/report-validation.ts",
+  "src/lib/assessment/types.ts",
+  "src/lib/curriculum/level-kind.ts",
+  "src/lib/curriculum/next-action.ts",
+  "src/lib/curriculum/progress-state.ts",
+  "src/lib/pocket-registration/referral-link-client.ts",
+  "src/lib/time/timecode.ts",
+  "src/server/media/lesson-media-access.ts",
+  "src/server/media/lesson-media-file.ts",
+  "src/server/proxy/referral-link-proxy.ts",
+  /* THE LESSON HI-FI (owner, 2026-10-02: «доведи экран урока и плеер до хай
+     фая … выбери лучшее и реализовывай»; DD-336). The level page's composition
+     on one axis — the stage, the reading column, the lesson line down to the
+     task — lives in its own stylesheet next to the page's others. The player,
+     its wire to the test and the page's markup were already on this list. Not
+     a loading boundary. */
+  "src/features/level-detail-fidelity/level-hifi.css",
+  /* HOME AND PROFILE, FILLED AND HI-FI (owner, 2026-10-03: «наполни внутреннюю
+     главную, после сделай ее хай фай, так же сделай с профилем, наполни как
+     нормальный профиль на платформе, поддержку тоже сюда переноси, что бы
+     написать в поддержку можно было только из профиля, не по ссылке из хеда»;
+     DD-337). Home: the greeting, the program line, the module, the tools and
+     «Что нового» around the same priority field, which gains the level's
+     number; the bell's notifications read is shared with «Что нового». The
+     program as points, read by Home and Profile alike. Profile: the passport
+     with its ring, the two parts «Аккаунт» and «Поддержка», the support card,
+     signing out, the address beside the support handoff, and the profile's
+     server read. Support: the desk at /profile/support, /support a redirect to
+     it, its status words shared with the card. The shell: support leaves both
+     bars, a «Ещё» with one destination becomes that destination's slot, and the
+     mobile avatar yields «current» to it. A test-only program fixture. No
+     loading boundary moved; the Home's own is untouched. */
+  "src/app/(app)/profile/support/page.tsx",
+  "src/components/navigation/desktop-route-navigation.tsx",
+  "src/components/navigation/mobile-bottom-navigation.tsx",
+  "src/components/navigation/mobile-slots.ts",
+  "src/components/shell/user-avatar.tsx",
+  "src/config/navigation.ts",
+  "src/features/auth-home-fidelity/auth-home-field.tsx",
+  "src/features/auth-home-fidelity/auth-home-loading.tsx",
+  "src/features/auth-home-fidelity/auth-home-screen.tsx",
+  "src/features/auth-home-fidelity/auth-home-state.ts",
+  "src/features/auth-home-fidelity/home-hifi.css",
+  "src/features/auth-home-fidelity/home-news.tsx",
+  "src/features/auth-home-fidelity/home-overview-model.ts",
+  "src/features/auth-home-fidelity/home-overview.tsx",
+  "src/features/auth-home-fidelity/home-program-line.tsx",
+  "src/features/profile-fidelity/local-day.tsx",
+  "src/features/profile-fidelity/profile-hifi.css",
+  "src/features/profile-fidelity/profile-passport.tsx",
+  "src/features/profile-fidelity/profile-record.ts",
+  "src/features/profile-fidelity/profile-tabs.tsx",
+  "src/features/support/components/support-hub.tsx",
+  "src/lib/curriculum/program-points.ts",
+  "src/lib/support/support-status.ts",
+  "src/server/profile/profile-read.ts",
+  "src/test/program-fixture.ts",
+  /* THE PRODUCT HI-FI, PART 1 (owner, 2026-10-03: «хай фай всего» — the whole
+     platform at Public Home's level, the direction delegated, released in
+     parts; DD-338). The shared values in the token file (the display face for
+     statements and titles, rounded surfaces lit from a corner, pill controls,
+     the halo, the arrow), the display face's role widened in the typography
+     roles, the shell's bar floating as Public Home's does and its logout a
+     pill, and a hi-fi layer over Path, Lessons and Notifications, each mounted
+     by its screen. Not a loading boundary. */
+  "src/design-system/typography/typography.ts",
+  "src/features/home/home.css",
+  "src/features/lessons-fidelity/lessons-fidelity-screen.tsx",
+  "src/features/lessons-fidelity/lessons-hifi.css",
+  "src/features/notifications-fidelity/notifications-fidelity.tsx",
+  "src/features/notifications-fidelity/notifications-hifi.css",
+  "src/features/path-fidelity/path-hifi.css",
+  "src/styles/globals.css",
+  "src/styles/tokens.css",
+  /* THE PRODUCT HI-FI, PART 2 (DD-338): a hi-fi layer over the tools' hub and
+     windows, the reader and the workspace, each mounted by its own page or
+     screen; the error and empty states and the top-level 404 in the product's
+     language, the states' layer loaded once for the signed-in group by its
+     layout. Not a loading boundary. */
+  "src/app/(app)/layout.tsx",
+  "src/app/not-found.tsx",
+  "src/features/reader-fidelity/reader-body.tsx",
+  "src/features/reader-fidelity/reader-fidelity-screen.tsx",
+  "src/features/reader-fidelity/reader-hifi.css",
+  "src/features/reader-fidelity/reader-unavailable.tsx",
+  "src/features/tool-windows/tools-hifi.css",
+  "src/features/workspace-fidelity/workspace-hifi.css",
+  "src/styles/states-hifi.css",
+  /* THE NAME (DD-341, owner 2026-10-03: «во всем проекте название должно быть
+     alpha а не alfa»): page titles, the brand mark's accessible name and the
+     comments that spelled the product «Alfa». Text only — no route, boundary
+     or behaviour moved. */
+  "src/app/(app)/community/[spaceCode]/page.tsx",
+  "src/app/(app)/community/d/[discussionId]/page.tsx",
+  "src/app/(app)/community/page.tsx",
+  "src/app/(app)/notifications/page.tsx",
+  "src/app/(app)/path/[levelCode]/workspace/page.tsx",
+  "src/components/shell/app-shell.tsx",
+  "src/components/shell/brand-mark.tsx",
+  "src/config/not-found-metadata.ts",
+  "src/lib/curriculum/provider.ts",
+  /* LAUNCH READINESS (2026-10-04, the owner: «продукт должен быть буквально
+     готовым к запуску»): «Выйти» always ends the session on this device (the
+     logout route clears the cookies when the Backend refuses), and two plain
+     sentences — the empty notifications and the material's last line. No
+     loading boundary, no route moved. */
+  "src/app/api/backend/auth/logout/route.ts",
+  "src/features/notifications-fidelity/notifications-state.ts",
+  "src/features/reader-fidelity/reader-state.ts",
+  /* …the root error page (sign-in, registration, recovery and the news fell
+     through to the framework's English default), and the client's one new
+     write: marking the notifications read once the learner has seen them. */
+  "src/app/error.tsx",
+  "src/lib/api/client.ts",
+  /* …and the one rule both the register and the bell now read: the broker's
+     own events (a Pocket postback, an exchange connection) are never shown to
+     a learner — on PREPROD they read «Получен exchange postback:
+     first_deposit.». The visibility config itself stays frozen. */
+  "src/lib/notifications/learner-facing.ts",
+  /* …and the proxy's hop to the Backend for «read»: the Backend routes accept
+     PATCH only, the proxy sent POST, and the first real call came back 405. */
+  "src/server/proxy/notifications-proxy.ts",
+  /* LAUNCH READINESS, WAVE 2 (2026-10-04): no dead ends. A Backend that does
+     not answer is «Нет связи с Академией» with a retry, not a sign-out; a 401
+     anywhere puts «Сеанс завершён — Войти снова» on screen beside the frozen
+     provider; a failed program read says so in the tools instead of drawing
+     six closed rows; and a full-length support message fits the proxy. No
+     loading boundary, no route moved. */
+  "src/features/auth/session-expired-notice.tsx",
+  "src/features/auth/session-states.css",
+  "src/features/auth/session-unavailable.tsx",
+  "src/features/tool-windows/components/tools-read-failed.tsx",
+  "src/server/proxy/support-proxy.ts",
+  /* …the in-app 404's «На главную» leads to the learner's Home, not the
+     marketing page; a reference code and a support-pointing error carry the
+     link to support; and the level's tab names the level. */
+  "src/app/(app)/not-found.tsx",
+  "src/features/curriculum-api/curriculum-states.tsx",
+  "src/features/level-start/level-start.css",
+  "src/features/manual-completion/level-manual-completion.css",
+  "src/lib/curriculum/level-tab-title.ts",
+  /* LAUNCH READINESS, WAVE 3 (2026-10-04): a line across the top while the next
+     page is on its way — the current page and its shell stay exactly as they
+     are, which is the point of this file; the bell's name is text so its
+     unread mark is heard; and a support case has an address the profile and
+     the notifications can link to. */
+  "src/components/shell/navigation-progress.css",
+  "src/components/shell/navigation-progress.tsx",
+  "src/components/shell/notification-button.tsx",
+  "src/components/shell/unread-presence.tsx",
+  "src/lib/support/support-links.ts",
+  /* PATH, THE OWNER'S REVIEW (2026-10-04): the rail controller draws the
+     branch from the current mark straight down to the panel — the stem used to
+     hang half a screen below the node it belonged to. Geometry only. */
+  "src/features/path-fidelity/path-rail.tsx",
+  /* PUBLIC HOME, THE FILM (2026-10-04, owner: «оставляли место для плеера —
+     давай его туда поставим уже»): the hero's frame holds the film — its cover
+     until a video is on the host — served by one public route of fixed names.
+     Nothing of the signed-in group moved. */
+  "src/app/film/[name]/route.ts",
+  "src/features/public-home/hero-film.tsx",
+  "src/server/media/public-film.ts",
+  /* The bell's window (DD-349, owner 2026-10-06): the bell opens a small window
+     in place, and the learner can clear their list — a named proxy operation. */
+  "src/app/api/backend/notifications/clear-all/route.ts",
+  "src/components/shell/notifications-bell.tsx",
+  "src/components/shell/notifications-popover.tsx",
+  "src/components/shell/notifications-popover.css",
+  /* Two sessions per account (DD-354, owner 2026-10-07): the profile lists the
+     account's live sessions and closes the other one — a named proxy pair with
+     one validated id; sign-in operations forward the browser's own description
+     so the list can name the device. «Сеанс» (profile-exit.tsx) became
+     «Сеансы» (profile-sessions.tsx). */
+  "src/app/api/backend/auth/sessions/route.ts",
+  "src/app/api/backend/auth/sessions/[id]/close/route.ts",
+  "src/features/profile-fidelity/profile-sessions.tsx",
+  "src/server/proxy/backend-proxy.ts",
+  "src/server/proxy/sessions-proxy.ts",
+  /* The sign-in and session audit (owner 2026-10-07: «проверь какие
+     потенциально баги могут быть в нашей системе логина/сессий и устрани их»):
+     «Выйти» leaves with a full load, so no page of the account stays in memory;
+     a challenge whose answer was lost is renewed; the proxy refuses an account
+     operation another site's page submitted. */
+  "src/features/auth/session-provider.tsx",
+  "src/lib/auth/login-outcome.ts",
+  "src/lib/navigation/hard-replace.ts",
+  "src/server/proxy/cross-site.ts",
+  /* Media on Amazon CloudFront (owner 2026-10-07: «подготовь продукт к работе с
+     amazon cdn видео уроков и на главной лежат на нем»): where this deployment
+     serves a lesson's files and the film from, and the Academy's own signer for
+     a lesson's CloudFront links. The addresses the rows and the pages use do
+     not change; the routes answer them with a redirect in `cdn` delivery. */
+  "src/server/media/cloudfront-signing.ts",
+  "src/server/media/delivery.ts",
 ];
 
   it("has brought no loading boundary back since the release", () => {
@@ -338,8 +623,23 @@ describe("the authenticated route group", () => {
        one meant every addition had to be inserted at exactly the right line
        or the failure said only that two 54-item arrays differed. */
     expect(changed.sort()).toEqual([...AUTHORISED_VIEWER_IDENTITY].sort());
+    /* The shell's stylesheet lives in the fixture Home's folder. The product
+       hi-fi (DD-338) moved the shell — its bar floats — so that one file is
+       authorised above, and shell-polish.test.tsx governs its shell section;
+       the fixture Home itself stays frozen. */
+    const SHELL_STYLESHEET = "src/features/home/home.css";
     for (const prefix of [
-      "src/features/home", "src/features/level-detail-fidelity",
+      "src/features/home",
+      /* Level detail is no longer frozen here: the 30-level program (owner,
+         2026-10-02) made the level page a lesson page — the lesson's own text,
+         the tool a level opens, the test's разбор, the report as records — and
+         took the player's look out of this tree and into the player.
+         level-lesson.test.tsx governs the tree in detail: what text may be
+         printed on the page and what keeps the reading surface, that the tool
+         block is the Backend's verdict and never a link to a closed tool, and
+         that every rule of the new sheet stays inside `.ld`, on the page's own
+         tokens and breakpoints. Freezing it in two places would mean the looser
+         of the two fails first, for the least informative reason. */
       /* Tools is no longer frozen here: TOOLS-AUTHORITY-DIVERGENCE-1
          was authorised to move the access decision, and tools-equivalence.test.ts
          governs that tree in detail — rendered contract, the decision lines, and
@@ -360,10 +660,25 @@ describe("the authenticated route group", () => {
          `next` contract and the submit endpoints are pinned there. Freezing it
          in two places would mean the looser of the two fails first, for the
          least informative reason. */
-      "src/features/support", "src/components/shell",
-      "src/config/feature-visibility.ts", "src/app/layout.tsx",
+      /* The root layout is no longer frozen here: the owner's Back-button bug
+         of 2026-10-02 is fixed by one component mounted in it, which renders
+         nothing (see the list above), and root-layout.test.ts governs the file
+         in detail — the document's language, the body's classes, the one thing
+         beside the page, the imports, the metadata and the viewport. Freezing
+         it in two places would mean the looser of the two fails first, for the
+         least informative reason. */
+      /* Support and the shell are no longer frozen here: the owner moved
+         support into the profile on 2026-10-03, which took it out of both bars
+         and touched the avatar's «current». support-hub.test.tsx and
+         support-design.test.ts govern the desk in detail (its h1, its regions,
+         every status word, its stylesheet), and shell-polish, community-hidden,
+         mobile-bottom-navigation, more-menu-disclosure and support-reachable
+         govern the shell — every route, every «current», the bar's slots and
+         «Ещё» the day it returns. Freezing them in two places would mean the
+         looser of the two fails first, for the least informative reason. */
+      "src/config/feature-visibility.ts",
     ]) {
-      expect(changed.filter((f) => f.startsWith(prefix)), prefix).toEqual([]);
+      expect(changed.filter((f) => f.startsWith(prefix) && f !== SHELL_STYLESHEET), prefix).toEqual([]);
     }
   });
 });

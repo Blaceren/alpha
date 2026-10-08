@@ -34,11 +34,15 @@ const sessionMock = vi.mocked(api.fetchSession);
 let turnstile: TurnstileDouble;
 
 const ok = { ok: true as const, data: { user: { id: 1, name: "A", role: "user" } }, requestId: null };
+/** What the page's own check finds for a visitor who is not signed in. */
+const signedOut = { ok: true as const, data: { user: null }, requestId: null };
 
 beforeEach(() => {
   replace.mockClear();
   loginMock.mockReset();
   sessionMock.mockReset();
+  // The form asks once, on arrival, whether someone is already signed in.
+  sessionMock.mockResolvedValue(signedOut);
   searchParams = new URLSearchParams();
   // Auto-solving mirrors the ordinary case: a visitor who passes the challenge
   // without an interactive puzzle. Cases that care about the pre-token state
@@ -69,11 +73,60 @@ function sentPayload(index = 0) {
     | undefined;
 }
 
+/* 2026-10-07 audit. A link from a messenger or a mail opens /login without the
+   SameSite=Strict session cookie, so the server cannot see a learner who is
+   signed in; the page's own request can. */
+describe("LoginForm — someone already signed in", () => {
+  it("sends a learner the page finds signed in on to where they were heading, without a sign-in", async () => {
+    searchParams = new URLSearchParams("next=/lessons/L2");
+    sessionMock.mockResolvedValue(ok);
+    render(<LoginForm turnstileSiteKey={TEST_SITE_KEY} />);
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/lessons/L2"));
+    expect(loginMock).not.toHaveBeenCalled();
+  });
+
+  it("stays put, saying nothing, when the page finds nobody or cannot ask", async () => {
+    sessionMock.mockResolvedValueOnce({ ok: false, error: makeError("NETWORK_ERROR") });
+    render(<LoginForm turnstileSiteKey={TEST_SITE_KEY} />);
+    await waitFor(() => expect(sessionMock).toHaveBeenCalledTimes(1));
+    expect(replace).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("goes on after a sign-in whose confirmation could not be read — it never signs in twice", async () => {
+    searchParams = new URLSearchParams("next=/lessons/L2");
+    loginMock.mockResolvedValue(ok);
+    sessionMock.mockResolvedValueOnce(signedOut).mockResolvedValue({ ok: false, error: makeError("NETWORK_ERROR") });
+    await fillAndSolve();
+    await submit();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/lessons/L2"));
+    expect(loginMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops when the confirmation says nobody is signed in — the cookie was not kept", async () => {
+    loginMock.mockResolvedValue(ok);
+    sessionMock.mockResolvedValue(signedOut);
+    await fillAndSolve();
+    await submit();
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("renews the challenge after an answer that was lost — the token may have been spent", async () => {
+    loginMock.mockResolvedValue({ ok: false, error: makeError("BACKEND_UNAVAILABLE", { status: 502 }) });
+    await fillAndSolve();
+    const rendersBefore = turnstile.renders.length;
+    await submit();
+    await screen.findByRole("alert");
+    await waitFor(() => expect(turnstile.renders.length).toBeGreaterThan(rendersBefore));
+  });
+});
+
 describe("LoginForm — the existing contract, preserved", () => {
   it("logs in, confirms the session and redirects to a validated internal returnTo", async () => {
     searchParams = new URLSearchParams("next=/lessons/L2");
     loginMock.mockResolvedValue(ok);
-    sessionMock.mockResolvedValue(ok);
+    sessionMock.mockResolvedValueOnce(signedOut).mockResolvedValue(ok);
 
     await fillAndSolve();
     await submit();
@@ -85,7 +138,7 @@ describe("LoginForm — the existing contract, preserved", () => {
   it("redirects to root when returnTo is an external URL (open-redirect blocked)", async () => {
     searchParams = new URLSearchParams("next=https://evil.example.com");
     loginMock.mockResolvedValue(ok);
-    sessionMock.mockResolvedValue(ok);
+    sessionMock.mockResolvedValueOnce(signedOut).mockResolvedValue(ok);
 
     await fillAndSolve();
     await submit();
@@ -164,17 +217,18 @@ describe("LoginForm — the Turnstile challenge (AFD-3A3)", () => {
     // The widget renders its own live region, so the prompt is located through
     // the button's own description rather than by picking one of two statuses.
     const describedBy = button.getAttribute("aria-describedby") as string;
-    expect(document.getElementById(describedBy)).toHaveTextContent(
-      "Пройдите проверку безопасности",
-    );
+    // The check runs by itself: the line says so, and asks for nothing.
+    expect(document.getElementById(describedBy)).toHaveTextContent("Проверяем браузер…");
+    expect(document.body.textContent).not.toContain("Пройдите проверку безопасности");
 
     await turnstile.solve();
     expect(screen.getByRole("button", { name: "Войти" })).toBeEnabled();
+    expect(document.getElementById(describedBy)).toHaveTextContent("Браузер проверен.");
   });
 
   it("sends the token in the exact DTO field and nothing else", async () => {
     loginMock.mockResolvedValue(ok);
-    sessionMock.mockResolvedValue(ok);
+    sessionMock.mockResolvedValueOnce(signedOut).mockResolvedValue(ok);
 
     await fillAndSolve();
     await submit();
@@ -275,7 +329,7 @@ describe("LoginForm — the Turnstile challenge (AFD-3A3)", () => {
     loginMock.mockImplementation(
       () => new Promise((resolve) => { resolveLogin = resolve as never; }),
     );
-    sessionMock.mockResolvedValue(ok);
+    sessionMock.mockResolvedValueOnce(signedOut).mockResolvedValue(ok);
 
     await fillAndSolve();
     const button = screen.getByRole("button", { name: "Войти" });
@@ -305,7 +359,7 @@ describe("LoginForm — the Turnstile challenge (AFD-3A3)", () => {
 
   it("never persists the token in browser storage or the URL", async () => {
     loginMock.mockResolvedValue(ok);
-    sessionMock.mockResolvedValue(ok);
+    sessionMock.mockResolvedValueOnce(signedOut).mockResolvedValue(ok);
 
     await fillAndSolve();
     await submit();
@@ -355,8 +409,9 @@ describe("LoginForm — the Turnstile challenge (AFD-3A3)", () => {
     const button = screen.getByRole("button", { name: "Войти" });
     const describedBy = button.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
-    expect(document.getElementById(describedBy as string)).toHaveTextContent(
-      "Пройдите проверку безопасности",
-    );
+    // One element carries that id, and it is the check's own line.
+    expect(document.querySelectorAll(`[id="${describedBy}"]`)).toHaveLength(1);
+    expect(document.getElementById(describedBy as string)).toHaveTextContent("Проверяем браузер…");
+    expect(document.getElementById(describedBy as string)).toHaveAttribute("role", "status");
   });
 });

@@ -21,11 +21,14 @@ import {
 import {
   fixtureToolAccess,
   learnerCurrentLevel,
-  levelTitleOf,
+  releasingLevelOf,
+  type ReleasingLevel,
   resolveToolWindow,
   toolAccessOf,
+  toolReadFailed,
   type ToolWindowState,
 } from "@/features/tool-windows/model/access";
+import { ToolsReadFailed } from "@/features/tool-windows/components/tools-read-failed";
 import type { AcademyToolAccess } from "@/lib/curriculum/academy-view";
 import { getPathProgress, resolvePathScenario } from "@/features/path/model/path-state";
 import { getLevel } from "@/data/curriculum/fixture";
@@ -45,12 +48,13 @@ import type { ChecklistState } from "@/features/tool-windows/checklist/checklist
 import type { JournalStats } from "@/features/tool-windows/stats/stats-model";
 import type { NewsCalendarState } from "@/features/tool-windows/news/news-model";
 import "@/features/tool-windows/tool-windows.css";
+import "@/features/tool-windows/tools-hifi.css";
 
 type Params = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const tool = toolWindowBySlug((await params).slug);
-  return { title: tool ? `${tool.title} — Alfa Trade Academy` : "Инструмент — Alfa Trade Academy" };
+  return { title: tool ? `${tool.title} — Alpha Trade Academy` : "Инструмент — Alpha Trade Academy" };
 }
 
 /**
@@ -112,9 +116,13 @@ export default async function ToolRoute({
         <ToolContent
           tool={tool}
           state={view?.state ?? "locked"}
+          readFailed={toolReadFailed(result)}
           unlockLevel={view?.unlockLevel ?? tool.unlockLevel}
           currentLevel={result.ok ? learnerCurrentLevel(result.view) : null}
-          releasingLevelTitle={result.ok ? levelTitleOf(result.view, tool.unlockLevel) : null}
+          /* The level the VERDICT names, not the catalogue's: in the 30-level
+             program the journal opens after level 9, and the catalogue still
+             remembers 10. */
+          releasing={result.ok ? releasingLevelOf(result.view, view?.unlockLevel ?? tool.unlockLevel) : null}
           data={{
             tradeCard,
             journal,
@@ -142,7 +150,7 @@ export default async function ToolRoute({
         state={view?.state ?? "locked"}
         unlockLevel={view?.unlockLevel ?? tool.unlockLevel}
         currentLevel={getPathProgress(scenario).currentLevel}
-        releasingLevelTitle={getLevel(tool.unlockLevel).title}
+        releasing={{ title: getLevel(tool.unlockLevel).title, kind: "unknown", inProduction: false }}
         data={{
           tradeCard: null,
           journal: null,
@@ -187,21 +195,26 @@ function isOpen(slug: ToolWindowDefinition["slug"], access: AcademyToolAccess | 
 function ToolContent({
   tool,
   state,
+  readFailed = false,
   unlockLevel,
   currentLevel,
-  releasingLevelTitle,
+  releasing,
   data,
 }: {
   tool: ToolWindowDefinition;
   state: ToolWindowState;
+  /** The program could not be read: say so, never «Закрыто» (2026-10-04). */
+  readFailed?: boolean;
   unlockLevel: number;
   currentLevel: number | null;
-  releasingLevelTitle: string | null;
+  releasing: ReleasingLevel | null;
   data: ToolData;
 }) {
   return (
     <ToolPage tool={tool} unlockLevel={unlockLevel}>
-      {state === "open" ? (
+      {readFailed ? (
+        <ToolsReadFailed />
+      ) : state === "open" ? (
         workspaceFor(tool, data)
       ) : state === "soon" ? (
         <ToolSoon tool={tool} />
@@ -210,7 +223,7 @@ function ToolContent({
           tool={tool}
           unlockLevel={unlockLevel}
           currentLevel={currentLevel}
-          releasingLevelTitle={releasingLevelTitle}
+          releasing={releasing}
         />
       )}
     </ToolPage>

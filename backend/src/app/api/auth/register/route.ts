@@ -23,6 +23,9 @@ import { isEnrollmentDomainError } from "@/lib/curriculum/enrollment";
 import { autoEnrollNewRegistrationInTransaction } from "@/lib/curriculum/registration-enrollment";
 import { ACADEMY_REGISTER_SURFACE } from "@/lib/captcha/surface";
 import { createEmailVerificationToken, isEmailVerificationRequired } from "@/lib/emailVerification";
+import { runDetached } from "@/lib/account/background";
+import { accountCapabilities } from "@/lib/account/capabilities";
+import { sendVerificationMail } from "@/lib/account/emailChange";
 import { prisma } from "@/lib/prisma";
 import {
   resolveRegistrationReferral,
@@ -32,11 +35,13 @@ import {
 import { getRequestIp, rateLimit } from "@/lib/rateLimit";
 import {
   issueSession,
+  readSessionToken,
   LEGACY_SESSION_COOKIE_NAME,
   SESSION_COOKIE_NAME,
   clearedLegacySessionCookieOptions,
   sessionCookieOptions,
 } from "@/lib/session";
+import { isUniqueViolationOn } from "@/lib/unique-violation";
 import { registerSchema, validateJsonBody } from "@/lib/validation";
 
 /**
@@ -75,8 +80,14 @@ export async function POST(request: Request) {
   const parsed = await validateJsonBody(request, registerSchema);
   const ip = getRequestIp(request);
   const email = parsed.success ? parsed.data.email : "invalid-email";
+  /* TEN PER ADDRESS PER HALF HOUR (2026-10-04, launch audit; it was three).
+     The count runs before validation and the challenge, so a mistyped form,
+     an address already taken or a failed challenge each spent one — and
+     learners behind one carrier or office address shared the three: the
+     fourth person of the half hour read «Слишком много попыток регистрации».
+     Turnstile is what stops a bot here; this cap only bounds one address. */
   const limit = rateLimit(`auth:register:${ip}`, {
-    limit: 3,
+    limit: 10,
     windowMs: 30 * 60 * 1000,
   });
 
@@ -139,10 +150,7 @@ export async function POST(request: Request) {
   });
 
   if (existingUser) {
-    return NextResponse.json(
-      { error: "Email уже занят" },
-      { status: 400 },
-    );
+    return emailTaken();
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
@@ -433,6 +441,10 @@ export async function POST(request: Request) {
     // would corrupt the acquisition ledger for a reason unrelated to it. It
     // leaves this handler as an explicit, bounded 503.
     if (isEnrollmentDomainError(error)) return enrollmentUnavailable(error, request);
+    // Two registrations of one address at once (two tabs, each with its own
+    // challenge): the check above passed for both, the unique index let one
+    // through. The other gets the same answer the check gives, not a 500.
+    if (isEmailTaken(error)) return emailTaken();
     if (attributionCandidate === null || !isVisitorAlreadyAttributed(error)) throw error;
     // The whole transaction rolled back, so no partial user exists to clean up.
     attributionCandidate = null;
@@ -440,6 +452,7 @@ export async function POST(request: Request) {
       committed = await runRegistration();
     } catch (retryError) {
       if (isEnrollmentDomainError(retryError)) return enrollmentUnavailable(retryError, request);
+      if (isEmailTaken(retryError)) return emailTaken();
       throw retryError;
     }
   }
@@ -460,6 +473,13 @@ export async function POST(request: Request) {
 
   const user = committed.created;
   const verificationRequired = isEmailVerificationRequired();
+  /* ACCOUNT RECOVERY — where mail can be sent, the new address is asked to
+     confirm itself. Detached: a slow mail provider must not hold a
+     registration, and a failed message must not undo one (it is audited). */
+  if (accountCapabilities().emailVerification) {
+    const account = { id: user.id, email: user.email, name: user.name };
+    runDetached(() => sendVerificationMail(account));
+  }
   const verificationToken = verificationRequired
     ? await createEmailVerificationToken(user.id)
     : null;
@@ -534,7 +554,12 @@ export async function POST(request: Request) {
   if (!verificationRequired) {
     response.cookies.set(
       SESSION_COOKIE_NAME,
-      await issueSession(user.id),
+      /* The session this browser still presents is closed, not left to take
+         one of the two places of the account it belonged to (2026-10-07). */
+      await issueSession(user.id, {
+        userAgent: request.headers.get("user-agent"),
+        replacing: await readSessionToken(),
+      }),
       sessionCookieOptions,
     );
   }
@@ -568,3 +593,12 @@ export async function POST(request: Request) {
 
   return response;
 }
+
+function emailTaken() {
+  return NextResponse.json(
+    { error: "Email уже занят" },
+    { status: 400 },
+  );
+}
+
+const isEmailTaken = (error: unknown) => isUniqueViolationOn(error, "User", "email");

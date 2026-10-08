@@ -10,7 +10,7 @@ export function Brand({ collapsed = false }: { collapsed?: boolean }) {
       </span>
       {!collapsed ? (
         <span className="truncate text-sm font-semibold text-white">
-          Alfa Trade Academy <span className="text-sidebar-foreground/60">CRM</span>
+          Alpha Trade Academy <span className="text-sidebar-foreground/60">CRM</span>
         </span>
       ) : null}
     </div>

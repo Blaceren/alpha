@@ -164,13 +164,18 @@ function AcademyInvitation({ authenticated }: { authenticated: boolean }) {
     <aside className="surface surface--ink pn-invite" aria-labelledby="pn-invite-title">
       <div className="shell pn-invite__inner">
         <div>
-          <p className="eyebrow">Модуль «Новости» · уровни 26–30</p>
+          {/* The program's own words (2026-10-04, launch audit): this used to name a «Новости» module at
+              levels 26–30 and the calendar at level 30 — the 100-level plan. In the program learners
+              have, module 6 «Пробои и события» holds levels 25–30, and News Calendar opens after
+              level 28. */}
+          <p className="eyebrow">Модуль «Пробои и события» · уровни 25–30</p>
           <h2 className="pn-invite__title" id="pn-invite-title">
             Решение о торговле на новости принимается до её выхода
           </h2>
           <p className="pn-invite__text">
-            В Alfa Trade Academy это отдельный модуль: экономический календарь, реакция цены, когда не торговать и ваш план
-            вокруг новостей. На уровне 30 открывается News Calendar — он показывает, когда ваш план закрывает вход.
+            В Alpha Trade Academy этому посвящены уровни 27–29: что происходит с ценой на выходе данных,
+            экономический календарь и ваше правило работы вокруг событий. После уровня 28 открывается News
+            Calendar — он показывает, когда ваш план закрывает вход.
           </p>
         </div>
         {authenticated ? (

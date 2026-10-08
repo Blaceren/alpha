@@ -27,7 +27,7 @@ const ROOT = process.cwd();
 const SITES = [
   ["src/features/lessons-fidelity/lessons-corpus.tsx", "material__open", "Lessons row → Level Detail"],
   ["src/features/reader-fidelity/reader-body.tsx", '<Link href="/path">Открыть путь</Link>', "Reader → /path"],
-  ["src/features/profile-fidelity/profile-fidelity.tsx", 'data-role="support-link"', "Profile → /support"],
+  ["src/features/profile-fidelity/profile-fidelity.tsx", 'data-role="support-link"', "Profile → support"],
   ["src/features/academy-experience/level-detail-screen.tsx", '<Link href="/path">Вернуться к пути</Link>', "Level Detail → /path"],
 ] as const;
 
@@ -54,10 +54,14 @@ describe("the four confirmed transitions use the router", () => {
     expect(s).not.toContain('<a href="/path">');
   });
 
-  it("Profile → /support is a Link, with its data-role intact", () => {
+  /* Support is a part of the profile since 2026-10-03, so the link leads to
+     `/profile/support` — through the one constant every handoff on the page
+     uses. Still a Link, with its data-role. */
+  it("Profile → support is a Link, with its data-role intact", () => {
     const s = src(SITES[2][0]);
-    expect(s).toContain('<Link href="/support" data-role="support-link">');
-    expect(s).not.toContain('<a href="/support"');
+    expect(s).toContain('export const SUPPORT_HREF = "/profile/support";');
+    expect(s).toContain('<Link href={SUPPORT_HREF} data-role="support-link">');
+    expect(s).not.toMatch(/<a href="\/(profile\/)?support"/);
   });
 
   it("Level Detail → /path is a Link, with the same words", () => {

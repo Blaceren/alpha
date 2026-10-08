@@ -2,20 +2,23 @@
  * Entry Checklist (L20) — enter or skip, decided before the button is pressed
  * in Pocket.
  *
- * THE BACKEND IS THE AUTHORITY. The nine items come from the Backend, and the
- * verdict below copies its rule (`backend/src/lib/tools/entry-checklist.ts`) so
- * it follows the learner's ticks live; a kept check carries the Backend's own
- * verdict.
+ * THE BACKEND IS THE AUTHORITY. The items come from the Backend (seven since
+ * 2026-10-07, none a stop factor — nine before), and the verdict below copies
+ * its rule (`backend/src/lib/tools/entry-checklist.ts`) so it follows the
+ * learner's ticks live; a kept check carries the Backend's own verdict, and
+ * since 2026-10-07 the named item's own words, from the list the check was
+ * answered against.
  *
  *   any stop factor not confirmed   «Не входить: стоп-фактор» — this wins
  *   any other item not confirmed    «Не входить: условие не выполнено»
- *   all nine confirmed              «Вход по плану допустим»
+ *   all confirmed                   «Вход по плану допустим»
  *
  * The verdict names the first unconfirmed item in the list's order. Declining a
  * trade is a full decision (L08): a «не входить» check is kept like any other.
  * Nothing is ticked for the learner, and nothing is read from Pocket.
  */
 import { localDateTime } from "../model/local-date";
+import { PAYOUT_LIMITS, parsePayoutPercent } from "../model/numeric-input";
 
 /* ------------------------------------------------------------------ types */
 
@@ -40,6 +43,10 @@ export type EntryCheck = {
   readonly answers: ChecklistAnswers;
   readonly verdict: ChecklistVerdict;
   readonly missingItem: string | null;
+  /** The named item as the learner read it when the check was made (the list may have changed since). */
+  readonly missingItemLabel?: string | null;
+  /** The list the check was answered against. */
+  readonly listVersion?: number;
   readonly createdAt: string;
 };
 
@@ -87,12 +94,15 @@ export function confirmedCount(items: readonly ChecklistItem[], answers: Checkli
   return items.filter((item) => answers[item.code]).length;
 }
 
+/** The payout item of each list: it carries the learner's own minimum. */
+const PAYOUT_ITEM_CODES: ReadonlySet<string> = new Set(["payout_checked", "payout_minimum"]);
+
 /**
  * The item as the learner reads it. The payout item carries the learner's own
- * minimum when they set one: «Payout не ниже моего минимума — 85%».
+ * minimum when they set one: «Payout посмотрел, планку посчитал — 85%».
  */
 export function itemLabel(item: ChecklistItem, minPayoutPercent: number | null): string {
-  return item.code === "payout_minimum" && minPayoutPercent !== null
+  return PAYOUT_ITEM_CODES.has(item.code) && minPayoutPercent !== null
     ? `${item.label} — ${minPayoutPercent}%`
     : item.label;
 }
@@ -121,11 +131,17 @@ export function verdictWords(
   }
 }
 
-/** A kept check's verdict in one line, for the list of checks. */
+/**
+ * A kept check's verdict in one line, for the list of checks. The named item is
+ * in the words the Backend kept for it (its own list's), else the current
+ * list's, else its code.
+ */
 export function verdictLine(check: EntryCheck, items: readonly ChecklistItem[]): string {
   if (check.verdict === "enter") return "Вход допустим";
-  const item = items.find((candidate) => candidate.code === check.missingItem);
-  const label = item ? itemLabel(item, check.minPayoutPercent) : (check.missingItem ?? "");
+  const code = check.missingItem ?? "";
+  const item = items.find((candidate) => candidate.code === code);
+  const words = check.missingItemLabel ?? item?.label ?? code;
+  const label = PAYOUT_ITEM_CODES.has(code) && check.minPayoutPercent !== null ? `${words} — ${check.minPayoutPercent}%` : words;
   return check.verdict === "skip_stop" ? `Не входить · стоп-фактор: ${label}` : `Не входить · условие: ${label}`;
 }
 
@@ -146,16 +162,16 @@ export function emptyChecklistDraft(state: Pick<ChecklistState, "checklist" | "l
 
 /** The minimum as a number: null when empty, undefined when it is not a valid one. */
 export function parseMinPayout(raw: string): number | null | undefined {
-  const trimmed = raw.trim().replace("%", "").trim();
-  if (trimmed === "") return null;
-  if (!/^\d{1,3}$/.test(trimmed)) return undefined;
-  const value = Number(trimmed);
-  return value >= 1 && value <= 100 ? value : undefined;
+  if (raw.trim() === "") return null;
+  return parsePayoutPercent(raw) ?? undefined;
 }
+
+/** The learner's own minimum is a payout like any other — the same range — and may be left empty. */
+export const MIN_PAYOUT_MESSAGE = `Минимум payout — целое число от ${PAYOUT_LIMITS.min} до ${PAYOUT_LIMITS.max}, или оставьте поле пустым.`;
 
 const MESSAGES: Record<ChecklistField, string> = {
   asset: "Выберите актив, для которого проверка.",
-  minPayoutPercent: "Минимум payout — целое число от 1 до 100, или оставьте поле пустым.",
+  minPayoutPercent: MIN_PAYOUT_MESSAGE,
 };
 
 export function checklistFieldMessage(field: ChecklistField): string {

@@ -2,27 +2,35 @@
  * Bounded same-origin proxy for the learner's TOOL routes (SERVER-ONLY).
  *
  * Like every other proxy in this directory it is NOT an arbitrary forwarder. It
- * exposes exactly eleven learner operations, each pinned to one HTTP method and
- * one constant Backend path shape:
+ * exposes exactly fourteen learner operations, each pinned to one HTTP method
+ * and one constant Backend path shape:
  *
- *   trade-card-state    GET   /api/tools/trade-cards
- *   trade-card-fix      POST  /api/tools/trade-cards
- *   trade-card-change   PATCH /api/tools/trade-cards/{cardId}
- *   journal-page        GET   /api/tools/journal?filter=…&before=…
- *   journal-create      POST  /api/tools/journal
- *   journal-change      PATCH /api/tools/journal/{entryId}
- *   risk-state          GET   /api/tools/risk-plan
- *   risk-save           POST  /api/tools/risk-plan
- *   checklist-state     GET   /api/tools/entry-checks
- *   checklist-save      POST  /api/tools/entry-checks
- *   stats-page          GET   /api/tools/stats?period=…&today=…
+ *   trade-card-state    GET    /api/tools/trade-cards
+ *   trade-card-fix      POST   /api/tools/trade-cards
+ *   trade-card-change   PATCH  /api/tools/trade-cards/{cardId}
+ *   journal-page        GET    /api/tools/journal?filter=…&before=…
+ *   journal-create      POST   /api/tools/journal
+ *   journal-change      PATCH  /api/tools/journal/{entryId}
+ *   journal-delete      DELETE /api/tools/journal/{entryId}
+ *   risk-state          GET    /api/tools/risk-plan
+ *   risk-save           POST   /api/tools/risk-plan
+ *   checklist-state     GET    /api/tools/entry-checks
+ *   checklist-save      POST   /api/tools/entry-checks
+ *   stats-page          GET    /api/tools/stats?period=…&today=…
+ *   news-calendar       GET    /api/tools/news-calendar?from=…&to=…
+ *   news-plan-save      POST   /api/tools/news-calendar
  *
  * THE ONLY CALLER-CONTROLLED INPUT IS A VALIDATED ID, and for a journal page a
  * filter from a closed list and a cursor, for a stats page a period from a
- * closed list and the learner's calendar date. No host, no absolute URL, no
- * arbitrary path, and no other query parameter — every query is rebuilt from
- * the validated values, never passed through — which keeps SSRF structurally
- * impossible. The browser never sees the Backend origin.
+ * closed list and the learner's calendar date, for a calendar day two instants.
+ * No host, no absolute URL, no arbitrary path, and no other query parameter —
+ * every query is rebuilt from the validated values, never passed through —
+ * which keeps SSRF structurally impossible. The browser never sees the Backend
+ * origin.
+ *
+ * A DELETE SAYS NOTHING BUT ITS ID. It is a write — it carries the session and
+ * the browser's CSRF token — but it has no body: one that arrives with any is
+ * refused here, so nothing unread travels on to the Backend.
  *
  * TOOL DATA BELONGS TO THE LEARNER (owner decision 2026-09-21). There is no
  * staff route here and none exists on the Backend: a mentor or a support agent
@@ -39,6 +47,7 @@ export type ToolsProxyInput =
   | { operation: "journal-page" }
   | { operation: "journal-create" }
   | { operation: "journal-change"; entryId: string }
+  | { operation: "journal-delete"; entryId: string }
   | { operation: "risk-state" }
   | { operation: "risk-save" }
   | { operation: "checklist-state" }
@@ -70,11 +79,13 @@ export const MAX_NEWS_RESPONSE_BYTES = 256 * 1024;
 
 const READ_REQUEST_HEADERS = new Set(["cookie", "accept", REQUEST_ID_HEADER]);
 const WRITE_REQUEST_HEADERS = new Set(["content-type", "cookie", "x-csrf-token", "accept", REQUEST_ID_HEADER]);
+/* A delete has no body, so it has no content type to declare. */
+const DELETE_REQUEST_HEADERS = new Set(["cookie", "x-csrf-token", "accept", REQUEST_ID_HEADER]);
 /* Cache-Control is NOT copied: a learner's tool data is private, so every
    answer is `no-store` whatever the Backend said. */
 const FORWARD_RESPONSE_HEADERS = new Set(["content-type", REQUEST_ID_HEADER]);
 
-type Method = "GET" | "POST" | "PATCH";
+type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
 function methodFor(operation: ToolsProxyInput["operation"]): Method {
   switch (operation) {
@@ -94,6 +105,8 @@ function methodFor(operation: ToolsProxyInput["operation"]): Method {
     case "trade-card-change":
     case "journal-change":
       return "PATCH";
+    case "journal-delete":
+      return "DELETE";
   }
 }
 
@@ -144,8 +157,9 @@ function errorResponse(error: NormalizedError, status: number): Response {
   });
 }
 
-function buildForwardHeaders(request: Request, write: boolean): Headers {
-  const allow = write ? WRITE_REQUEST_HEADERS : READ_REQUEST_HEADERS;
+function buildForwardHeaders(request: Request, method: Method): Headers {
+  const allow =
+    method === "GET" ? READ_REQUEST_HEADERS : method === "DELETE" ? DELETE_REQUEST_HEADERS : WRITE_REQUEST_HEADERS;
   const headers = new Headers();
   request.headers.forEach((value, key) => {
     if (allow.has(key.toLowerCase())) headers.set(key, value);
@@ -173,6 +187,7 @@ export function resolveToolsTargetPath(input: ToolsProxyInput): string | null {
     case "journal-create":
       return "/api/tools/journal";
     case "journal-change":
+    case "journal-delete":
       if (!CARD_ID_RE.test(input.entryId)) return null;
       return `/api/tools/journal/${encodeURIComponent(input.entryId)}`;
     case "risk-state":
@@ -193,7 +208,6 @@ export function resolveToolsTargetPath(input: ToolsProxyInput): string | null {
 
 export async function proxyTools(request: Request, input: ToolsProxyInput): Promise<Response> {
   const method = methodFor(input.operation);
-  const write = method !== "GET";
 
   if (request.method !== method) {
     return errorResponse(makeError("VALIDATION_ERROR", { status: 405 }), 405);
@@ -222,12 +236,19 @@ export async function proxyTools(request: Request, input: ToolsProxyInput): Prom
   }
 
   let body: BodyInit | undefined;
-  if (write) {
+  if (method === "POST" || method === "PATCH") {
     const raw = await request.arrayBuffer();
     if (raw.byteLength > MAX_TOOLS_BODY_BYTES) {
       return errorResponse(makeError("VALIDATION_ERROR", { status: 413 }), 413);
     }
     body = raw;
+  } else if (method === "DELETE") {
+    // The id in the path is the whole request; a body is not forwarded, and one
+    // that arrives is refused rather than silently dropped.
+    const raw = await request.arrayBuffer();
+    if (raw.byteLength > 0) {
+      return errorResponse(makeError("VALIDATION_ERROR", { status: 400 }), 400);
+    }
   }
 
   const controller = new AbortController();
@@ -237,7 +258,7 @@ export async function proxyTools(request: Request, input: ToolsProxyInput): Prom
   try {
     backendResponse = await fetch(`${config.backendOrigin}${path}${query}`, {
       method,
-      headers: buildForwardHeaders(request, write),
+      headers: buildForwardHeaders(request, method),
       body,
       redirect: "manual",
       signal: controller.signal,

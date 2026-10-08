@@ -1,0 +1,188 @@
+/*
+ * WORKSPACE, HI-FI — the product hi-fi (DD-338, owner 2026-10-03: «хай фай
+ * всего»). The frozen workspace keeps its identity, its requirement, its state
+ * and its one action, and speaks the product's language like every other page:
+ *
+ *   the level's title and the task's heading in the display face;
+ *   the task — the report the learner fills in here — as the page's one
+ *     rounded surface lit from its corner, its records as inner windows;
+ *   fields, records and option rows at the product's control radius (12px);
+ *   every action as a pill;
+ *   the shell's ground (with its corner light) through the root.
+ *
+ * The frozen stylesheet and its adaptation layer are untouched. Every rule here
+ * is `.wsp.wsp--hifi …`, one class over the rule it replaces, so it wins by
+ * specificity and never by order.
+ */
+
+.wsp.wsp--hifi {
+  /* The frozen sheet draws fields, records, notices and option rows with one
+     shared radius; the product's control radius replaces its 8px everywhere at
+     once. */
+  --radius: var(--hf-radius-control);
+  background: none;
+}
+
+.wsp.wsp--hifi .ws-id__title,
+.wsp.wsp--hifi .ws-page-msg__title {
+  font: 400 clamp(34px, 3.4vw, 48px) / 1.06 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+  text-wrap: balance;
+}
+
+/* ------------------------------------------------------------- the task -- */
+
+/* The report is the page's object: Public Home's lit surface, inset as one.
+   (The adaptation layer returned the frozen page padding to the host; the
+   report's own panel colour stayed behind with no inset at all, so the heading
+   and the criteria ran into its edges.) */
+.wsp.wsp--hifi .ws-host .rpt.sub-wrap {
+  padding: 36px 40px 40px;
+  background: var(--hf-light), var(--hf-surface);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-surface);
+  box-shadow: var(--hf-shadow);
+}
+
+.wsp.wsp--hifi .ws-host .rpt__heading {
+  margin: 0 0 12px;
+  font: 400 var(--hf-title-md) / 1.12 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+  text-wrap: balance;
+}
+
+/* A record is an inner window: the lit surface shows through it, its head is
+   a slightly raised band. */
+.wsp.wsp--hifi .ws-host .rpt-group {
+  border-color: var(--hf-line);
+  border-radius: var(--hf-radius-window);
+  background: rgba(243, 244, 239, 0.015);
+}
+
+.wsp.wsp--hifi .ws-host .rpt-group__head {
+  background: rgba(243, 244, 239, 0.035);
+}
+
+/* The record's name and how much of it is filled sit at the two ends of its
+   head, as the frozen head lays them out. The adaptation layer's `display:
+   block` for the floated legend dropped that row, and the two ran together
+   («Сделка 1заполнено 0 из 10»). */
+.wsp.wsp--hifi .ws-host legend.rpt-group__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.wsp.wsp--hifi .ws-host .rpt-group__fill {
+  color: var(--text-muted);
+  font: 500 11px / 1.6 var(--font-mono);
+  letter-spacing: 0.06em;
+}
+
+/* The submitted record reads in the same window as the one being filled: its
+   head band runs edge to edge instead of sitting inset inside a second card. */
+.wsp.wsp--hifi .ws-host .rpt-readonly__group {
+  padding: 0;
+}
+
+/* ---------------------------------------------------------- the actions -- */
+
+/* Every action is a pill: Signal for the one way forward («Сдать отчёт»), the
+   quiet outline for the rest («Сохранить черновик», «Добавить запись отказа»,
+   «Вернуться к уровню»). */
+.wsp.wsp--hifi :is(.ws-act, .btn-2, .ws-req__cta) {
+  border-radius: var(--hf-radius-pill);
+}
+
+.wsp.wsp--hifi :is(.btn-2, .ws-req__cta) {
+  padding-inline: 22px;
+  border-color: rgba(243, 244, 239, 0.18);
+  background: rgba(243, 244, 239, 0.035);
+  color: var(--text-primary);
+}
+
+.wsp.wsp--hifi :is(.btn-2, .ws-req__cta):hover {
+  border-color: rgba(243, 244, 239, 0.32);
+  background: rgba(243, 244, 239, 0.09);
+}
+
+.wsp.wsp--hifi .ws-req__cta {
+  min-height: 48px;
+}
+
+/* An accepted report: the outcome is an inner window, and the way on to the
+   next level is the page's one Signal pill — as it is on the lesson page. */
+.wsp.wsp--hifi .ws-host .rpt__done {
+  padding: 20px 22px 22px;
+  background: rgba(243, 244, 239, 0.035);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-window);
+}
+
+.wsp.wsp--hifi .ws-host .rpt__next {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  margin-top: 6px;
+  padding: 0 24px;
+  border-radius: var(--hf-radius-pill);
+  color: var(--background-base);
+  background: var(--signal-active);
+  font-size: 14.5px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.wsp.wsp--hifi .ws-host .rpt__next:hover {
+  background: var(--ata-signal-300);
+}
+
+/* Targets a thumb can hit (44px): the exits and the disclosure of the
+   learner's own report. */
+.wsp.wsp--hifi .ws-exit a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.wsp.wsp--hifi .ws-host .rpt-own__summary {
+  padding-block: 10px;
+}
+
+/* --------------------------------------------------------------- phones -- */
+
+/* Below 900px the shell's bar is fixed to the bottom: the page ends above it.
+   The frozen 56px left «Вернуться к уровню» and «Вернуться к пути» under the
+   bar on a phone (measured at 320, 360 and 375). */
+@media (max-width: 899px) {
+  .wsp.wsp--hifi .ws {
+    padding-bottom: calc(var(--mobile-bottom-nav-height, 60px) + env(safe-area-inset-bottom, 0px) + 32px);
+  }
+}
+
+@media (max-width: 599px) {
+  .wsp.wsp--hifi .ws-id__title,
+  .wsp.wsp--hifi .ws-page-msg__title {
+    font-size: 32px;
+  }
+
+  .wsp.wsp--hifi .ws-host .rpt.sub-wrap {
+    padding: 24px 18px 26px;
+  }
+
+  /* The frozen phone head drops its side inset (its record had no band);
+     on a banded window the name and the count need it back. */
+  .wsp.wsp--hifi .ws-host .rpt-group__head {
+    padding-inline: 16px;
+  }
+
+  .wsp.wsp--hifi .ws-host .rpt-group__body {
+    padding: 18px 16px;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 899px) {
+  .wsp.wsp--hifi .ws-host .rpt.sub-wrap {
+    padding: 30px 30px 32px;
+  }
+}

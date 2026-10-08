@@ -1,4 +1,4 @@
-# SLA_POLICY.md — Alfa Trade Academy CRM
+# SLA_POLICY.md — Alpha Trade Academy CRM
 
 > Phase 0.5 · Политика SLA для очередей и задач. Единый источник значений и модели SLA.
 > Стартовые значения (DECISIONS D-05), конфигурируемы. Для mock считаются календарные часы.

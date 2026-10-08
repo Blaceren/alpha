@@ -28,7 +28,7 @@ export function CycleObject({ step }: { step: 1 | 2 | 3 | 4 | 5 | 6 }) {
     case 2:
       return (
         <div className="cyc cyc--decide" data-step="2" aria-label="Поле решения в продукте">
-          <p className="pw-mono">Причина входа до сделки</p>
+          <p className="pw-mono">Основание входа в сделку</p>
           <p className="cyc__field">Вход только после подтверждения уровня — не раньше.</p>
           <p className="pw-mono pw-mono--signal">● Зафиксировано</p>
         </div>
@@ -47,7 +47,7 @@ export function CycleObject({ step }: { step: 1 | 2 | 3 | 4 | 5 | 6 }) {
           <p className="pw-mono">Вопрос 3 из 5</p>
           <p className="cyc__q">Что записывается до входа в сделку?</p>
           <ul className="cyc__options" aria-hidden="true">
-            <li className="is-on">Причина входа</li>
+            <li className="is-on">Основание входа</li>
             <li>Результат сделки</li>
             <li>Настроение</li>
           </ul>
@@ -71,7 +71,7 @@ export function CycleObject({ step }: { step: 1 | 2 | 3 | 4 | 5 | 6 }) {
             <li className="is-current">L6</li>
             <li>L7</li>
           </ol>
-          <p className="cyc__sub">Открылся L6 · Экспирация и payout</p>
+          <p className="cyc__sub">Открылся L6 · Выбор актива</p>
         </div>
       );
   }

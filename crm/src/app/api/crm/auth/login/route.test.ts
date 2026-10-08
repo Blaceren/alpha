@@ -307,6 +307,40 @@ describe("CRM login route — the CAPTCHA error contract", () => {
   });
 });
 
+/* 2026-10-07 audit. The backend now refuses a non-staff account on this form
+   before it issues a session; and the session this browser already holds goes
+   along with the sign-in, so the backend replaces it instead of leaving it live. */
+describe("CRM login route — no session for a non-staff account, none left behind", () => {
+  it("reads the backend's NOT_STAFF as not_staff, not as an inactive account", async () => {
+    const { calls } = backendDouble(() =>
+      backendResponse({ error: "NOT_STAFF", message: "У этого аккаунта нет доступа к CRM" }, { status: 403 }),
+    );
+    const res = await POST(loginRequest());
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: "not_staff" });
+    // Refused at the backend: no staff check, no cookie.
+    expect(calls).toHaveLength(1);
+    const cookies = typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [];
+    expect(cookies.some((cookie) => cookie.includes(SESSION_COOKIE_NAME))).toBe(false);
+  });
+
+  it("sends the session this browser holds — and none of its other cookies — so it is replaced", async () => {
+    const { calls } = backendDouble(() => backendResponse({ user: {} }, { setCookie: SESSION_COOKIE }));
+    await POST(
+      loginRequest(undefined, {
+        cookie: `trading_platform_csrf=abc; ${SESSION_COOKIE_NAME}=held-session-value; other=1`,
+      }),
+    );
+    expect(headersOf(callAt(calls)).Cookie).toBe(`${SESSION_COOKIE_NAME}=held-session-value`);
+  });
+
+  it("sends no cookie when the browser holds no session", async () => {
+    const { calls } = backendDouble(() => backendResponse({ user: {} }, { setCookie: SESSION_COOKIE }));
+    await POST(loginRequest(undefined, { cookie: "trading_platform_csrf=abc" }));
+    expect(headersOf(callAt(calls)).Cookie).toBeUndefined();
+  });
+});
+
 describe("CRM login route — the staff contract, unchanged", () => {
   it("bridges the session cookie for a confirmed staff account", async () => {
     backendDouble(

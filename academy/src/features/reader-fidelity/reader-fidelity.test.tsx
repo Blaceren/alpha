@@ -190,6 +190,17 @@ describe("Reader — the frozen reading composition", () => {
     );
   });
 
+  it("prints the objective's extension only when it adds to the objective", () => {
+    const more = render(<ReaderBody {...readerProps} objectiveExt="Записать их до первой сделки." />);
+    expect(more.container.querySelector(".objective__ext")!.textContent).toBe("Записать их до первой сделки.");
+    more.unmount();
+
+    // The v5 programme fills both with the same sentence: it is said once.
+    const same = render(<ReaderBody {...readerProps} objectiveExt={"  Научиться формулировать\nусловия допуска. "} />);
+    expect(same.container.querySelectorAll(".objective p")).toHaveLength(2);
+    expect(same.container.querySelector(".objective__ext")).toBeNull();
+  });
+
   it("carries exactly one h1, and one h2 per section", () => {
     const { container } = render(<ReaderBody {...readerProps} />);
     expect(container.querySelectorAll("h1")).toHaveLength(1);

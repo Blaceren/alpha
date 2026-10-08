@@ -21,7 +21,7 @@ describe("«Инструменты» — the six tools", () => {
       "News Calendar",
     ]);
     expect(screen.getByText("Открыто 1 из 6")).toBeInTheDocument();
-    expect(screen.getByText("План сделки до входа: актив, направление, сумма, payout, экспирация и причина.")).toBeInTheDocument();
+    expect(screen.getByText("План сделки до входа: актив, направление, сумма, payout, экспирация и основание.")).toBeInTheDocument();
   });
 
   it("opens an unlocked tool in the SAME tab, as one full-row link", () => {
@@ -36,8 +36,8 @@ describe("«Инструменты» — the six tools", () => {
   it("names the level of a locked tool and offers no way into it, and no preview", () => {
     render(<ToolsHub tools={resolveToolWindows(null)} />);
     expect(screen.queryAllByRole("link")).toHaveLength(0);
-    expect(within(rows()[0]!).getByText("Откроется на уровне 5")).toBeInTheDocument();
-    expect(screen.getByText("Откроется на уровне 20")).toBeInTheDocument();
+    expect(within(rows()[0]!).getByText("Откроется после уровня 5")).toBeInTheDocument();
+    expect(screen.getByText("Откроется после уровня 20")).toBeInTheDocument();
     expect(screen.queryByText(/Как будет выглядеть/)).toBeNull();
   });
 

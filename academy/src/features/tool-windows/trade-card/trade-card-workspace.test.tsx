@@ -73,7 +73,7 @@ async function fillPlan(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Сумма"), "8");
   await user.type(screen.getByLabelText("Payout"), "90");
   await user.selectOptions(screen.getByLabelText("Экспирация"), "M3");
-  await user.type(screen.getByLabelText("Причина входа до сделки"), "Отскок от уровня, отмеченного до сессии");
+  await user.type(screen.getByLabelText("Основание входа в сделку"), "Отскок от уровня, отмеченного до сессии");
 }
 
 describe("Trade Card — a new plan", () => {
@@ -96,6 +96,8 @@ describe("Trade Card — a new plan", () => {
     expect(screen.getByText("Выберите направление: выше или ниже.")).toBeInTheDocument();
     expect(screen.getByLabelText("Сумма")).toHaveAttribute("aria-invalid", "true");
     expect(fixTradePlan).not.toHaveBeenCalled();
+    // …and the first wrong field takes the focus, so a phone shows it (2026-10-04).
+    await waitFor(() => expect(document.activeElement?.id).toBe("tc-asset"));
   });
 
   it("shows both outcomes as the learner types", async () => {
@@ -134,7 +136,7 @@ describe("Trade Card — a new plan", () => {
     await screen.findByRole("button", { name: "Зафиксировать план" });
     await fillPlan(user);
     await user.click(screen.getByRole("button", { name: "Зафиксировать план" }));
-    expect(await screen.findByText("Payout — целое число от 1 до 100.")).toBeInTheDocument();
+    expect(await screen.findByText("Payout — целое число от 20 до 99.")).toBeInTheDocument();
     expect(screen.getByLabelText("Payout")).toHaveAttribute("aria-invalid", "true");
   });
 });
@@ -144,7 +146,7 @@ describe("Trade Card — the fixed plan", () => {
     fetchTradeCardState.mockResolvedValue({ ok: true, data: { card: card(), reference: REFERENCE } });
     render(<TradeCardWorkspace />);
     expect(await screen.findByText("Результат после экспирации")).toBeInTheDocument();
-    expect(screen.getByLabelText("Причина входа до сделки")).toHaveValue("Отскок от уровня, отмеченного до сессии");
+    expect(screen.getByLabelText("Основание входа в сделку")).toHaveValue("Отскок от уровня, отмеченного до сессии");
   });
 
   it("saves only once a result is picked, with a trimmed observation", async () => {

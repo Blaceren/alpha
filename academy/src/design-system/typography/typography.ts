@@ -16,10 +16,11 @@ export const FONT_ROLES = {
   ui: "ATA Manrope — основной UI и тексты",
   mono: "ATA IBM Plex Mono — технические значения и метаданные",
   /**
-   * Public Home ONLY. The authenticated product never uses this face; it is the
-   * marketing surface's display voice and is bound to --font-public-display.
+   * The display voice, bound to --font-public-display. Public Home's first; since
+   * 2026-10-03 (DD-338, owner: «хай фай всего») also the authenticated product's
+   * statements and page titles. Never body text, controls or numbers.
    */
-  publicDisplay: "ATA Source Serif 4 — только Public Home",
+  publicDisplay: "ATA Source Serif 4 — заголовки и высказывания: Public Home и продукт",
 } as const;
 
 /** Tailwind class fragments for the provisional type scale. */

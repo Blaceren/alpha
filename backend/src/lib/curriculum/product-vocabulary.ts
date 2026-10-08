@@ -247,7 +247,7 @@ export const RANK_CODES: ReadonlySet<string> = new Set(RANK_TRANSITIONS.map((ran
  * is recorded so the converter's substitution is reviewable rather than magic.
  */
 export const OBSOLETE_PRODUCT_BRANDS = [
-  { marker: "TradeQuest", pattern: /\btradequest\b/i, replacement: "Alfa Trade Academy" },
+  { marker: "TradeQuest", pattern: /\btradequest\b/i, replacement: "Alpha Trade Academy" },
 ] as const;
 
 /** The obsolete brand this text carries, or null. Never echoes the text back. */

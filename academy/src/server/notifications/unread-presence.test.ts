@@ -41,6 +41,13 @@ describe("unread presence is derived from the visible set", () => {
     expect(await ask({ unreadCount: 2, items: [unread("community_reply"), unread("community_moderation")] })).toBe(false);
   });
 
+  it("does NOT light for the broker's own events", async () => {
+    // PREPROD, 2026-10-04: «Получен exchange postback: first_deposit.» lit the bell.
+    expect(await ask({ unreadCount: 1, items: [unread("postback_received")] })).toBe(false);
+    expect(await ask({ unreadCount: 2, items: [unread("exchange_connected"), unread("exchange_rejected")] })).toBe(false);
+    expect(await ask({ unreadCount: 2, items: [unread("postback_received"), unread("level_up")] })).toBe(true);
+  });
+
   it("ignores the Backend's own count, which cannot be filtered", async () => {
     // unreadCount says 7; every item a learner can see is read.
     expect(await ask({ unreadCount: 7, items: [read("level_up"), read("system")] })).toBe(false);

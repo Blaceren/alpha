@@ -78,6 +78,33 @@ describe("readBackendContentAssets", () => {
     }
   });
 
+  it("keeps a registry address — a path under /media/ on the Academy's own origin", () => {
+    const kept = readBackendContentAssets([
+      asset({ url: "/media/lessons/v2.l004.kak-chitat-grafik/4d86121c0c7a1eee.mp4" }),
+    ]);
+    expect(kept.map((a) => a.url)).toEqual(["/media/lessons/v2.l004.kak-chitat-grafik/4d86121c0c7a1eee.mp4"]);
+  });
+
+  it("refuses every path that is not plainly under /media/", () => {
+    for (const url of [
+      "//evil.example/media/x.mp4", // another origin
+      "/media//evil.example/x.mp4",
+      "/media/../etc/passwd",
+      "/media/lessons/../../secret.mp4",
+      "/media/lessons/a b.mp4",
+      "/media/lessons/x.mp4?token=1",
+      "/media/lessons/x.mp4#t=10",
+      "/media/",
+      "/media",
+      "/uploads/x.mp4",
+      "media/lessons/x.mp4",
+      "/media/.hidden/x.mp4",
+      "\\media\\x.mp4",
+    ]) {
+      expect(readBackendContentAssets([asset({ url })]), url).toEqual([]);
+    }
+  });
+
   it("refuses a URL carrying credentials", () => {
     expect(readBackendContentAssets([asset({ url: "https://u:p@media.example.com/x.mp4" })])).toEqual([]);
   });
@@ -140,6 +167,57 @@ describe("mapLevelContent media", () => {
     const payload = content([asset({ durationSeconds: null })]);
     payload.content.videoDurationSeconds = 600;
     expect(mapLevelContent(payload, null).media?.durationSeconds).toBe(600);
+  });
+
+  it("maps a registry video, poster and captions by their own-origin paths", () => {
+    const mapped = mapLevelContent(
+      content([
+        asset({ url: "/media/lessons/v2.l004.x/aaaaaaaaaaaaaaaa.mp4", durationSeconds: 612, sortOrder: 0 }),
+        asset({ kind: "image", assetCode: "poster", url: "/media/lessons/v2.l004.x/bbbbbbbbbbbbbbbb.jpg", sortOrder: 1 }),
+        asset({ kind: "subtitles", assetCode: "captions", url: "/media/lessons/v2.l004.x/cccccccccccccccc.vtt", locale: "ru", sortOrder: 2 }),
+      ]),
+      null,
+    );
+    expect(mapped.media).toEqual({
+      src: "/media/lessons/v2.l004.x/aaaaaaaaaaaaaaaa.mp4",
+      mimeType: "video/mp4",
+      poster: "/media/lessons/v2.l004.x/bbbbbbbbbbbbbbbb.jpg",
+      durationSeconds: 612,
+      captions: [{ src: "/media/lessons/v2.l004.x/cccccccccccccccc.vtt", srcLang: "ru", label: "ru" }],
+      markers: [],
+    });
+  });
+
+  it("carries the lesson line's points, read strictly, and none the video cannot reach", () => {
+    const payload = content([asset({ url: "/media/lessons/v2.l004.x/aaaaaaaaaaaaaaaa.mp4", durationSeconds: 612, sortOrder: 0 })]);
+    (payload.content as { questionMarkers?: unknown }).questionMarkers = [
+      { questionNumber: 2, rewatchFromSeconds: 190 },
+      { questionNumber: 1, rewatchFromSeconds: 115 },
+      { questionNumber: 1, rewatchFromSeconds: 400 }, // a number seen twice keeps its first second
+      { questionNumber: 3, rewatchFromSeconds: 900 }, // past the end of a 612-second video
+      { questionNumber: 4, rewatchFromSeconds: "470" }, // not a number
+      { questionNumber: 0, rewatchFromSeconds: 10 }, // not a question
+      "noise",
+    ];
+    expect(mapLevelContent(payload, null).media?.markers).toEqual([
+      { questionNumber: 1, seconds: 115 },
+      { questionNumber: 2, seconds: 190 },
+    ]);
+    (payload.content as { questionMarkers?: unknown }).questionMarkers = { questionNumber: 1 };
+    expect(mapLevelContent(payload, null).media?.markers).toEqual([]);
+  });
+
+  it("drops an unreadable address even when the payload was never pre-read", () => {
+    // The mapper reads the asset list itself. Before 2026-10-02 it trusted the
+    // caller to have done so, and the product's own caller had not.
+    const payload = content([]);
+    (payload.content as { assets: unknown }).assets = [
+      asset({ url: "javascript:alert(1)" }),
+      asset({ url: "http://media.example.com/plain.mp4", assetCode: "plain" }),
+    ];
+    expect(mapLevelContent(payload, null).media).toBeNull();
+    (payload.content as { assets: unknown }).assets = undefined;
+    expect(mapLevelContent(payload, null).media).toBeNull();
   });
 
   it("unavailable content carries no media", () => {

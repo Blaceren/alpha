@@ -37,9 +37,22 @@ describe("mapLevelState (enrolled context)", () => {
     expect(s.lockReason).toBe("sequence");
   });
 
-  it("external event locked -> lock reason external", () => {
-    const s = mapLevelState({ presentationState: "locked", blockers: ["not_current_level"], isExternal: true });
+  it("an external-event level that is simply not reached yet says so — the registration level stands third", () => {
+    const s = mapLevelState({ presentationState: "locked", blockers: ["not_current_level", "sequence_incomplete"], isExternal: true });
+    expect(s.lockReason).toBe("sequence");
+  });
+
+  it("an external-event level locked for no reason this build knows -> lock reason external", () => {
+    const s = mapLevelState({ presentationState: "locked", blockers: [], isExternal: true });
     expect(s.lockReason).toBe("external");
+  });
+
+  it("a level the program has not opened yet is «Готовится», never «Заблокирован»", () => {
+    const s = mapLevelState({ presentationState: "locked", blockers: ["definition_inactive", "sequence_incomplete"], isExternal: false });
+    expect(s.state).toBe("locked");
+    expect(s.lockReason).toBe("inactive");
+    expect(s.label).toBe("Готовится");
+    expect(s.routeAccessible).toBe(false);
   });
 
   it("xp_eligible is NOT accessible (still locked to the learner)", () => {

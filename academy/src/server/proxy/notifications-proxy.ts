@@ -9,10 +9,20 @@
  * template — which is what makes SSRF structurally impossible rather than merely
  * unlikely.
  *
- * SCOPE. Three named operations, each pinned to one method:
+ * SCOPE. Four named operations, each pinned to one method:
  *   - list      GET  /api/notifications
- *   - read-one  POST /api/notifications/{id}/read
- *   - read-all  POST /api/notifications/read-all
+ *   - read-one  POST /api/notifications/{id}/read   → Backend PATCH
+ *   - read-all  POST /api/notifications/read-all    → Backend PATCH
+ *   - clear-all POST /api/notifications/clear-all   → Backend PATCH (DD-349,
+ *     2026-10-06: «Очистить всё» in the bell's window; the Backend hides the
+ *     learner's notifications from the learner and deletes nothing)
+ *
+ * THE BACKEND'S WRITE METHOD IS PATCH (found 2026-10-04, launch audit). Both
+ * Backend routes export PATCH only. This file forwarded POST, and nothing ever
+ * called either write until the register started marking what the learner has
+ * seen — then the first real call came back 405 and the bell never cleared.
+ * The browser still says POST to the Academy (the Academy's own route, CSRF
+ * checked by the Backend as before); only the hop to the Backend changed.
  *
  * The previous revision of this file carried exactly one operation and said of
  * the other two: "There is deliberately no passthrough for
@@ -42,6 +52,7 @@ import { makeError, REQUEST_ID_HEADER, type NormalizedError } from "@/lib/api/er
 
 const BACKEND_PATH = "/api/notifications";
 const BACKEND_READ_ALL_PATH = "/api/notifications/read-all";
+const BACKEND_CLEAR_ALL_PATH = "/api/notifications/clear-all";
 
 /**
  * Notification id: conservative identity charset, bounded length — the same
@@ -111,7 +122,7 @@ function resolveConfig(): { config: ResolvedConfig } | { failure: Response } {
 async function forward(
   request: Request,
   config: ResolvedConfig,
-  method: "GET" | "POST",
+  method: "GET" | "PATCH",
   backendPath: string,
 ): Promise<Response> {
   const headers = buildHeaders(request, method === "GET" ? REQUEST_HEADERS : WRITE_REQUEST_HEADERS);
@@ -179,7 +190,7 @@ export async function proxyMarkNotificationRead(request: Request, id: string): P
   const resolved = resolveConfig();
   if ("failure" in resolved) return resolved.failure;
   const path = `${BACKEND_PATH}/${encodeURIComponent(id)}/read`;
-  return forward(request, resolved.config, "POST", path);
+  return forward(request, resolved.config, "PATCH", path);
 }
 
 /**
@@ -194,5 +205,21 @@ export async function proxyMarkAllNotificationsRead(request: Request): Promise<R
   }
   const resolved = resolveConfig();
   if ("failure" in resolved) return resolved.failure;
-  return forward(request, resolved.config, "POST", BACKEND_READ_ALL_PATH);
+  return forward(request, resolved.config, "PATCH", BACKEND_READ_ALL_PATH);
+}
+
+/**
+ * clear-all — POST /api/notifications/clear-all (DD-349).
+ *
+ * A constant path with no caller input of any kind, like read-all. Idempotent:
+ * a second call finds nothing left to clear. The Backend scopes it to the
+ * authenticated learner, so it cannot touch anybody else's list.
+ */
+export async function proxyClearAllNotifications(request: Request): Promise<Response> {
+  if (request.method !== "POST") {
+    return errorResponse(makeError("VALIDATION_ERROR", { status: 405 }), 405);
+  }
+  const resolved = resolveConfig();
+  if ("failure" in resolved) return resolved.failure;
+  return forward(request, resolved.config, "PATCH", BACKEND_CLEAR_ALL_PATH);
 }

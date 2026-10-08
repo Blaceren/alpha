@@ -1,4 +1,4 @@
-# IMPLEMENTATION_STATUS.md — Alfa Trade Academy CRM
+# IMPLEMENTATION_STATUS.md — Alpha Trade Academy CRM
 
 ## Phase 0 — Product & Architecture Blueprint ✅
 Спроектированы продуктовый контекст, IA, доменная модель, роли/права, контракт провайдера, план mock-данных, UX-блюпринт, будущая интеграция, план реализации. Только документы.

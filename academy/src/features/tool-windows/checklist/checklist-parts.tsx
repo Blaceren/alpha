@@ -6,8 +6,10 @@
  * and no effects; the workspace owns both.
  */
 import { Check, CircleCheck, ListChecks, OctagonX } from "lucide-react";
+import { PayoutField } from "../components/payout-field";
 import { AssetOptions, FieldError } from "../trade-card/trade-card-parts";
 import {
+  MIN_PAYOUT_MESSAGE,
   itemLabel,
   verdictLine,
   verdictWords,
@@ -59,35 +61,22 @@ export function ChecklistSubject({
         </select>
         <FieldError id={errorId("asset")} message={errors.asset} />
       </div>
-      <div className="tc-field">
-        <label className="tc-label" htmlFor={checklistFieldId("minPayoutPercent")}>
-          Мой минимум payout
-        </label>
-        <span className="tc-affix" data-side="end">
-          <input
-            id={checklistFieldId("minPayoutPercent")}
-            className="tc-input"
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            value={draft.minPayoutPercent}
-            onChange={(event) => onChange("minPayoutPercent", event.target.value)}
-            disabled={disabled}
-            aria-invalid={errors.minPayoutPercent ? true : undefined}
-            aria-describedby={errors.minPayoutPercent ? errorId("minPayoutPercent") : undefined}
-          />
-          <span className="tc-affix__mark" aria-hidden="true">
-            %
-          </span>
-        </span>
-        <FieldError id={errorId("minPayoutPercent")} message={errors.minPayoutPercent} />
-      </div>
+      <PayoutField
+        id={checklistFieldId("minPayoutPercent")}
+        errorId={errorId("minPayoutPercent")}
+        label="Мой минимум payout"
+        value={draft.minPayoutPercent}
+        onChange={(value) => onChange("minPayoutPercent", value)}
+        disabled={disabled}
+        error={errors.minPayoutPercent}
+        rangeMessage={MIN_PAYOUT_MESSAGE}
+      />
     </div>
   );
 }
 
 /**
- * «EUR/USD OTC · перед входом» and the nine segments, one per item: how far the
+ * «EUR/USD · перед входом» and one segment per item: how far the
  * check has come, never a score.
  */
 export function ChecklistProgress({

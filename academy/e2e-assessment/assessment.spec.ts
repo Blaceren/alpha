@@ -71,6 +71,7 @@ test("Journey A — failed attempt leaves L2 incomplete and L3 locked", async ({
   await expect(page.locator(`[data-level="${L3}"]`).first()).toHaveAttribute("data-state", "locked");
 
   await page.goto(`${ACADEMY_ON}/lessons/${L2}`);
+  // The rev3 package is a record (DD-341): it keeps the spelling it was approved with.
   await expect(page.locator(".cur-detail__title")).toContainText("Как устроен Alfa Trade Academy");
   await expect(page.locator('[data-media="pending"]')).toBeVisible();
 
@@ -156,6 +157,7 @@ test("Journey D — assessment flag disabled fails closed, content stays readabl
   await login(page, ACADEMY_OFF, LEARNER_D);
   await page.goto(`${ACADEMY_OFF}/lessons/${L2}`);
   // Lesson content remains readable.
+  // The rev3 package is a record (DD-341): it keeps the spelling it was approved with.
   await expect(page.locator(".cur-detail__title")).toContainText("Как устроен Alfa Trade Academy");
   // Assessment fails closed with a bounded notice; no questions rendered.
   await expect(page.getByText("Проверка сейчас недоступна")).toBeVisible();

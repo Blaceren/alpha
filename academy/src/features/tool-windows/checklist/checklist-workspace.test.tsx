@@ -166,14 +166,17 @@ describe("Entry Checklist — keeping a check", () => {
     expect(within(list).getByText("Не входить · стоп-фактор: Рядом нет важной новости (±15 мин)")).toBeInTheDocument();
   });
 
-  it("sends no minimum when the field is empty, and refuses one that is not a percent", async () => {
+  it("sends no minimum when the field is empty, and refuses one outside 20–99", async () => {
     const user = userEvent.setup();
     saveEntryCheck.mockResolvedValue({ ok: true, data: { check: check(), recent: [check()], lastMinPayoutPercent: null } });
     render(<ChecklistWorkspace initialState={{ ...STATE, lastMinPayoutPercent: null }} />);
     await user.selectOptions(screen.getByLabelText("Актив"), "BTCUSD_OTC");
-    await user.type(screen.getByLabelText("Мой минимум payout"), "150");
+    // Letters never reach the field, and neither does a third digit.
+    await user.type(screen.getByLabelText("Мой минимум payout"), "льдл150");
+    expect(screen.getByLabelText("Мой минимум payout")).toHaveValue("15");
     await user.click(screen.getByRole("button", { name: "Записать проверку" }));
-    expect(screen.getByText("Минимум payout — целое число от 1 до 100, или оставьте поле пустым.")).toBeInTheDocument();
+    expect(screen.getByText("Минимум payout — целое число от 20 до 99, или оставьте поле пустым.")).toBeInTheDocument();
+    expect(saveEntryCheck).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Мой минимум payout")).toHaveFocus();
     await user.clear(screen.getByLabelText("Мой минимум payout"));
     await user.click(screen.getByRole("button", { name: "Записать проверку" }));
@@ -191,7 +194,7 @@ describe("Entry Checklist — keeping a check", () => {
   it("says the tool is closed when the Backend says so", async () => {
     fetchChecklistState.mockResolvedValue(failure("TOOL_LOCKED", "FORBIDDEN"));
     render(<ChecklistWorkspace />);
-    expect(await screen.findByText("Entry Checklist открывается после контрольной точки уровня 20.")).toBeInTheDocument();
+    expect(await screen.findByText("Entry Checklist пока закрыт: он откроется по ходу пути, после уровня, указанного на странице «Инструменты».")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Продолжить путь" })).toHaveAttribute("href", "/path");
   });
 });

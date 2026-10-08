@@ -124,11 +124,21 @@ describe("api client — logout", () => {
     expect(headers.get("x-csrf-token")).toBe("tok-123");
   });
 
-  it("propagates a CSRF bootstrap failure without attempting logout", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({}, { status: 500 }));
+  /* 2026-10-07 audit: when the pair could not be fetched nothing was sent, so
+     the Academy's logout route never expired the cookie — the learner was shown
+     /login while the browser stayed signed in. */
+  it("still sends the logout, without the header, when the CSRF bootstrap fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({}, { status: 502 }))
+      .mockResolvedValueOnce(jsonResponse({ error: "CSRF_INVALID" }, { status: 403 }));
     vi.stubGlobal("fetch", fetchMock);
     const result = await logout();
     expect(result.ok).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(url).toBe(`${PROXY_BASE}/auth/logout`);
+    expect(init.method).toBe("POST");
+    expect(new Headers(init.headers).get("x-csrf-token")).toBeNull();
   });
 });

@@ -74,7 +74,7 @@ export default function LoginPage() {
           </span>
           <DemoBadge />
         </div>
-        <h1 className="text-base font-semibold text-text-primary">Alfa Trade Academy CRM</h1>
+        <h1 className="text-base font-semibold text-text-primary">Alpha Trade Academy CRM</h1>
         <p className="mt-1 text-sm text-text-secondary">
           Внутреннее рабочее пространство сотрудников. В demo-режиме аутентификация отключена —
           настоящий вход сотрудников доступен в режиме подключённого backend.

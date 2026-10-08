@@ -16,6 +16,16 @@ export type ValidationSummaryProps = {
   labelForKey: (stableKey: string) => string;
 };
 
+/**
+ * How many problems the summary names one by one.
+ *
+ * A report of fifty required fields submitted empty has fifty of them, and a
+ * list of fifty links above the form is not a summary. The first few are named
+ * so a keyboard user can jump to them; the rest are counted, and every one is
+ * still marked at its own field.
+ */
+export const MAX_LISTED_ERRORS = 8;
+
 export function ValidationSummary({ errors, serverMessage, labelForKey }: ValidationSummaryProps) {
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -34,7 +44,7 @@ export function ValidationSummary({ errors, serverMessage, labelForKey }: Valida
       {serverMessage ? <p className="rpt-summary__server eng-notice__body">{serverMessage}</p> : null}
       {errors.length > 0 ? (
         <ul className="rpt-summary__list eng-notice__body">
-          {errors.map((err) => (
+          {errors.slice(0, MAX_LISTED_ERRORS).map((err) => (
             <li key={err.stableKey}>
               <a
                 href={`#rf-${err.stableKey}`}
@@ -49,6 +59,11 @@ export function ValidationSummary({ errors, serverMessage, labelForKey }: Valida
               </a>
             </li>
           ))}
+          {errors.length > MAX_LISTED_ERRORS ? (
+            <li className="rpt-summary__more">
+              и ещё {errors.length - MAX_LISTED_ERRORS} — они отмечены в форме ниже.
+            </li>
+          ) : null}
         </ul>
       ) : null}
     </div>

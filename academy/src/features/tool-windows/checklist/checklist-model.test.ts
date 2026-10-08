@@ -84,6 +84,43 @@ describe("the words around it", () => {
       "Не входить · условие: Payout не ниже моего минимума — 80%",
     );
   });
+
+  /* 2026-10-07: the seven conditions replaced the nine. A kept check of the first
+     list comes with the named item's own words from the Backend, and the current
+     list's payout item is `payout_checked`. */
+  it("names a kept check's item in the words the Backend kept for it, whatever the list is now", () => {
+    const seven: ChecklistItem[] = [
+      { code: "asset_in_list", group: "environment", stop: false, label: "Актив из моего списка" },
+      { code: "payout_checked", group: "environment", stop: false, label: "Payout посмотрел, планку посчитал" },
+      { code: "market_state", group: "chart", stop: false, label: "Состояние определено: тренд, боковик или неясно" },
+    ];
+    const kept = (over: Partial<EntryCheck>): EntryCheck => ({
+      id: "cmcheck0000000abcdefghij",
+      asset: { code: "EURUSD", label: "EUR/USD" },
+      minPayoutPercent: 80,
+      answers: {},
+      verdict: "skip_condition",
+      missingItem: "market_state",
+      createdAt: "2026-10-07T12:00:00.000Z",
+      ...over,
+    });
+    // The first list's words win over the current list's for the same code.
+    expect(
+      verdictLine(kept({ verdict: "skip_stop", missingItem: "market_state", missingItemLabel: "Состояние рынка определено: тренд или боковик", listVersion: 1 }), seven),
+    ).toBe("Не входить · стоп-фактор: Состояние рынка определено: тренд или боковик");
+    // A code the current list does not know, with its words kept.
+    expect(verdictLine(kept({ verdict: "skip_stop", missingItem: "no_revenge", missingItemLabel: "Нет желания отыграться", listVersion: 1 }), seven)).toBe(
+      "Не входить · стоп-фактор: Нет желания отыграться",
+    );
+    // The current payout item carries the minimum, in the form and in the list.
+    expect(itemLabel(seven[1]!, 85)).toBe("Payout посмотрел, планку посчитал — 85%");
+    expect(verdictLine(kept({ missingItem: "payout_checked", missingItemLabel: "Payout посмотрел, планку посчитал" }), seven)).toBe(
+      "Не входить · условие: Payout посмотрел, планку посчитал — 80%",
+    );
+    // Without the Backend's words (an older Backend), the current list's, else the code.
+    expect(verdictLine(kept({ missingItem: "asset_in_list" }), seven)).toBe("Не входить · условие: Актив из моего списка");
+    expect(verdictLine(kept({ missingItem: "gone" }), seven)).toBe("Не входить · условие: gone");
+  });
 });
 
 describe("the form", () => {
@@ -95,11 +132,13 @@ describe("the form", () => {
     expect(emptyChecklistDraft({ ...STATE, lastMinPayoutPercent: null }).minPayoutPercent).toBe("");
   });
 
-  it("reads the minimum as empty, a whole percent, or not valid", () => {
+  it("reads the minimum as empty, a payout from 20 to 99, or not valid", () => {
     expect(parseMinPayout("")).toBeNull();
-    expect(parseMinPayout(" 85 % ")).toBe(85);
-    expect(parseMinPayout("0")).toBeUndefined();
-    expect(parseMinPayout("85.5")).toBeUndefined();
+    expect(parseMinPayout("  ")).toBeNull();
+    expect(parseMinPayout("85")).toBe(85);
+    expect(parseMinPayout("20")).toBe(20);
+    expect(parseMinPayout("99")).toBe(99);
+    for (const raw of ["0", "19", "100", "85.5", "85%", "8a"]) expect(parseMinPayout(raw), raw).toBeUndefined();
   });
 
   it("sends exactly the nine answers, the asset and the minimum", () => {

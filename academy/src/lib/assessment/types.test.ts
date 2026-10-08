@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   isAssessmentResult,
   isAssessmentStart,
+  assessmentResultData,
   assessmentStartData,
+  readAssessmentReview,
   type AssessmentStart,
 } from "@/lib/assessment/types";
 
@@ -60,5 +62,78 @@ describe("assessment DTO guards — answer isolation", () => {
   it("rejects a malformed result", () => {
     expect(isAssessmentResult({ data: { status: "maybe" } })).toBe(false);
     expect(isAssessmentResult({ data: { status: "passed", passed: "yes" } })).toBe(false);
+  });
+});
+
+/**
+ * THE РАЗБОР (2026-10-02) — read defensively, because it is printed.
+ */
+describe("readAssessmentReview", () => {
+  const item = (over: Record<string, unknown> = {}) => ({
+    questionKey: "q1",
+    questionNumber: 1,
+    explanation: "Тело — расстояние между открытием и закрытием.",
+    rewatchFromSeconds: 220,
+    ...over,
+  });
+
+  it("is null when the result carries no review — the aggregate-only result of before", () => {
+    for (const absent of [undefined, null, "no", 3, {}]) expect(readAssessmentReview(absent)).toBeNull();
+  });
+
+  it("is an empty list on a pass, which is not the same as null", () => {
+    expect(readAssessmentReview([])).toEqual([]);
+  });
+
+  it("keeps a well-formed item as it is", () => {
+    expect(readAssessmentReview([item()])).toEqual([item()]);
+  });
+
+  it("keeps an item with no explanation or no second, as nulls", () => {
+    expect(readAssessmentReview([item({ explanation: null, rewatchFromSeconds: null })])).toEqual([
+      item({ explanation: null, rewatchFromSeconds: null }),
+    ]);
+    expect(readAssessmentReview([item({ explanation: "   " })])![0]!.explanation).toBeNull();
+  });
+
+  it("drops a second that is not a whole, sane number of seconds", () => {
+    for (const bad of [-1, 1.5, Number.NaN, 90_000, "115"]) {
+      expect(readAssessmentReview([item({ rewatchFromSeconds: bad })])![0]!.rewatchFromSeconds, String(bad)).toBeNull();
+    }
+    expect(readAssessmentReview([item({ rewatchFromSeconds: 0 })])![0]!.rewatchFromSeconds).toBe(0);
+  });
+
+  it("drops a malformed item and a repeated question without losing the rest", () => {
+    const read = readAssessmentReview([
+      item(),
+      "nope",
+      item({ questionKey: "" }),
+      item({ questionKey: "q2", questionNumber: 0 }),
+      item({ questionKey: "q1", explanation: "second opinion" }),
+      item({ questionKey: "q3", questionNumber: 3 }),
+    ]);
+    expect(read!.map((entry) => entry.questionKey)).toEqual(["q1", "q3"]);
+    expect(read![0]!.explanation).toBe("Тело — расстояние между открытием и закрытием.");
+  });
+
+  it("never carries an answer key through, whatever the payload held", () => {
+    const read = readAssessmentReview([item({ correctAnswer: { code: "b" }, correctOptionCodes: ["b"], selected: "a" })]);
+    expect(Object.keys(read![0]!).sort()).toEqual(["explanation", "questionKey", "questionNumber", "rewatchFromSeconds"]);
+  });
+
+  it("assessmentResultData normalises the review of a graded result", () => {
+    const graded = assessmentResultData({
+      data: {
+        created: true, status: "failed", passed: false, attemptNumber: 1, submittedAt: "t", durationSeconds: 3,
+        totalQuestions: 4, correctCount: 3, scoreBasisPoints: 7500, completion: null,
+        review: [item({ rewatchFromSeconds: "soon" })],
+      },
+    });
+    expect(graded.review).toEqual([item({ rewatchFromSeconds: null })]);
+    // An older Backend sends no `review` at all.
+    const old = assessmentResultData({
+      data: { created: true, status: "failed", passed: false, attemptNumber: 1, submittedAt: "t", durationSeconds: 3, totalQuestions: 4, correctCount: 3, scoreBasisPoints: 7500, completion: null },
+    });
+    expect(old.review).toBeNull();
   });
 });

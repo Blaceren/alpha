@@ -11,6 +11,7 @@ import {
 } from "@/features/lessons-fidelity/lessons-corpus";
 import { countPhrase } from "@/features/lessons-fidelity/ru-plural";
 import "@/features/lessons-fidelity/lessons-fidelity.css";
+import "@/features/lessons-fidelity/lessons-hifi.css";
 
 /**
  * LESSONS — the reference corpus, restored.
@@ -116,7 +117,8 @@ export async function LessonsFidelityScreen() {
 
   return (
     <AppShell userName={name} activeId="lessons" frozenSurface notificationPresence={<UnreadPresence />}>
-      <div className="lsn">
+      {/* `lsn--hifi`: the product hi-fi layer (DD-338) over the frozen surface. */}
+      <div className="lsn lsn--hifi">
         <section className="lessons-head" aria-labelledby="lessons-title">
           <div className="lessons-head__row">
             <h1 id="lessons-title">Уроки</h1>

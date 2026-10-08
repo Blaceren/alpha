@@ -40,7 +40,11 @@ import {
   contentBodyToolReferences,
   isBlocksV2,
 } from "@/lib/curriculum/content-body";
-import { findObsoleteBrand, isProductToolCode } from "@/lib/curriculum/product-vocabulary";
+import {
+  curriculumToolByCode,
+  findObsoleteBrand,
+  isProductToolCode,
+} from "@/lib/curriculum/product-vocabulary";
 
 export type PackageIssue = { code: string; path: string; message: string };
 
@@ -179,6 +183,7 @@ const SELF_COMPLETABLE_METHODS = new Set([
   "manual",
   "assessment_pass",
   "report_approval",
+  "formal_check",
   "mentor_review",
 ]);
 
@@ -709,6 +714,23 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
           if (needsChoices && field.choiceCodes.length < 2) {
             issue(issues, "REPORT_FIELD_CHOICES_MISSING", `${fieldPath}.choiceCodes`, "choice field requires at least two choices");
           }
+          // Choice labels are positional against `choiceCodes`, and the importer
+          // turns them into the `{ code: label }` record the runtime reads. A
+          // list of another length has no such mapping. An EMPTY list stays
+          // legal: it is what every package shipped so far carries.
+          field.localizations.forEach((localization, li) => {
+            if (
+              localization.choiceLabels.length > 0 &&
+              localization.choiceLabels.length !== field.choiceCodes.length
+            ) {
+              issue(
+                issues,
+                "REPORT_FIELD_CHOICE_LABEL_MISMATCH",
+                `${fieldPath}.localizations[${li}].choiceLabels`,
+                "choice label count does not match choice code count",
+              );
+            }
+          });
           // Conditional requiredness (RC-1): controller must be an earlier field of
           // the same report, the comparison must be type-compatible, and a field
           // must not be both statically required and conditionally required.
@@ -777,6 +799,20 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
             if (!criterion.localizations.some((l) => l.locale === pkg.locale)) {
               issue(issues, "REPORT_CRITERION_LOCALIZATION_MISSING", `${criterionPath}.localizations`, `missing package locale ${pkg.locale}`);
             }
+            // The package schema lets a criterion description be empty; the
+            // report runtime does not, and reads a rubric with one as a corrupt
+            // definition — for the learner too, who then cannot open the report
+            // at all. Refused here, where it is still a JSON edit.
+            criterion.localizations.forEach((localization, li) => {
+              if (localization.description.trim().length === 0) {
+                issue(
+                  issues,
+                  "REPORT_CRITERION_DESCRIPTION_EMPTY",
+                  `${criterionPath}.localizations[${li}].description`,
+                  "the report runtime requires a criterion description",
+                );
+              }
+            });
           });
 
           const scaleKeys = new Set<string>();
@@ -896,6 +932,92 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
       issue(issues, "PREREQUISITE_CYCLE", `levels.${code}`, "prerequisite cycle detected");
       break;
     }
+  }
+
+  /* ----------------------- 4b. program structure ---------------------- */
+  /*
+   * CHAPTERS. A chapter is a run of consecutive modules. Either every module
+   * names one or none does — a program with half its modules in chapters has no
+   * honest way to be drawn — and the numbers run 1, 2, 3 in module order with
+   * one title each.
+   */
+  const modulesInOrder = pkg.modules
+    .map((moduleDefinition, index) => ({ moduleDefinition, path: `modules[${index}]` }))
+    .sort((a, b) => a.moduleDefinition.moduleNumber - b.moduleDefinition.moduleNumber);
+  const chaptered = modulesInOrder.filter((entry) => entry.moduleDefinition.chapter);
+  if (chaptered.length > 0 && chaptered.length !== modulesInOrder.length) {
+    for (const entry of modulesInOrder) {
+      if (!entry.moduleDefinition.chapter) {
+        issue(issues, "MODULE_CHAPTER_MISSING", `${entry.path}.chapter`, "every module names a chapter, or none does");
+      }
+    }
+  } else if (chaptered.length > 0) {
+    const chapterTitles = new Map<number, string>();
+    let previousChapter = 0;
+    for (const entry of modulesInOrder) {
+      const chapter = entry.moduleDefinition.chapter!;
+      if (chapter.number !== previousChapter && chapter.number !== previousChapter + 1) {
+        issue(
+          issues,
+          "MODULE_CHAPTER_NOT_SEQUENTIAL",
+          `${entry.path}.chapter.number`,
+          previousChapter === 0
+            ? "chapter numbering must start at 1"
+            : `chapter ${chapter.number} cannot follow chapter ${previousChapter}: a chapter is a run of consecutive modules`,
+        );
+      }
+      const known = chapterTitles.get(chapter.number);
+      if (known !== undefined && known !== chapter.title) {
+        issue(issues, "MODULE_CHAPTER_TITLE_MISMATCH", `${entry.path}.chapter.title`, "one chapter has one title");
+      }
+      chapterTitles.set(chapter.number, chapter.title);
+      previousChapter = chapter.number;
+    }
+  }
+
+  /*
+   * LEVELS THAT ARE NOT OPEN YET. Only a trailing run: the first level is always
+   * open, and once a level is `disabled` every later one is too. A closed level
+   * with an open one behind it would lock that open level for ever — the
+   * runtime completes levels strictly in order.
+   */
+  const levelsInOrder = [...levelsByCode.values()].sort((a, b) => a.level.levelNumber - b.level.levelNumber);
+  const firstClosed = levelsInOrder.findIndex((entry) => entry.level.status === "disabled");
+  if (firstClosed === 0) {
+    issue(issues, "LEVEL_STATUS_NO_OPEN_LEVEL", `${levelsInOrder[0].path}.status`, "the first level of a program must be open");
+  } else if (firstClosed > 0) {
+    for (const entry of levelsInOrder.slice(firstClosed)) {
+      if (entry.level.status !== "disabled") {
+        issue(
+          issues,
+          "LEVEL_STATUS_NOT_TRAILING",
+          `${entry.path}.status`,
+          `level ${entry.level.levelNumber} is open but follows a level that is not: only a trailing run may be disabled`,
+        );
+      }
+    }
+  }
+
+  /*
+   * TOOL UNLOCKS. One level per tool, the tool must be one the product has, and
+   * the level must be in this package. A level that is not open yet MAY be named:
+   * that is how a learner is told a tool arrives later in the program.
+   */
+  if (pkg.toolUnlocks) {
+    const unlockedTools = new Set<string>();
+    pkg.toolUnlocks.forEach((unlock, index) => {
+      const unlockPath = `toolUnlocks[${index}]`;
+      if (!curriculumToolByCode(unlock.toolCode)) {
+        issue(issues, "TOOL_UNLOCK_CODE_UNKNOWN", `${unlockPath}.toolCode`, "tool code is not a live tool of the product vocabulary");
+      }
+      if (unlockedTools.has(unlock.toolCode)) {
+        issue(issues, "TOOL_UNLOCK_DUPLICATE", `${unlockPath}.toolCode`, "a tool is opened by exactly one level of a version");
+      }
+      unlockedTools.add(unlock.toolCode);
+      if (!levelsByCode.has(unlock.levelCode)) {
+        issue(issues, "TOOL_UNLOCK_LEVEL_MISSING", `${unlockPath}.levelCode`, "the unlocking level is not in this package");
+      }
+    });
   }
 
   /* --------------------- 5. hygiene / secrets scan -------------------- */
@@ -1019,6 +1141,8 @@ export function validateCurriculumPackage(input: unknown): PackageValidationResu
         }
       }
       if (!CONTENT_REQUIRED_FOR_APPROVED_TYPES.has(level.type)) continue;
+      // A level that is not open yet has nothing to read and nobody to read it.
+      if (level.status === "disabled") continue;
       if (!level.content) {
         issue(issues, "CONTENT_REQUIRED_FOR_APPROVED", `${path}.content`, "content-bearing level in an approved package requires content");
         continue;

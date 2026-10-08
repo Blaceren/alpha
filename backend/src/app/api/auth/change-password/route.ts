@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { runDetached } from "@/lib/account/background";
+import { retireLinksOnPasswordChange } from "@/lib/account/lifecycle";
 import { apiAuthErrorResponse, requireUser } from "@/lib/apiAuth";
 import { createAuditLog } from "@/lib/audit";
 import { csrfFailureResponse, validateCsrfToken } from "@/lib/csrf";
+import { sendMail } from "@/lib/mail/send";
+import { passwordChangedMessage } from "@/lib/mail/templates";
 import { prisma } from "@/lib/prisma";
 import { getRequestIp, rateLimit } from "@/lib/rateLimit";
 import {
@@ -11,7 +15,7 @@ import {
   SESSION_COOKIE_NAME,
   sessionCookieOptions,
 } from "@/lib/session";
-import { passwordSchema, validateJsonBody } from "@/lib/validation";
+import { newPasswordSchema, validateJsonBody } from "@/lib/validation";
 
 /**
  * CHANGE YOUR OWN PASSWORD.
@@ -35,6 +39,12 @@ import { passwordSchema, validateJsonBody } from "@/lib/validation";
  * WHAT NEVER LEAVES THIS FILE. No password, no hash, no session token and no
  * token hash appears in a response body or an audit record. The audit trail
  * carries the action and the outcome, which is what it is for.
+ *
+ * ACCOUNT RECOVERY (2026-10-01). The same commit retires what was mailed before
+ * it — a pending change of address and any reset link (`account/lifecycle.ts`)
+ * — and, where this deployment can send mail, the account's address is told
+ * that the password changed, exactly as it is after a reset. A change made by
+ * someone else is otherwise silent until the owner fails to sign in.
  */
 
 export const dynamic = "force-dynamic";
@@ -45,7 +55,7 @@ const changePasswordSchema = z.object({
      hash, never against a policy. Applying today's minimum to it would lock out
      anyone whose password predates the rule. */
   currentPassword: z.string().min(1, "Введите текущий пароль"),
-  newPassword: passwordSchema,
+  newPassword: newPasswordSchema,
 });
 
 export async function POST(request: Request) {
@@ -82,7 +92,7 @@ export async function POST(request: Request) {
 
     const user = await prisma.user.findUnique({
       where: { id: currentUser.id },
-      select: { id: true, passwordHash: true },
+      select: { id: true, email: true, name: true, passwordHash: true },
     });
 
     if (!user || !(await bcrypt.compare(parsed.data.currentPassword, user.passwordHash))) {
@@ -105,9 +115,17 @@ export async function POST(request: Request) {
 
     const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
 
-    const token = await issueSessionWithin(user.id, async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
-    });
+    /* Every other session ends with the old password — the account's second
+       one included (two may be live since 2026-10-07) — and this browser gets
+       a fresh one. */
+    const token = await issueSessionWithin(
+      user.id,
+      async (tx) => {
+        await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
+        await retireLinksOnPasswordChange(tx, user.id);
+      },
+      { userAgent: request.headers.get("user-agent") },
+    );
 
     await createAuditLog({
       userId: user.id,
@@ -116,6 +134,12 @@ export async function POST(request: Request) {
       entityId: user.id,
       request,
     });
+
+    /* Detached: the response does not wait for a mail provider, and a
+       deployment without mail sends nothing and records nothing. */
+    runDetached(() =>
+      sendMail(passwordChangedMessage({ to: user.email, name: user.name }), { userId: user.id }),
+    );
 
     const response = NextResponse.json({ ok: true });
     response.cookies.set(SESSION_COOKIE_NAME, token, sessionCookieOptions);

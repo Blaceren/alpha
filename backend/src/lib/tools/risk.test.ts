@@ -37,6 +37,7 @@ describe("riskNumbers — the presentation's own example", () => {
 
   it("puts break-even at 1 / (1 + payout): 52.63% at 90%", () => {
     expect(numbers.breakEvenBasisPoints).toBe(5263);
+    // The arithmetic holds for any payout; what a learner may ENTER is 20…99 (see the parser below).
     expect(riskNumbers({ capitalMinor: 40_000, payoutPercent: 100, riskPercent: 2, dailyLimitPercent: 6 }).breakEvenBasisPoints).toBe(5000);
   });
 
@@ -99,6 +100,10 @@ describe("parseRiskPlan", () => {
     expect(refused({ ...PLAN, riskPercent: 4 })).toBe("TOOL_VALIDATION:invalid_riskPercent");
     expect(refused({ ...PLAN, riskPercent: 2.5 })).toBe("TOOL_VALIDATION:invalid_riskPercent");
     expect(refused({ ...PLAN, payoutPercent: 0 })).toBe("TOOL_VALIDATION:invalid_payoutPercent");
+    expect(refused({ ...PLAN, payoutPercent: 19 })).toBe("TOOL_VALIDATION:invalid_payoutPercent");
+    expect(refused({ ...PLAN, payoutPercent: 100 })).toBe("TOOL_VALIDATION:invalid_payoutPercent");
+    expect(parseRiskPlan({ ...PLAN, payoutPercent: 20 }).payoutPercent).toBe(20);
+    expect(parseRiskPlan({ ...PLAN, payoutPercent: 99 }).payoutPercent).toBe(99);
     expect(refused({ ...PLAN, dailyLimitPercent: 101 })).toBe("TOOL_VALIDATION:invalid_dailyLimitPercent");
     expect(refused({ ...PLAN, scenario: "  a " })).toBe("TOOL_VALIDATION:invalid_scenario");
     expect(refused({ ...PLAN, cancelCondition: "x".repeat(1001) })).toBe("TOOL_VALIDATION:invalid_cancelCondition");

@@ -23,7 +23,7 @@ export async function UnreadPresence() {
   return (
     <>
       <span className="dot" aria-hidden="true" />
-      <span className="sr-only">есть непрочитанные уведомления</span>
+      <span className="sr-only">, есть непрочитанные</span>
     </>
   );
 }

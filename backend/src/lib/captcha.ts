@@ -64,7 +64,7 @@ import type { CaptchaPurpose } from "@/lib/captcha/purpose";
 export { CAPTCHA_LOGIN_ENFORCED_KEY, isCaptchaLoginEnforced } from "@/lib/captcha/provider";
 
 /** Purposes whose verification is unconditional, whatever the configuration says. */
-const ALWAYS_ENFORCED: ReadonlySet<CaptchaPurpose> = new Set<CaptchaPurpose>(["register"]);
+const ALWAYS_ENFORCED: ReadonlySet<CaptchaPurpose> = new Set<CaptchaPurpose>(["register", "recovery"]);
 
 export type CaptchaVerificationInput = {
   token?: string | null;

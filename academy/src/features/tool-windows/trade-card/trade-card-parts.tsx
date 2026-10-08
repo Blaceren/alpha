@@ -11,6 +11,9 @@
  * are created on this side of the boundary and callers pass plain values.
  */
 import { CircleCheck, Info } from "lucide-react";
+import { PayoutField } from "../components/payout-field";
+import { TimeField } from "../components/time-field";
+import { moneyOnly } from "../model/numeric-input";
 import {
   TRADE_CARD_STEPS,
   gainLabel,
@@ -164,7 +167,7 @@ export function TradeCardPlanForm({
               inputMode="decimal"
               autoComplete="off"
               value={draft.amount}
-              onChange={change("amount")}
+              onChange={(event) => onChange?.("amount", moneyOnly(event.target.value))}
               disabled={disabled}
               aria-invalid={errors.amount ? true : undefined}
               aria-describedby={described("amount")}
@@ -173,29 +176,14 @@ export function TradeCardPlanForm({
           <FieldError id={errorId("amount")} message={errors.amount} />
         </div>
 
-        <div className="tc-field">
-          <label className="tc-label" htmlFor={id("payoutPercent")}>
-            Payout
-          </label>
-          <span className="tc-affix" data-side="end">
-            <input
-              id={id("payoutPercent")}
-              className="tc-input"
-              type="text"
-              inputMode="numeric"
-              autoComplete="off"
-              value={draft.payoutPercent}
-              onChange={change("payoutPercent")}
-              disabled={disabled}
-              aria-invalid={errors.payoutPercent ? true : undefined}
-              aria-describedby={described("payoutPercent")}
-            />
-            <span className="tc-affix__mark" aria-hidden="true">
-              %
-            </span>
-          </span>
-          <FieldError id={errorId("payoutPercent")} message={errors.payoutPercent} />
-        </div>
+        <PayoutField
+          id={id("payoutPercent")}
+          errorId={errorId("payoutPercent")}
+          value={draft.payoutPercent}
+          onChange={(value) => onChange?.("payoutPercent", value)}
+          disabled={disabled}
+          error={errors.payoutPercent}
+        />
 
         <div className="tc-field">
           <label className="tc-label" htmlFor={id("expiry")}>
@@ -219,22 +207,21 @@ export function TradeCardPlanForm({
           <label className="tc-label" htmlFor={id("entryTime")}>
             Время входа
           </label>
-          <input
+          <TimeField
             id={id("entryTime")}
-            className="tc-input"
-            type="time"
             value={draft.entryTime}
-            onChange={change("entryTime")}
+            onChange={(value) => onChange?.("entryTime", value)}
             disabled={disabled}
-            aria-invalid={errors.entryTime ? true : undefined}
-            aria-describedby={described("entryTime")}
+            invalid={Boolean(errors.entryTime)}
+            describedBy={described("entryTime")}
+            align="end"
           />
           <FieldError id={errorId("entryTime")} message={errors.entryTime} />
         </div>
 
         <div className="tc-field" data-span="full">
           <label className="tc-label" htmlFor={id("reason")}>
-            Причина входа до сделки
+            Основание входа в сделку
           </label>
           <textarea
             id={id("reason")}

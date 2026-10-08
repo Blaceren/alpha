@@ -313,6 +313,35 @@ export function ProgressionAdjustDialog({
   );
 }
 
+/**
+ * Why the correction stops at a level, in the operator's words.
+ *
+ * Two different facts used to share one sentence. A level whose state belongs
+ * to another authority (a checkpoint, the registration) cannot be set by an
+ * administrator. A level that is NOT OPEN YET (2026-10-02: the 30-level
+ * program is published with its later lessons still in production) cannot be
+ * completed by anyone, because there is nothing in it to have completed —
+ * and «подтверждается отдельной authority» said something untrue about it.
+ *
+ * The Backend decides which it is (`blocker.reason`); a reason this build does
+ * not know keeps the original sentence, which is the cautious one.
+ */
+export function blockerSentence(blocker: NonNullable<ProgressionPlan["blocker"]>): string {
+  if (blocker.reason === "level_not_open") {
+    return (
+      `Невозможно выполнить эту корректировку. L${blocker.levelNumber} «${blocker.title}» ` +
+      "ещё не открыт в программе — его урок готовится. Завершить такой уровень нельзя " +
+      "ничьим решением, в том числе административным: перевести учащегося можно только " +
+      "до этого уровня."
+    );
+  }
+  return (
+    `Невозможно выполнить эту корректировку автоматически. L${blocker.levelNumber} — ` +
+    `${levelTypeLabel(blocker.type)}. Его состояние подтверждается отдельной authority ` +
+    "и не может быть выставлено административно."
+  );
+}
+
 function PlanView({ plan }: { plan: ProgressionPlan }) {
   return (
     <div className="mt-4 rounded border border-border bg-surface p-3 text-xs">
@@ -320,10 +349,7 @@ function PlanView({ plan }: { plan: ProgressionPlan }) {
 
       {plan.blocker ? (
         <p role="alert" className="mb-2 text-danger-text">
-          Невозможно выполнить эту корректировку автоматически. L
-          {plan.blocker.levelNumber} — {levelTypeLabel(plan.blocker.type)}. Его
-          состояние подтверждается отдельной authority и не может быть выставлено
-          административно.
+          {blockerSentence(plan.blocker)}
         </p>
       ) : null}
 

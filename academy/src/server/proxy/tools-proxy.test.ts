@@ -1,11 +1,11 @@
 /**
  * TOOLS-V2 — the bounded tools proxy.
  *
- * Six operations, each pinned to one method and one constant Backend path
- * shape. What these cases pin is the boundary, not the happy path: nothing a
- * caller sends can choose a host, leave an id's segment, reach a staff route,
- * carry a query other than a journal page's validated filter and cursor, or
- * make a private answer cacheable.
+ * A closed list of operations, each pinned to one method and one constant
+ * Backend path shape. What these cases pin is the boundary, not the happy path:
+ * nothing a caller sends can choose a host, leave an id's segment, reach a
+ * staff route, carry a query other than the validated ones, send a body with a
+ * delete, or make a private answer cacheable.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -253,8 +253,10 @@ describe("tools proxy — the Trading Journal", () => {
     expect(resolveToolsTargetPath({ operation: "journal-page" })).toBe("/api/tools/journal");
     expect(resolveToolsTargetPath({ operation: "journal-create" })).toBe("/api/tools/journal");
     expect(resolveToolsTargetPath({ operation: "journal-change", entryId: ENTRY })).toBe(`/api/tools/journal/${ENTRY}`);
+    expect(resolveToolsTargetPath({ operation: "journal-delete", entryId: ENTRY })).toBe(`/api/tools/journal/${ENTRY}`);
     for (const entryId of ["../../crm/v1/users", `${ENTRY}/x`, `${ENTRY}?a=1`, "//evil.invalid/x", "", "short"]) {
       expect(resolveToolsTargetPath({ operation: "journal-change", entryId }), JSON.stringify(entryId)).toBeNull();
+      expect(resolveToolsTargetPath({ operation: "journal-delete", entryId }), JSON.stringify(entryId)).toBeNull();
     }
   });
 
@@ -302,6 +304,67 @@ describe("tools proxy — the Trading Journal", () => {
     ]);
     expect((fetchMock.mock.calls[0]![1].headers as Headers).get("x-csrf-token")).toBeNull();
     expect((fetchMock.mock.calls[1]![1].headers as Headers).get("x-csrf-token")).toBe("t");
+  });
+
+  it("deletes with DELETE on the entry's own path: the session and the token, and no body at all", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => backendJson({ data: { deleted: { id: ENTRY }, summary: {} } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await proxyTools(
+      request("DELETE", `/api/backend/tools/journal/${ENTRY}`, {
+        cookie: "s=1",
+        "x-csrf-token": "t",
+        "content-type": "application/json",
+        authorization: "Basic dGVhbTpwYXNz",
+      }),
+      { operation: "journal-delete", entryId: ENTRY },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect([url, init.method]).toEqual([`${ORIGIN}/api/tools/journal/${ENTRY}`, "DELETE"]);
+    expect(init.body).toBeUndefined();
+    const headers = init.headers as Headers;
+    expect(headers.get("cookie")).toBe("s=1");
+    expect(headers.get("x-csrf-token")).toBe("t");
+    // Nothing is sent, so nothing is declared; and the edge's credentials stay at the edge.
+    expect(headers.get("content-type")).toBeNull();
+    expect(headers.get("authorization")).toBeNull();
+  });
+
+  it("refuses a delete that says anything but its id, without contacting Backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const path = `/api/backend/tools/journal/${ENTRY}`;
+    const input = { operation: "journal-delete", entryId: ENTRY } as const;
+
+    // A body: a delete has none, and one that arrives is not dropped silently.
+    expect((await proxyTools(journal("DELETE", path, JSON.stringify({ all: true })), input)).status).toBe(400);
+    // A query.
+    expect((await proxyTools(journal("DELETE", `${path}?all=1`), input)).status).toBe(400);
+    // An id that is not one entry's.
+    expect(
+      (await proxyTools(journal("DELETE", "/api/backend/tools/journal/x"), { operation: "journal-delete", entryId: "../../crm/v1/users" }))
+        .status,
+    ).toBe(400);
+    // Any other method on the delete.
+    for (const method of ["GET", "POST", "PATCH", "PUT"]) {
+      const body = method === "GET" ? undefined : "{}";
+      expect((await proxyTools(journal(method, path, body), input)).status, method).toBe(405);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("passes the Backend's «not found» for a delete through unchanged", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(backendJson({ error: "JOURNAL_ENTRY_NOT_FOUND" }, 404)));
+    const response = await proxyTools(journal("DELETE", `/api/backend/tools/journal/${ENTRY}`), {
+      operation: "journal-delete",
+      entryId: ENTRY,
+    });
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "JOURNAL_ENTRY_NOT_FOUND" });
   });
 
   it("refuses a query it does not know, a wrong method and a hostile id, without contacting Backend", async () => {

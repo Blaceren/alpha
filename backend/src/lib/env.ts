@@ -1,4 +1,11 @@
 import { z } from "zod";
+import {
+  MAIL_FROM_KEY,
+  MAIL_OUTBOX_DIR_KEY,
+  MAIL_TRANSPORT_KEY,
+  describeMailConfigRejection,
+  resolveMailConfig,
+} from "@/lib/mail/config";
 import { classifyEnvironment } from "@/lib/environment";
 import {
   CAPTCHA_LOGIN_ENFORCED_KEY,
@@ -114,6 +121,10 @@ const OPTIONAL_ENV = [
   "REPORT_ATTACHMENT_CLAMAV_PORT",
   "REPORT_ATTACHMENT_TEST_BACKEND",
   "PUBLIC_APP_URL",
+  // ACCOUNT RECOVERY — mail. Absent means disabled; see `mail/config.ts`.
+  MAIL_TRANSPORT_KEY,
+  MAIL_FROM_KEY,
+  MAIL_OUTBOX_DIR_KEY,
   // AFD-3B2 — acquisition attribution. Absent means disabled, which is the only
   // safe default: a deployment that has not been given a signing secret must not
   // be issuing attribution tokens.
@@ -144,6 +155,11 @@ const envSchema = z.object({
   // would happily accept http, embedded credentials, a query string or a
   // loopback host. See the PUBLIC_APP_URL check in validateRuntimeEnv.
   PUBLIC_APP_URL: z.string().optional(),
+  // Judged as a set by `resolveMailConfig`, not one by one: a transport without
+  // a sender, or a sender without a public origin, is an invalid configuration.
+  [MAIL_TRANSPORT_KEY]: z.string().optional(),
+  [MAIL_FROM_KEY]: z.string().optional(),
+  [MAIL_OUTBOX_DIR_KEY]: z.string().optional(),
   STORAGE_DRIVER: z.enum(["local", "s3", "r2"]).optional(),
   LOCAL_UPLOADS_DIR: z.string().optional(),
   NODE_ENV: z.enum(["development", "production", "test"]).optional(),
@@ -302,6 +318,21 @@ export function validateRuntimeEnv(env = process.env): RuntimeEnvCheck {
     const publicUrl = resolvePublicAppUrl(env);
     if (publicUrl.kind === "invalid") {
       errors.push(describePublicAppUrlRejection(publicUrl.reason));
+    }
+  }
+
+  // ACCOUNT RECOVERY — mail.
+  //
+  // Absence is legal and means disabled: the capability endpoint answers false
+  // and no flow that ends in an email is offered. A HALF-configured mail —
+  // a transport with no sender, a sender with no public origin to build links
+  // from, the file transport on a host that is not dev — is refused at startup,
+  // for the reason CAPTCHA is: a deployment that believes it can send password
+  // links and cannot is worse than one that knows it cannot.
+  {
+    const mail = resolveMailConfig(env);
+    if (mail.kind === "invalid") {
+      errors.push(describeMailConfigRejection(mail.reason));
     }
   }
 

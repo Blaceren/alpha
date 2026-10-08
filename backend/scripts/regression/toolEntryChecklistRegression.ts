@@ -8,7 +8,7 @@
  * What it proves:
  *   - the tool opens with L20 durably completed and not a level before;
  *   - a check is kept with the server's own verdict: a stop factor wins over
- *     any other gap, all nine confirmed allows the entry;
+ *     any other gap, all confirmed allows the entry (seven since 2026-10-07, none a stop factor);
  *   - the newest checks come back newest first, twenty at most, and the
  *     minimum payout the learner last used comes back with them;
  *   - another learner sees none of it;
@@ -23,6 +23,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { seedLegacyToolUnlocks } from "./support/toolUnlocks";
 
 const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ata-tool-check-"));
 const dbUrl = `file:${path.join(scratchDir, "regression.sqlite")}`;
@@ -60,14 +61,14 @@ async function main() {
   const { PrismaClient } = await import("@prisma/client");
   const db = new PrismaClient({ datasources: { db: { url: dbUrl } } });
   const service = await import("@/lib/tools/entry-checklist-service");
-  const { CHECKLIST_ITEMS, parseEntryCheck } = await import("@/lib/tools/entry-checklist");
+  const { CHECKLIST_ITEMS, parseEntryCheck, toEntryCheckDto } = await import("@/lib/tools/entry-checklist");
   const { isToolUnlockedForUser } = await import("@/lib/tools/access");
   const { EXPECTED_MIGRATION_COUNT } = await import("./support/migrationCount");
 
   const all = Object.fromEntries(CHECKLIST_ITEMS.map((item) => [item.code, true])) as Record<string, boolean>;
   const input = (overrides: Record<string, unknown> = {}, missing: string[] = []) =>
     parseEntryCheck({
-      asset: "EURUSD_OTC",
+      asset: "EURUSD",
       minPayoutPercent: 85,
       answers: { ...all, ...Object.fromEntries(missing.map((code) => [code, false])) },
       ...overrides,
@@ -99,6 +100,7 @@ async function main() {
       }),
     );
   }
+  await seedLegacyToolUnlocks(db, version.id, levels);
   async function learner(email: string, completedThrough: number) {
     const user = await db.user.create({ data: { email, name: email, role: "user", passwordHash: "x" } });
     const enrollment = await db.userCurriculumEnrollment.create({
@@ -129,6 +131,7 @@ async function main() {
         SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL ORDER BY migration_name`;
       assert.equal(rows.length, EXPECTED_MIGRATION_COUNT);
       assert.ok(rows.some((row) => row.migration_name === "20260921220000_tool_entry_check"));
+      assert.ok(rows.some((row) => row.migration_name === "20261007180000_entry_checklist_seven"));
     });
 
     await check("the tool opens with L20 durably completed, and not a level before", async () => {
@@ -142,32 +145,57 @@ async function main() {
       assert.equal(state.lastMinPayoutPercent, null);
     });
 
-    await check("all nine confirmed: the entry is allowed", async () => {
+    await check("all seven confirmed: the entry is allowed, under the second list", async () => {
       const row = await service.createEntryCheck(bob.user.id, input(), db);
       assert.equal(row.verdict, "enter");
       assert.equal(row.missingItem, null);
-      assert.equal(row.answers, "111111111");
-      assert.equal(row.listVersion, 1);
+      assert.equal(row.answers, "1111111");
+      assert.equal(row.listVersion, 2);
     });
 
-    await check("a stop factor wins over an earlier ordinary gap", async () => {
-      const row = await service.createEntryCheck(bob.user.id, input({}, ["payout_minimum", "no_revenge"]), db);
-      assert.equal(row.verdict, "skip_stop");
-      assert.equal(row.missingItem, "no_revenge");
-      assert.equal(row.answers, "110111101");
-    });
-
-    await check("an ordinary gap alone says «условие не выполнено», naming the first", async () => {
-      const row = await service.createEntryCheck(bob.user.id, input({ minPayoutPercent: null }, ["attention", "price_at_zone"]), db);
+    await check("a gap says «условие не выполнено», naming the first in the list's order", async () => {
+      const row = await service.createEntryCheck(bob.user.id, input({}, ["payout_checked", "reason_in_words"]), db);
       assert.equal(row.verdict, "skip_condition");
-      assert.equal(row.missingItem, "price_at_zone");
+      assert.equal(row.missingItem, "payout_checked");
+      assert.equal(row.answers, "1101110");
+    });
+
+    await check("nothing confirmed is still a condition, never a stop factor: the seven have none", async () => {
+      const row = await service.createEntryCheck(bob.user.id, input({ minPayoutPercent: null }, CHECKLIST_ITEMS.map((item) => item.code)), db);
+      assert.equal(row.verdict, "skip_condition");
+      assert.equal(row.missingItem, "asset_in_list");
+      assert.equal(row.answers, "0000000");
+    });
+
+    await check("a check of the first list is read as it was: nine answers, its item in its own words", async () => {
+      await db.$executeRawUnsafe(
+        `INSERT INTO "ToolEntryCheck" ("id","userId","assetCode","minPayoutPercent","listVersion","answers","verdict","missingItem","createdAt") VALUES (?,?,?,?,?,?,?,?,?)`,
+        "rawv1check000000000000000",
+        bob.user.id,
+        "EURUSD_OTC",
+        85,
+        1,
+        "110111101",
+        "skip_stop",
+        "no_revenge",
+        Date.now() - 60_000,
+      );
+      const kept = await db.toolEntryCheck.findUniqueOrThrow({ where: { id: "rawv1check000000000000000" } });
+      const dto = toEntryCheckDto(kept);
+      assert.equal(dto.listVersion, 1);
+      assert.equal(Object.keys(dto.answers).length, 9);
+      assert.equal(dto.answers.no_revenge, false);
+      assert.equal(dto.missingItemLabel, "Нет желания отыграться");
+      const current = toEntryCheckDto(await db.toolEntryCheck.findFirstOrThrow({ where: { userId: bob.user.id, listVersion: 2, verdict: "enter" } }));
+      assert.equal(Object.keys(current.answers).length, 7);
+      assert.equal(current.missingItemLabel, null);
     });
 
     await check("the newest checks come back newest first, with the last minimum used", async () => {
       const state = await service.readEntryChecks(bob.user.id, db);
       assert.deepEqual(
         state.recent.map((row) => row.verdict),
-        ["skip_condition", "skip_stop", "enter"],
+        ["skip_condition", "skip_condition", "enter", "skip_stop"],
       );
       // The newest check had no minimum; the one before it did.
       assert.equal(state.lastMinPayoutPercent, 85);
@@ -178,7 +206,7 @@ async function main() {
       const state = await service.readEntryChecks(bob.user.id, db);
       assert.equal(state.recent.length, 20);
       assert.equal(state.lastMinPayoutPercent, 80);
-      assert.equal(await db.toolEntryCheck.count({ where: { userId: bob.user.id } }), 23);
+      assert.equal(await db.toolEntryCheck.count({ where: { userId: bob.user.id } }), 24);
     });
 
     await check("another learner sees none of it", async () => {
@@ -211,7 +239,7 @@ async function main() {
           missing,
           Date.now(),
         );
-      await assert.rejects(insert("11111111", "skip_stop", "no_news"), "eight answers");
+      await assert.rejects(insert("11111111", "skip_stop", "no_news"), "eight answers under the first list");
       await assert.rejects(insert("11111111x", "skip_stop", "no_news"), "an answer that is not 0 or 1");
       await assert.rejects(insert("111111111", "skip_stop", "no_news"), "a refusal with every item confirmed");
       await assert.rejects(insert("011111111", "enter", null), "an entry with an item open");
@@ -220,8 +248,13 @@ async function main() {
       await assert.rejects(insert("011111111", "maybe", "no_news"), "an unknown verdict");
       await assert.rejects(insert("011111111", "skip_stop", "No News!"), "an item code out of shape");
       await assert.rejects(insert("111111111", "enter", null, 0), "a minimum payout of nothing");
-      await assert.rejects(insert("111111111", "enter", null, null, 2), "an item list that does not exist");
+      await assert.rejects(insert("111111111", "enter", null, null, 3), "an item list that does not exist");
+      // The second list: seven answers, no more and no fewer.
+      await assert.rejects(insert("111111111", "enter", null, null, 2), "nine answers under the second list");
+      await assert.rejects(insert("1111111", "enter", null, null, 1), "seven answers under the first list");
+      await assert.rejects(insert("0111111", "enter", null, null, 2), "an entry with an item open, second list");
       assert.equal(await insert("011111111", "skip_stop", "no_news"), 1);
+      assert.equal(await insert("0111111", "skip_condition", "asset_in_list", null, 2), 1);
     });
 
     await check("deleting a learner deletes their checks", async () => {

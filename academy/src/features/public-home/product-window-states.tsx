@@ -25,23 +25,26 @@ function HomeState() {
         <p className="pw-mono pw-mono--signal pw-moment-1">Требуется действие</p>
       </div>
       <div className="pw-home__body">
-        <p className="pw-home__level pw-moment-1">Первые пять demo-сделок</p>
-        <h3 className="pw-home__title pw-moment-2">Подготовьте и отправьте отчёт</h3>
-        <p className="pw-home__meta pw-moment-2">Модуль 01 · Уровень 3 · отчёт</p>
+        <p className="pw-home__level pw-moment-1">Как читать график: свеча, таймфрейм, масштаб</p>
+        <h3 className="pw-home__title pw-moment-2">Пройдите проверку знаний</h3>
+        <p className="pw-home__meta pw-moment-2">Модуль 01 · Уровень 4 · урок</p>
         <p className="pw-home__text pw-moment-3">
-          Отчёт проверяет наставник. После одобрения уровень будет завершён.
+          Изучите урок и пройдите короткую проверку, чтобы завершить уровень.
         </p>
-        <span className="pw-button pw-moment-3">Открыть отчёт</span>
+        <span className="pw-button pw-moment-3">Открыть уровень</span>
       </div>
     </div>
   );
 }
 
+/* The first module of the program learners have (2026-10-04, launch audit): it
+   used to be the 100-level plan's — L1 «Подготовить среду», L3 a report, L4 a
+   checkpoint — which is not what anyone who signs up finds. */
 const MODULE_LEVELS = [
-  { code: "L1", title: "Подготовить среду", kind: "done" },
+  { code: "L1", title: "Что такое бинарные опционы", kind: "done" },
   { code: "L2", title: "Как устроен ATA", kind: "done" },
-  { code: "L3", title: "Первые пять demo-сделок", kind: "current" },
-  { code: "L4", title: "Контрольная точка", kind: "gate" },
+  { code: "L3", title: "Регистрация и терминал", kind: "done" },
+  { code: "L4", title: "Как читать график", kind: "current" },
   { code: "L5", title: "Жизненный цикл сделки", kind: "next" },
 ] as const;
 
@@ -52,10 +55,10 @@ function PathState() {
         <div>
           <p className="pw-path__h">Путь</p>
           <p className="pw-path__now">
-            Сейчас: <strong>Уровень 3</strong> · Первые пять demo-сделок <span className="pw-mono">модуль 1 из 20</span>
+            Сейчас: <strong>Уровень 4</strong> · Как читать график <span className="pw-mono">модуль 1 из 20</span>
           </p>
         </div>
-        <p className="pw-path__count">Пройдено 2 из 100 уровней</p>
+        <p className="pw-path__count">Пройдено 3 из 100 уровней</p>
       </div>
       <div className="pw-path__bar" aria-hidden="true">
         <i />
@@ -92,7 +95,7 @@ function TradeCardState() {
     <div className="pw-tool pw-trade">
       <div className="pw-tool__head">
         <p className="pw-tool__name">Trade Card</p>
-        <p className="pw-tool__sub">План сделки до входа: актив, направление, экспирация и причина.</p>
+        <p className="pw-tool__sub">План сделки до входа: актив, направление, экспирация и основание.</p>
       </div>
       <ol className="pw-trade__tabs" aria-hidden="true">
         <li className="is-active">Подготовка</li>
@@ -104,7 +107,7 @@ function TradeCardState() {
       <div className="pw-trade__grid">
         <div className="pw-field">
           <span>Актив</span>
-          <strong>EUR/USD OTC</strong>
+          <strong>EUR/USD</strong>
         </div>
         <div className="pw-field pw-field--seg">
           <span>Направление</span>
@@ -122,7 +125,7 @@ function TradeCardState() {
           <strong>90 %</strong>
         </div>
         <div className="pw-field pw-field--wide pw-trade__reason">
-          <span>Причина входа до сделки</span>
+          <span>Основание входа в сделку</span>
           <strong>
             <i className="pw-typing">Цена вернулась к уровню поддержки, отмеченному до сессии. Свеча закрылась выше уровня.</i>
           </strong>
@@ -137,10 +140,10 @@ function TradeCardState() {
 }
 
 const JOURNAL_ROWS = [
-  { time: "14:32", asset: "EUR/USD OTC", dir: "▲ Выше", forecast: "прогноз верен", mark: "не отмечено", kind: "none" },
-  { time: "14:02", asset: "EUR/USD OTC", dir: "▼ Ниже", forecast: "прогноз неверен", mark: "нарушен", kind: "broken" },
-  { time: "13:40", asset: "EUR/USD OTC", dir: "▼ Ниже", forecast: "прогноз неверен", mark: "по плану", kind: "plan" },
-  { time: "18:15", asset: "BTC/USD OTC", dir: "▲ Выше", forecast: "прогноз верен", mark: "по плану", kind: "plan" },
+  { time: "14:32", asset: "EUR/USD", dir: "▲ Выше", forecast: "прогноз верен", mark: "не отмечено", kind: "none" },
+  { time: "14:02", asset: "EUR/USD", dir: "▼ Ниже", forecast: "прогноз неверен", mark: "нарушен", kind: "broken" },
+  { time: "13:40", asset: "EUR/USD", dir: "▼ Ниже", forecast: "прогноз неверен", mark: "по плану", kind: "plan" },
+  { time: "18:15", asset: "BTC/USD", dir: "▲ Выше", forecast: "прогноз верен", mark: "по плану", kind: "plan" },
 ] as const;
 
 function JournalState() {
@@ -148,7 +151,7 @@ function JournalState() {
     <div className="pw-tool pw-journal">
       <div className="pw-tool__head">
         <p className="pw-tool__name">Trading Journal</p>
-        <p className="pw-tool__sub">Ручной разбор отдельных сделок: план, исполнение и вывод.</p>
+        <p className="pw-tool__sub">Ручной разбор отдельных сделок: основание, исполнение и вывод.</p>
       </div>
       <div className="pw-journal__counters">
         <div><span>Записей</span><strong>24</strong></div>
@@ -210,10 +213,11 @@ function RiskState() {
   );
 }
 
+/* The seven conditions of the tool itself (owner 2026-10-07), none a stop factor. */
 const CHECKS = [
-  { group: "Среда", items: [["Рядом нет важной новости (±15 мин)", true], ["Связь стабильна", true], ["Payout не ниже моего минимума — 85 %", false]] },
-  { group: "Setup", items: [["Состояние рынка определено: тренд или боковик", false], ["Цена у зоны, отмеченной до сессии", false], ["Все условия моего setup выполнены", false]] },
-  { group: "Моё состояние", items: [["Дневной лимит не достигнут", true], ["Нет желания отыграться", true], ["Внимание на графике, не устал", false]] },
+  { group: "Среда", items: ["Актив из моего списка", "Время — подходящий период", "Payout посмотрел, планку посчитал — 85 %"] },
+  { group: "График", items: ["Состояние определено: тренд, боковик или неясно", "Область названа"] },
+  { group: "Сделка", items: ["Размер по плану", "Основание сформулировано словами"] },
 ] as const;
 
 function ChecklistState() {
@@ -222,21 +226,20 @@ function ChecklistState() {
     <div className="pw-tool pw-check">
       <div className="pw-tool__head">
         <p className="pw-tool__name">Entry Checklist</p>
-        <p className="pw-tool__sub">Условия допуска перед входом: среда, setup и собственное состояние.</p>
+        <p className="pw-tool__sub">Условия допуска перед входом: среда, график и сделка.</p>
       </div>
       <div className="pw-check__grid">
         <div className="pw-check__list">
-          <p className="pw-mono pw-check__count">EUR/USD OTC · перед входом <b>9 / 9</b></p>
+          <p className="pw-mono pw-check__count">EUR/USD · перед входом <b>7 / 7</b></p>
           {CHECKS.map((group) => (
             <div key={group.group} className="pw-check__group">
               <p className="pw-mono">{group.group}</p>
-              {group.items.map(([label, stop]) => {
+              {group.items.map((label) => {
                 const i = index++;
                 return (
                   <div key={label} className="pw-check__item" style={{ "--i": i } as React.CSSProperties}>
                     <i aria-hidden="true" />
                     <span>{label}</span>
-                    {stop ? <em className="pw-mono">стоп-фактор</em> : null}
                   </div>
                 );
               })}
@@ -282,7 +285,7 @@ function StatsState() {
         </div>
         <div>
           <p className="pw-stats__h">Нарушения <b>7</b></p>
-          <div className="pw-bar pw-bar--neg pw-moment-3" style={{ "--v": "43%" } as React.CSSProperties}><span>Вход без записанной причины</span><em>3</em><i /></div>
+          <div className="pw-bar pw-bar--neg pw-moment-3" style={{ "--v": "43%" } as React.CSSProperties}><span>Вход без записанного основания</span><em>3</em><i /></div>
           <div className="pw-bar pw-bar--neg pw-moment-3" style={{ "--v": "29%" } as React.CSSProperties}><span>Рядом важная новость</span><em>2</em><i /></div>
           <div className="pw-bar pw-bar--neg pw-moment-3" style={{ "--v": "29%" } as React.CSSProperties}><span>Сделка после дневного лимита</span><em>2</em><i /></div>
         </div>
@@ -300,7 +303,7 @@ function NewsState() {
       </div>
       <div className="pw-news__status pw-moment-2">
         <strong>Вход закрыт по вашему плану до 14:45</strong>
-        <span>Через 12 мин: USD · Базовый индекс потребительских цен, м/м.</span>
+        <span>Через 12 мин: USD · Базовый индекс потребительских цен, <span className="pw-nowrap">м/м</span>.</span>
         <small>Первое движение после публикации — только наблюдение.</small>
       </div>
       <p className="pw-news__day">Сегодня, 21 сентября · понедельник <span className="pw-mono">по плану: USD, EUR · высокая важность · 15 мин до и 15 после</span></p>
@@ -323,7 +326,7 @@ function NewsState() {
       <ol className="pw-news__events">
         <li>
           <span className="pw-mono">14:30</span><b className="pw-news__cur">USD</b>
-          <span className="pw-news__title">Базовый индекс потребительских цен, м/м <em className="pw-mono">скоро</em></span>
+          <span className="pw-news__title">Базовый индекс потребительских цен, <span className="pw-nowrap">м/м</span> <em className="pw-mono">скоро</em></span>
           <small>США · ●●● · прогноз 0,3 % · вход закрыт 14:15–14:45</small>
         </li>
         <li>

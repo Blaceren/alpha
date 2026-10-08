@@ -151,6 +151,7 @@ model User {
   testerFeedback                  TesterFeedback[]             @relation("TesterFeedbackAuthor")
   resolvedFeedback                TesterFeedback[]             @relation("TesterFeedbackResolver")
   emailVerificationTokens         EmailVerificationToken[]
+  accountActionTokens             AccountActionToken[]
   dailyRewards                    DailyLoginReward[]
   promocodeRedemptions            PromocodeRedemption[]
   promocodeRedemptionRequests     PromocodeRedemptionRequest[]
@@ -289,6 +290,34 @@ model EmailVerificationToken {
   @@index([userId, expiresAt])
 }
 
+/// ACCOUNT RECOVERY — the one-time links a learner receives by email: a password
+/// reset, or the confirmation of a new address. Email verification keeps its own
+/// table (`EmailVerificationToken`), which predates this one and is unchanged.
+///
+/// The raw token exists only in the email. Here is its SHA-256, so a copy of the
+/// database cannot be turned into a working link. A row is used once (`usedAt`),
+/// and a newer link of the same kind, or a cancelled request, retires the older
+/// ones (`revokedAt`) — at most one link of a kind is ever live for a learner.
+/// The database checks the kind, the hash's shape, and that `newEmail` is set
+/// exactly for `email_change`.
+model AccountActionToken {
+  id        String    @id @default(cuid())
+  userId    Int
+  /// password_reset | email_change
+  kind      String
+  tokenHash String    @unique
+  /// The address being confirmed. Set for email_change, null for password_reset.
+  newEmail  String?
+  expiresAt DateTime
+  usedAt    DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@index([expiresAt])
+}
+
 model Level {
   id         Int      @id @default(autoincrement())
   number     Int      @unique
@@ -419,10 +448,13 @@ model Notification {
   message   String
   metadata  Json?
   readAt    DateTime?
+  /// The learner cleared it from their own list (DD-349): hidden there, never deleted.
+  clearedAt DateTime?
   createdAt DateTime         @default(now())
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
+  @@index([userId, clearedAt, createdAt])
 }
 
 model FileAsset {
@@ -1090,6 +1122,13 @@ model ModuleDefinition {
   checkpointLevel     Int?
   learningObjective   String                     @default("")
   status              CurriculumDefinitionStatus @default(active)
+  /// PROGRAM STRUCTURE (2026-10-02). The chapter this module belongs to — «Глава 1 ·
+  /// Основы и первые реальные сделки». A chapter is a run of consecutive modules
+  /// and carries nothing but a number and a title, so it lives on the module
+  /// rather than in a table of its own. Both columns are NULL together for every
+  /// version imported before chapters existed; display only, gates nothing.
+  chapterNumber       Int?
+  chapterTitle        String?
   curriculumVersion   CurriculumVersion          @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
   levels              LevelDefinition[]
 
@@ -1117,6 +1156,13 @@ model LevelDefinition {
   featureUnlockCode          String?
   visibilityRule             Json?
   status                     CurriculumDefinitionStatus      @default(active)
+  /// PROGRAM STRUCTURE (2026-10-02). What the learner is told this level IS:
+  /// lesson | task | report | practice | assembly («Урок», «Задание», «Отчёт»,
+  /// «Практика», «Точка сборки»). DISPLAY ONLY — who may complete a level is still
+  /// decided by `type` + `completionMethod` and by nothing else. NULL for every
+  /// version imported before the column existed; a reader then names the level
+  /// from its completion pair, as it always did.
+  presentationKind           String?
   curriculumVersion          CurriculumVersion               @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
   module                     ModuleDefinition                @relation(fields: [moduleId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Restrict)
   userProgress               UserLevelProgress[]
@@ -1138,6 +1184,8 @@ model LevelDefinition {
   previewSnapshots           AuthoringPreviewSnapshot[]
   // PHASE-G2 FOUNDATION — back-reference only.
   sourceAuthorityResolutions SourceAuthorityResolution[]
+  // PROGRAM STRUCTURE — the tools this level's completion opens.
+  toolUnlocks                LevelToolUnlock[]
 
   @@unique([id, curriculumVersionId])
   @@unique([curriculumVersionId, levelNumber])
@@ -1166,6 +1214,74 @@ model LevelCheckpointRequirement {
   levelDefinition     LevelDefinition @relation(fields: [levelDefinitionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([integrationCode])
+}
+
+/**
+ * PROGRAM STRUCTURE (2026-10-02) — which level's completion opens which tool, PER
+ * CURRICULUM VERSION.
+ * WHY A TABLE. The unlock level used to be one global number per tool in
+ * `product-vocabulary.ts`, which is true only while every published version has
+ * the same shape. The 30-level program opens the Trading Journal after level 9
+ * and both the Risk Plan and the Entry Checklist after level 13, while a learner
+ * still pinned to the 100-level version keeps levels 10, 15 and 20. A number that
+ * depends on the version belongs to the version.
+ * ONE ROW IS ONE TOOL OF ONE VERSION. A tool is opened by exactly one level of a
+ * version (`curriculumVersionId, toolCode` is unique); a level may open several.
+ * A version with no row for a tool never opens it — absence is "locked".
+ * WHAT DECIDES ACCESS is unchanged: the durable `UserLevelProgress.status =
+ * 'completed'` on that level, in the learner's own enrollment.
+ */
+model LevelToolUnlock {
+  id                  Int             @id @default(autoincrement())
+  levelDefinitionId   Int
+  curriculumVersionId Int
+  toolCode            String
+  createdAt           DateTime        @default(now())
+  /// CASCADE, unlike the other tables that hang off a level. An unlock row is a
+  /// statement ABOUT the level and has no history of its own: nothing is ever
+  /// earned against it, so removing a draft level removes what it would have
+  /// opened. (A published level is never deleted — its learners' progress rows
+  /// are RESTRICT.)
+  levelDefinition     LevelDefinition @relation(fields: [levelDefinitionId, curriculumVersionId], references: [id, curriculumVersionId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([curriculumVersionId, toolCode])
+  @@index([levelDefinitionId])
+}
+
+/**
+ * LESSON MEDIA (2026-10-02) — the video a lesson plays, and its poster and
+ * captions, registered per LEVEL STABLE CODE.
+ * WHY IT IS NOT A `ContentAsset`. A content version is immutable once its
+ * curriculum is published, and a video is not: it is produced after the lesson
+ * is written, re-cut, re-encoded and moved between storages, and none of that
+ * changes what the lesson teaches. Tying the file to the content version would
+ * make every re-encode a new curriculum version. This table is OPERATIONAL: one
+ * current file per (curriculum, level stable code, asset code), replaced in
+ * place, read at request time and merged into the lesson the learner receives.
+ * `storageKey` is a path under the deployment's media root, never a URL: where
+ * the bytes are served from is the deployment's business (a local directory on
+ * PREPROD, signed delivery on PROD), so no environment's host name is ever
+ * stored in a row.
+ * A stable code names a lesson across versions, so a successor version that
+ * keeps the code keeps the video.
+ */
+model LessonMediaAsset {
+  id              Int              @id @default(autoincrement())
+  curriculumCode  String
+  levelStableCode String
+  kind            ContentAssetKind
+  assetCode       String
+  locale          String?
+  storageKey      String
+  mimeType        String
+  sizeBytes       Int
+  durationSeconds Int?
+  checksum        String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([curriculumCode, levelStableCode, assetCode])
+  @@index([curriculumCode, levelStableCode, kind])
 }
 
 /**
@@ -2423,6 +2539,11 @@ model QuestionDefinition {
   status              CurriculumDefinitionStatus @default(active)
   options             Json?
   correctAnswer       Json
+  /// PROGRAM STRUCTURE (2026-10-02). «Пересмотреть: с 1:55» — the second of the
+  /// lesson's video at which the answer to this question is taught. Shown to the
+  /// learner beside the explanation of a wrong answer. NULL when the lesson has
+  /// no such point, which is every question imported before the column existed.
+  rewatchFromSeconds  Int?
   createdAt           DateTime                   @default(now())
   updatedAt           DateTime                   @updatedAt
   assessmentVersion   AssessmentVersion          @relation(fields: [assessmentVersionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -5281,18 +5402,30 @@ model UserSession {
   tokenHash String    @unique
   createdAt DateTime  @default(now())
   expiresAt DateTime
-  /// Null while live. Set by logout, and by the next successful login.
+  /// Null while live. Set by logout, by closing it from the account's other
+  /// session, by a password change or reset, and by a third sign-in when this
+  /// is the session unused the longest.
   revokedAt DateTime?
+  /// One of the two places a live session can hold: 0 or 1 (a CHECK in the
+  /// migration). Revoked rows keep theirs as history.
+  slot       Int       @default(0)
+  /// The browser's own description at sign-in, to name the device in the
+  /// learner's list of sessions. Never shown raw.
+  userAgent  String?
+  /// When the session was last used, written at most every few minutes.
+  lastSeenAt DateTime?
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// TWO LIVE SESSIONS PER USER ARE ENFORCED BY THE DATABASE, not by this file
+  /// (owner 2026-10-07). The migration `20261007120000_two_live_sessions`
+  /// creates `UserSession_userId_slot_active_key`, a UNIQUE index on
+  /// (userId, slot) WHERE revokedAt IS NULL, with `slot` checked to 0 or 1.
+  /// Prisma cannot express a partial index, so it lives in SQL — but it is a
+  /// real constraint, and a third live row fails at the database no matter
+  /// which writer attempts it. (H-7 held one, in `UserSession_userId_active_key`.)
 
   @@index([userId])
   @@index([expiresAt])
-
-  /// ONE LIVE SESSION PER USER IS ENFORCED BY THE DATABASE, not by this file.
-  /// The migration creates `UserSession_userId_active_key`, a UNIQUE index on
-  /// (userId) WHERE revokedAt IS NULL. Prisma cannot express a partial index,
-  /// so it lives in SQL — but it is a real constraint, and a second live row
-  /// fails at the database no matter which writer attempts it.
 }
 
 /// TOOLS-V2 — Trade Card (L5). The plan of ONE binary-options trade, written by
@@ -5301,7 +5434,7 @@ model UserSession {
 /// (fixed → saved | cancelled) and the money rules live in
 /// `src/lib/tools/trade-card.ts`. Every CHECK is in the migration.
 model ToolTradeCard {
-  id                String    @id @default(cuid())
+  id                String            @id @default(cuid())
   userId            Int
   /// fixed | saved | cancelled
   status            String
@@ -5318,23 +5451,23 @@ model ToolTradeCard {
   entryTime         String
   reason            String
   fixedAt           DateTime
-  planRevisionCount Int       @default(0)
+  planRevisionCount Int               @default(0)
   /// profit | loss, present exactly when the card is saved.
   result            String?
   observation       String?
   savedAt           DateTime?
   cancelledAt       DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// The journal entry this card became when it was saved after L10, if any.
   journalEntry      ToolJournalEntry?
-
-  @@index([userId, createdAt])
 
   /// ONE OPEN CARD PER LEARNER IS ENFORCED BY THE DATABASE. The migration creates
   /// `ToolTradeCard_userId_open_key`, a UNIQUE index on (userId) WHERE
   /// status = 'fixed'. Prisma cannot express a partial index.
+
+  @@index([userId, createdAt])
 }
 
 /// TOOLS-V2 — Trading Journal (L10). One finished trade, as the learner reviews it.
@@ -5426,7 +5559,7 @@ model ToolEntryCheck {
   minPayoutPercent Int?
   /// The version of the fixed item list the answers belong to.
   listVersion      Int      @default(1)
-  /// Nine characters, "1" = the learner confirmed the item.
+  /// One character per item of that list version, "1" = the learner confirmed the item.
   answers          String
   /// enter | skip_stop | skip_condition — written by the server from the answers.
   verdict          String

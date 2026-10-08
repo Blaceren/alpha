@@ -43,7 +43,7 @@ export function LoginPanelShell({ sessionExpired, turnstileSiteKey }: LoginPanel
         </span>
         <h1 className="mt-4 text-base font-semibold text-text-primary">Вход для сотрудников</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Alfa Trade Academy CRM — внутреннее рабочее пространство.
+          Alpha Trade Academy CRM — внутреннее рабочее пространство.
         </p>
 
         <LoginForm sessionExpired={sessionExpired} turnstileSiteKey={turnstileSiteKey} />

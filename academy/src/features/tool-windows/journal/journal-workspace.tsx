@@ -9,15 +9,24 @@
  * is copied from Pocket; ATA never sees the account.
  *
  *   the list      → counts · filter · the trades, day by day, newest first
- *   an entry      → ПЛАН · ИСПОЛНЕНИЕ · ВЫВОД, the rules broken, and
- *                   «Разобрать сделку» / «Изменить разбор»
+ *   an entry      → ОСНОВАНИЕ · ИСПОЛНЕНИЕ · ВЫВОД, the rules broken, and
+ *                   «Разобрать сделку» / «Изменить разбор» · «Изменить запись»
+ *                   · «Удалить»
  *   the review    → plan followed or broken, which rules, how it went, the
  *                   conclusion                                  «Сохранить разбор»
  *   «Новая запись» → a trade opened without a card, and its review
  *                                                              «Сохранить запись»
+ *   «Изменить запись» → the same form over any entry, every field of it
+ *                                                           «Сохранить изменения»
+ *   «Удалить»     → asked in place, then gone                  «Удалить запись»
  *
- * NOTHING IS DELETED (owner decision): the learner keeps the whole history. A
- * card's trade is the card's and is not edited here; a hand-recorded one is.
+ * THE RECORD IS THE LEARNER'S TO CORRECT AND TO DELETE (owner, 2026-10-01;
+ * until then an entry from a card kept the card's trade and nothing was
+ * deleted). Every entry opens in the form whole, whichever source it came
+ * from, and every entry can be deleted. Neither reaches the Trade Card: the
+ * card stays what it was when it was saved, the form says so, and a corrected
+ * entry is marked «изменена в журнале». A delete is asked about first, because
+ * it cannot be undone and takes the trade out of Personal Stats with it.
  *
  * NO MONEY TOTALS (DD-303/DD-304). Each line shows its own stake and result;
  * nothing adds them up. The counts are of entries, never of dollars.
@@ -27,10 +36,10 @@
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import type { NormalizedError } from "@/lib/api/errors";
 import type { ToolFailure } from "../tools-client-core";
-import { changeJournalEntry, createJournalEntry, fetchJournalPage } from "./journal-client";
+import { changeJournalEntry, createJournalEntry, deleteJournalEntry, fetchJournalPage } from "./journal-client";
 import {
   adjustSummary,
   draftResultMoney,
@@ -42,7 +51,9 @@ import {
   localDate,
   manualDraftOf,
   matchesFilter,
+  neighbourOf,
   placeEntry,
+  removeEntry,
   reviewDraftOf,
   summaryWithEntry,
   validateManual,
@@ -62,6 +73,7 @@ import {
 import {
   JournalCounts,
   JournalDayHead,
+  JournalDeleteConfirm,
   JournalFilterBar,
   JournalNote,
   JournalNotes,
@@ -91,6 +103,9 @@ const FORM_FIELDS = "jr-new";
 const reviewFields = (entryId: string) => `jr-${entryId}`;
 const rowId = (entryId: string) => `jr-row-${entryId}`;
 const detailId = (entryId: string) => `jr-entry-${entryId}`;
+/** «Удалить» on an open entry, and the «Отмена» of the question it asks. */
+const deleteButtonId = (entryId: string) => `${reviewFields(entryId)}-delete`;
+const deleteKeepId = (entryId: string) => `${reviewFields(entryId)}-delete-keep`;
 
 /** The fields in reading order: the first one in error takes the focus. */
 const FIELD_ORDER: readonly ManualField[] = [
@@ -138,7 +153,7 @@ function messageFor(error: NormalizedError): string {
   switch (error.category) {
     case "NETWORK_ERROR":
     case "BACKEND_UNAVAILABLE":
-      return "Нет связи с ATA. Проверьте интернет и попробуйте ещё раз.";
+      return "Нет связи с Академией. Проверьте интернет и попробуйте ещё раз.";
     case "RATE_LIMITED":
       return "Слишком много действий подряд. Подождите минуту и попробуйте снова.";
     case "UNAUTHENTICATED":
@@ -194,6 +209,8 @@ export function JournalWorkspace({
   const [reviewDraft, setReviewDraft] = useState<ReviewDraft>(() =>
     cardEntry ? reviewDraftOf(cardEntry) : EMPTY_REVIEW,
   );
+  /** The entry whose delete is being asked about; one question at a time. */
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [manualDraft, setManualDraft] = useState<ManualDraft | null>(null);
   const [today, setToday] = useState("");
   const [errors, setErrors] = useState<DraftErrors>({});
@@ -296,6 +313,7 @@ export function JournalWorkspace({
     setListError(null);
     setOpenIds(new Set());
     setReviewId(null);
+    setDeleteId(null);
     const response = await fetchJournalPage(next);
     if (request !== listRequest.current) return;
     if (!response.ok) {
@@ -328,6 +346,13 @@ export function JournalWorkspace({
         setPhase({ kind: "locked" });
         return;
       }
+      // The line this page continues from was deleted somewhere else: there is
+      // nothing to continue from, so the list is read again from its start.
+      if (response.detail === "invalid_before") {
+        void loadFilter(filter);
+        showToast("Журнал изменился — показываю актуальный.");
+        return;
+      }
       setListStatus("failed");
       setListError(messageFor(response.error));
       return;
@@ -339,9 +364,12 @@ export function JournalWorkspace({
     });
     setNextCursor(response.data.nextCursor);
     setListStatus("idle");
-  }, [filter, nextCursor]);
+  }, [filter, loadFilter, nextCursor, showToast]);
 
-  /** A refused write: a field error goes under its field, a stale entry reloads the list. */
+  /**
+   * A refused write: a field error goes under its field; an entry that is no
+   * longer there — deleted in another tab or on another device — reloads the list.
+   */
   const handleFailure = useCallback(
     (failure: ToolFailure) => {
       const code = failure.error.code;
@@ -349,10 +377,12 @@ export function JournalWorkspace({
         setPhase({ kind: "locked" });
         return;
       }
-      if (code === "JOURNAL_ENTRY_NOT_FOUND" || code === "JOURNAL_TRADE_FROM_CARD") {
+      if (code === "JOURNAL_ENTRY_NOT_FOUND") {
         setMode({ kind: "list" });
+        setManualDraft(null);
         void loadFilter(filter);
-        showToast("Запись изменилась — показываю актуальный журнал.");
+        pendingFocus.current = `#${NEW_ENTRY_BUTTON_ID}`;
+        showToast("Этой записи уже нет — показываю актуальный журнал.");
         return;
       }
       const field = fieldOfServerDetail(failure.detail);
@@ -378,7 +408,7 @@ export function JournalWorkspace({
     return (
       <div className="tw-quiet">
         <h2 className="tw-quiet__title">Инструмент закрыт</h2>
-        <p className="tw-quiet__line">Trading Journal открывается после контрольной точки уровня 10.</p>
+        <p className="tw-quiet__line">Trading Journal пока закрыт: он откроется по ходу пути, после уровня, указанного на странице «Инструменты».</p>
         <Link className="tw-button" data-variant="outline" href="/path">
           Продолжить путь
         </Link>
@@ -409,17 +439,25 @@ export function JournalWorkspace({
 
   /* ------------------------------------------------------------ the list */
 
-  const toggle = (entryId: string) =>
+  const toggle = (entryId: string) => {
+    // A question left open on an entry does not wait inside it once it is closed.
+    if (deleteId === entryId && !busy) {
+      setDeleteId(null);
+      setActionError(null);
+    }
     setOpenIds((current) => {
       const next = new Set(current);
       if (next.has(entryId)) next.delete(entryId);
       else next.add(entryId);
       return next;
     });
+  };
 
   const startReview = (entry: JournalEntry) => {
+    if (busy) return;
     setReviewId(entry.id);
     setReviewDraft(reviewDraftOf(entry));
+    setDeleteId(null);
     setErrors({});
     setActionError(null);
     pendingFocus.current = `#${reviewFields(entry.id)}-mark-first`;
@@ -471,9 +509,11 @@ export function JournalWorkspace({
   };
 
   const startEdit = (entry: JournalEntry) => {
+    if (busy) return;
     setToday(localDate(new Date()));
     setManualDraft(manualDraftOf(entry));
     setMode({ kind: "edit", entry });
+    setDeleteId(null);
     setErrors({});
     setActionError(null);
     pendingFocus.current = `#${FORM_TITLE_ID}`;
@@ -501,7 +541,7 @@ export function JournalWorkspace({
     const editing = mode.kind === "edit" ? mode.entry : null;
     const response = editing
       ? await changeJournalEntry(editing.id, {
-          kind: "manual",
+          kind: "entry",
           ...checked.entry,
         })
       : await createJournalEntry(checked.entry);
@@ -530,6 +570,60 @@ export function JournalWorkspace({
     showToast(editing ? "Запись изменена" : "Запись добавлена");
   };
 
+  /* ------------------------------------------------------------ the delete */
+
+  /** «Удалить»: the question opens in the entry, the focus on the way out of it. */
+  const askDelete = (entry: JournalEntry) => {
+    if (busy) return;
+    setDeleteId(entry.id);
+    setActionError(null);
+    pendingFocus.current = `#${deleteKeepId(entry.id)}`;
+  };
+
+  const cancelDelete = (entry: JournalEntry) => {
+    setDeleteId(null);
+    setActionError(null);
+    pendingFocus.current = `#${deleteButtonId(entry.id)}`;
+  };
+
+  /**
+   * «Удалить запись». The counts are the Backend's own, read in the step that
+   * deleted; the line leaves the list, and the focus goes to the line that
+   * takes its place.
+   */
+  const confirmDelete = async (entry: JournalEntry) => {
+    if (busy) return;
+    setBusy(true);
+    setActionError(null);
+    const response = await deleteJournalEntry(entry.id);
+    setBusy(false);
+    if (!response.ok) {
+      // The buttons were disabled while the request was out; the focus returns
+      // to the question, on its safe side.
+      pendingFocus.current = `#${deleteKeepId(entry.id)}`;
+      handleFailure(response);
+      return;
+    }
+    const left = removeEntry(entries, entry.id, nextCursor);
+    const neighbour = neighbourOf(entries, entry.id);
+    setSummary(response.data);
+    setDeleteId(null);
+    setOpenIds((current) => {
+      if (!current.has(entry.id)) return current;
+      const next = new Set(current);
+      next.delete(entry.id);
+      return next;
+    });
+    setEntries(left.entries);
+    setNextCursor(left.nextCursor);
+    // Nothing on screen while the journal still has entries: read the list again
+    // rather than show an emptiness that is not there.
+    const reread = left.reread || (left.entries.length === 0 && filter === "all" && response.data.total > 0);
+    if (reread) void loadFilter(filter);
+    pendingFocus.current = !reread && neighbour ? `#${rowId(neighbour.id)}` : `#${NEW_ENTRY_BUTTON_ID}`;
+    showToast("Запись удалена");
+  };
+
   const errorLine = actionError ? (
     <p className="tc-error" role="alert">
       {actionError}
@@ -554,7 +648,9 @@ export function JournalWorkspace({
           </h2>
           <p className="jr-form__lede">
             {editing
-              ? "Запись сделки, сделанная вручную. Исправьте то, что было записано неточно."
+              ? editing.source === "trade_card"
+                ? "Запись из Trade Card. Исправьте то, что записано неточно: изменения останутся в журнале, сама карточка не изменится."
+                : "Запись сделки, сделанная вручную. Исправьте то, что было записано неточно."
               : "Сделка, которую вы открыли в Pocket без карточки, — так, как она прошла."}
           </p>
         </div>
@@ -650,7 +746,11 @@ export function JournalWorkspace({
       <div className="tw-quiet jr-empty">
         <h2 className="tw-quiet__title">Журнал пока пуст</h2>
         <p className="tw-quiet__line">
-          Карточки, сохранённые в Trade Card, попадут сюда сами. Сделку, открытую без карточки, можно записать вручную.
+          {/* «Только новые» (the journal's own rule): a card saved before the journal
+              opened never arrives, so the line no longer promises it does
+              (2026-10-04, launch audit). */}
+          Карточки Trade Card, сохранённые после открытия журнала, попадут сюда сами. Сделку без карточки — или из более
+          ранней карточки — можно записать вручную.
         </p>
         <div className="tc-actions__row jr-empty__actions">
           <button
@@ -749,6 +849,7 @@ export function JournalWorkspace({
                     const open = openIds.has(entry.id);
                     const reviewing = reviewId === entry.id;
                     const reviewed = isReviewed(entry);
+                    const deleting = deleteId === entry.id;
                     return (
                       <li className="jr-entry" key={entry.id} data-open={open || undefined}>
                         <JournalRow
@@ -762,7 +863,7 @@ export function JournalWorkspace({
                           {reviewing ? (
                             <div className="jr-detail__review">
                               <dl className="jr-notes">
-                                <JournalNote term="План" text={entry.plan} empty="Причина входа не записана" />
+                                <JournalNote term="Основание" text={entry.plan} empty="Основание не записано" />
                               </dl>
                               <ReviewFields
                                 idPrefix={reviewFields(entry.id)}
@@ -819,26 +920,45 @@ export function JournalWorkspace({
                             <>
                               <JournalNotes entry={entry} reference={reference} />
                               <p className="jr-facts">{entryFacts(entry)}</p>
-                              <div className="tc-actions__row jr-detail__actions">
-                                <button
-                                  type="button"
-                                  className="tw-button"
-                                  data-variant={reviewed ? "outline" : "primary"}
-                                  onClick={() => startReview(entry)}
-                                >
-                                  {reviewed ? "Изменить разбор" : "Разобрать сделку"}
-                                </button>
-                                {entry.source === "manual" ? (
+                              {deleting ? (
+                                <JournalDeleteConfirm
+                                  idPrefix={reviewFields(entry.id)}
+                                  fromCard={entry.source === "trade_card"}
+                                  busy={busy}
+                                  error={errorLine}
+                                  onConfirm={() => void confirmDelete(entry)}
+                                  onCancel={() => cancelDelete(entry)}
+                                />
+                              ) : (
+                                <div className="tc-actions__row jr-detail__actions jr-entry-actions">
                                   <button
                                     type="button"
                                     className="tw-button"
-                                    data-variant="ghost"
+                                    data-variant={reviewed ? "outline" : "primary"}
+                                    onClick={() => startReview(entry)}
+                                  >
+                                    {reviewed ? "Изменить разбор" : "Разобрать сделку"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="tw-button"
+                                    data-variant="outline"
                                     onClick={() => startEdit(entry)}
                                   >
                                     Изменить запись
                                   </button>
-                                ) : null}
-                              </div>
+                                  <button
+                                    id={deleteButtonId(entry.id)}
+                                    type="button"
+                                    className="tw-button jr-detail__delete"
+                                    data-variant="danger"
+                                    onClick={() => askDelete(entry)}
+                                  >
+                                    <Trash2 aria-hidden="true" size={16} strokeWidth={2} />
+                                    Удалить
+                                  </button>
+                                </div>
+                              )}
                             </>
                           )}
                         </div>

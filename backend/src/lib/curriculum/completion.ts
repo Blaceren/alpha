@@ -18,6 +18,7 @@ import {
 import { isFinancialCheckpointType } from "./checkpoint";
 import {
   ADMIN_CORRECTABLE_COMPLETION_PAIRS,
+  isFormallyAcceptedReportPair,
   isProtectedAuthorityPair,
   PRODUCTION_COMPLETION_PAIRS,
   STAGING_ATTESTED_COMPLETION_PAIRS,
@@ -821,6 +822,130 @@ async function assertLessonAssessmentProof(
   }
 }
 
+/**
+ * PROGRAM STRUCTURE (2026-10-02) — the proof behind a FORMALLY accepted report.
+ *
+ * A `report:formal_check` level has no reviewer: «Ручной проверки нет. Система
+ * проверяет формально». The report workflow validates every required field at
+ * submission and, in the same transaction, writes an acceptance row and asks
+ * this owner to complete the level. The acceptance row is a `ReportReview` —
+ * the report tables require an accepted submission to point at one — that
+ * names NO reviewer and carries no claim. What is checked here is that exactly
+ * that happened, for THIS learner and THIS level:
+ *
+ *   - the row is an approval of the submitted revision, with no reviewer, no
+ *     claim, the neutral role snapshot and one score per rubric criterion;
+ *   - the submission is this enrollment's own, for this level and this progress
+ *     row, and is either still `pending_review` inside the accepting
+ *     transaction or `approved` and pointing at this row;
+ *   - and the completion is recorded for the report's own author.
+ *
+ * THE TWO PROOFS DO NOT MIX, and the level decides which one applies — never
+ * the request. `assertReportApprovalProof` sends a `formal_check` level here
+ * and every other report level to the reviewer proof, which demands an active
+ * reviewer who is not the author and a live claim. So a reviewer-less row can
+ * never complete a level a mentor is supposed to read, and a mentor's approval
+ * can never be attached to a level the product says nobody reviews.
+ *
+ * Field-level validity is NOT re-derived here. It belongs to the report
+ * workflow, which is the only writer of such a row and which refuses to write
+ * one for a submission whose fields fail validation.
+ */
+async function assertReportFormalAcceptanceProof(
+  tx: Prisma.TransactionClient,
+  context: CompletionContext,
+  input: ReturnType<typeof validatedInput>,
+  reviewId: number,
+) {
+  const review = await tx.reportReview.findUnique({
+    where: { id: reviewId },
+    include: {
+      scores: true,
+      submission: {
+        include: {
+          rubric: { include: { criteria: true, scaleOptions: true } },
+          submittedRevision: { select: { id: true, submissionId: true, kind: true, submittedAt: true } },
+        },
+      },
+    },
+  });
+  if (!review) {
+    failure("COMPLETION_STATE_CORRUPT", "report formal acceptance proof is missing or corrupt");
+  }
+  const submission = review.submission;
+  const pendingProof =
+    submission.status === "pending_review" &&
+    submission.approvedRevisionId === null &&
+    submission.approvedReviewId === null &&
+    submission.approvedAt === null;
+  const approvedProof =
+    submission.status === "approved" &&
+    submission.approvedRevisionId === review.revisionId &&
+    submission.latestReviewId === review.id &&
+    submission.approvedReviewId === review.id &&
+    submission.reviewedAt !== null &&
+    submission.approvedAt !== null &&
+    submission.reviewedAt.getTime() === review.reviewedAt.getTime() &&
+    submission.approvedAt.getTime() === review.reviewedAt.getTime();
+  const criterionIds = new Set(submission.rubric.criteria.map((criterion) => criterion.id));
+  const scaleIds = new Set(submission.rubric.scaleOptions.map((option) => option.id));
+  const scoredCriterionIds = new Set(review.scores.map((score) => score.rubricCriterionId));
+  if (
+    review.decision !== "approved" ||
+    // Nobody reviewed it: no reviewer, no claim, no words from anyone.
+    review.reviewerId !== null ||
+    review.reviewerRoleSnapshot !== "user" ||
+    review.claimedAt !== null ||
+    review.claimExpiresAt !== null ||
+    review.reviewStartedAt !== null ||
+    review.rejectionReasonId !== null ||
+    review.humanComment !== null ||
+    review.correctiveAction !== null ||
+    review.revisionId !== submission.submittedRevisionId ||
+    !submission.submittedRevision ||
+    submission.submittedRevision.id !== review.revisionId ||
+    submission.submittedRevision.submissionId !== submission.id ||
+    (submission.submittedRevision.kind !== "initial_submission" &&
+      submission.submittedRevision.kind !== "resubmission") ||
+    submission.submittedRevision.submittedAt === null ||
+    submission.activeRevisionId !== submission.submittedRevisionId ||
+    submission.userId !== context.enrollment.userId ||
+    submission.enrollmentId !== context.enrollment.id ||
+    submission.curriculumVersionId !== context.enrollment.curriculumVersionId ||
+    submission.levelDefinitionId !== context.level.id ||
+    submission.userLevelProgressId !== context.progress.id ||
+    review.curriculumVersionId !== submission.curriculumVersionId ||
+    review.levelDefinitionId !== submission.levelDefinitionId ||
+    review.reportAssignmentVersionId !== submission.reportAssignmentVersionId ||
+    review.reportRubricVersionId !== submission.reportRubricVersionId ||
+    submission.claimedById !== null ||
+    submission.claimedAt !== null ||
+    submission.claimExpiresAt !== null ||
+    submission.reviewStartedAt !== null ||
+    submission.rejectedAt !== null ||
+    !/^sha256:[a-f0-9]{64}$/.test(review.payloadFingerprint) ||
+    review.requestId.length < 8 ||
+    criterionIds.size === 0 ||
+    review.scores.length !== criterionIds.size ||
+    scoredCriterionIds.size !== criterionIds.size ||
+    review.scores.some(
+      (score) =>
+        score.reportRubricVersionId !== submission.reportRubricVersionId ||
+        !criterionIds.has(score.rubricCriterionId) ||
+        !scaleIds.has(score.rubricScaleOptionId) ||
+        score.comment !== null,
+    ) ||
+    (!pendingProof && !approvedProof)
+  ) {
+    failure("COMPLETION_STATE_CORRUPT", "report formal acceptance proof is missing or corrupt");
+  }
+  // The actor of a formal acceptance is the learner whose report it is — the
+  // one actor a reviewed approval must never have.
+  if (input.actorId !== context.enrollment.userId) {
+    failure("COMPLETION_OWNER_MISMATCH", "a formal acceptance is recorded for the report's own author");
+  }
+}
+
 async function assertReportApprovalProof(
   tx: Prisma.TransactionClient,
   context: CompletionContext,
@@ -831,6 +956,13 @@ async function assertReportApprovalProof(
   const reviewId = match ? Number(match[1]) : 0;
   if (!Number.isSafeInteger(reviewId) || reviewId <= 0) {
     failure("COMPLETION_OWNER_MISMATCH", "report approval proof identity is invalid");
+  }
+  // WHICH PROOF APPLIES IS THE LEVEL'S DECISION. A `formal_check` level takes
+  // the reviewer-less acceptance and nothing else; every other report level
+  // takes a reviewer's approval and nothing else. See the note on the two proofs.
+  if (isFormallyAcceptedReportPair(context.level.type, context.level.completionMethod)) {
+    await assertReportFormalAcceptanceProof(tx, context, input, reviewId);
+    return;
   }
   const review = await tx.reportReview.findUnique({
     where: { id: reviewId },

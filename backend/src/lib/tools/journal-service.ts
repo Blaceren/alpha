@@ -2,12 +2,15 @@
  * TOOLS-V2 — Trading Journal persistence.
  *
  * EVERY READ AND WRITE IS SCOPED BY OWNER. An entry id from another account is
- * «not found», never a different learner's trade. There is no delete (owner
- * decision): a learner keeps the whole history, and a correction is an edit.
+ * «not found», never a different learner's trade — for a read, an edit and a
+ * delete alike.
  *
- * AN ENTRY MADE FROM A TRADE CARD keeps the card's trade. Only its review —
- * plan followed, violations, execution, conclusion — is edited here; replacing
- * the trade is refused with JOURNAL_TRADE_FROM_CARD.
+ * ANY ENTRY CAN BE REPLACED WHOLE AND ANY ENTRY CAN BE DELETED (owner,
+ * 2026-10-01; before that an entry made from a card kept the card's trade and
+ * nothing was deleted). Neither touches the Trade Card: an edit changes the
+ * journal's record of the trade, a delete removes that record, and the card
+ * stays what it was when it was saved. Every row is read with the trade of its
+ * card beside it, so the DTO can say when the two no longer agree.
  */
 import type { Prisma, PrismaClient, ToolTradeCard } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/prisma";
@@ -27,7 +30,22 @@ import {
 type Db = Pick<PrismaClient, "toolJournalEntry" | "$transaction">;
 type Tx = Prisma.TransactionClient;
 
-const WITH_VIOLATIONS = { violations: { select: { code: true } } } as const;
+/** An entry is always read with its broken rules and, if it came from a card, the card's trade. */
+const WITH_VIOLATIONS = {
+  violations: { select: { code: true } },
+  tradeCard: {
+    select: {
+      entryTime: true,
+      assetCode: true,
+      direction: true,
+      amountMinor: true,
+      payoutPercent: true,
+      expiryCode: true,
+      result: true,
+      reason: true,
+    },
+  },
+} as const;
 
 /** Newest trade first; entries recorded for the same minute in the order they were written. */
 const ORDER: Prisma.ToolJournalEntryOrderByWithRelationInput[] = [
@@ -100,18 +118,25 @@ export async function listJournal(
   const hasMore = rows.length > JOURNAL_LIMITS.pageSize;
   const page = hasMore ? rows.slice(0, JOURNAL_LIMITS.pageSize) : rows;
 
+  return {
+    rows: page,
+    nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
+    summary: await journalSummary(userId, db),
+  };
+}
+
+/** The counts over the learner's whole journal. Entries are counted; money is never summed. */
+export async function journalSummary(
+  userId: number,
+  db: Pick<PrismaClient | Tx, "toolJournalEntry"> = defaultPrisma,
+): Promise<JournalSummary> {
   const [total, onPlan, violated, withoutConclusion] = await Promise.all([
     db.toolJournalEntry.count({ where: { userId } }),
     db.toolJournalEntry.count({ where: { userId, planFollowed: true } }),
     db.toolJournalEntry.count({ where: { userId, planFollowed: false } }),
     db.toolJournalEntry.count({ where: { userId, conclusion: null } }),
   ]);
-
-  return {
-    rows: page,
-    nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
-    summary: { total, onPlan, violated, unmarked: total - onPlan - violated, withoutConclusion },
-  };
+  return { total, onPlan, violated, unmarked: total - onPlan - violated, withoutConclusion };
 }
 
 /** «Новая запись»: a trade recorded by hand. */
@@ -132,7 +157,11 @@ export function createManualJournalEntry(
   });
 }
 
-/** Edit the review of any entry, or replace a hand-recorded one whole. */
+/**
+ * Edit the review of an entry, or replace the entry whole — whichever source it
+ * came from. The source and the link to the card are never changed by an edit:
+ * an entry made from a card stays that card's entry, corrected.
+ */
 export function updateJournalEntry(
   userId: number,
   entryId: string,
@@ -140,21 +169,46 @@ export function updateJournalEntry(
   db: Db = defaultPrisma,
 ): Promise<JournalRow> {
   return db.$transaction(async (tx) => {
-    const entry = await tx.toolJournalEntry.findFirst({ where: { id: entryId, userId }, select: { source: true } });
+    const entry = await tx.toolJournalEntry.findFirst({ where: { id: entryId, userId }, select: { id: true } });
     if (!entry) throw new ToolError("JOURNAL_ENTRY_NOT_FOUND");
-    if (change.kind === "manual" && entry.source !== "manual") throw new ToolError("JOURNAL_TRADE_FROM_CARD");
 
-    const review = change.kind === "manual" ? change.entry : change.review;
+    const review = change.kind === "entry" ? change.entry : change.review;
     await tx.toolJournalViolation.deleteMany({ where: { entryId } });
     return tx.toolJournalEntry.update({
       where: { id: entryId },
       data: {
-        ...(change.kind === "manual" ? tradeData(change.entry) : {}),
+        ...(change.kind === "entry" ? tradeData(change.entry) : {}),
         ...reviewData(review),
         violations: { create: review.violations.map((code) => ({ code })) },
       },
       include: WITH_VIOLATIONS,
     });
+  });
+}
+
+/**
+ * Delete one of the learner's own entries, with the rules marked on it, and
+ * return the counts of what is left.
+ *
+ * WHAT IS DELETED, AND WHAT IS NOT. The journal's record of one trade: the row
+ * and its broken rules (the rules go by the foreign key's cascade). The Trade
+ * Card the entry was made from stays saved — it is the card's own record, and
+ * cards are never deleted — but it has no entry any more and gets no second
+ * one: a deleted trade does not come back by itself.
+ *
+ * The delete is scoped by owner in the statement itself, so an id from another
+ * account deletes nothing and is «not found»; the count is read in the same
+ * transaction, so it is the count after THIS delete.
+ */
+export function deleteJournalEntry(
+  userId: number,
+  entryId: string,
+  db: Db = defaultPrisma,
+): Promise<{ readonly summary: JournalSummary }> {
+  return db.$transaction(async (tx) => {
+    const deleted = await tx.toolJournalEntry.deleteMany({ where: { id: entryId, userId } });
+    if (deleted.count !== 1) throw new ToolError("JOURNAL_ENTRY_NOT_FOUND");
+    return { summary: await journalSummary(userId, tx) };
   });
 }
 

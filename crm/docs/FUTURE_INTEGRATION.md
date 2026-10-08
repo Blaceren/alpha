@@ -1,6 +1,6 @@
-# FUTURE_INTEGRATION.md — Alfa Trade Academy CRM
+# FUTURE_INTEGRATION.md — Alpha Trade Academy CRM
 
-> Phase 0 (обновлено в Phase 0.5) · Перечень будущих API от backend Alfa Trade Academy, чтобы `ApiCrmDataProvider` заменил `MockCrmDataProvider` без переписывания UI.
+> Phase 0 (обновлено в Phase 0.5) · Перечень будущих API от backend Alpha Trade Academy, чтобы `ApiCrmDataProvider` заменил `MockCrmDataProvider` без переписывания UI.
 > **Это НЕ проектирование прямого подключения к базе.** CRM никогда не ходит в production DB, Prisma или Pocket напрямую — только через отдельный защищённый API продукта.
 > Статус: Draft / запрос к backend-команде.
 >

@@ -1,5 +1,6 @@
 import { deriveNotificationHref, type HrefSource } from "@/features/academy-experience/notifications-screen";
-import { isVisibleNotificationType } from "@/config/feature-visibility";
+import { isLearnerFacingNotificationType } from "@/lib/notifications/learner-facing";
+import { supportCaseHref } from "@/lib/support/support-links";
 
 /**
  * NOTIFICATIONS — the semantic layer, mapped from the real Backend row.
@@ -56,7 +57,8 @@ export type NotificationTypeName =
  *
  * Required on every record by the item contract, and it is an IDENTITY, not
  * route or debug metadata: the shape is «область · предмет», exactly as the
- * frozen page renders it («Уровень 3 · Отчёт», «Academy · Система»).
+ * frozen page renders it («Уровень 3 · Отчёт», «Академия · Система» — the
+ * product's own name in Russian since 2026-10-04; it was the Latin «Academy»).
  *
  * Every value of the deployed enum is mapped, so nothing a learner can see
  * today is affected by the suppression rule below. The map exists so that a
@@ -65,23 +67,23 @@ export type NotificationTypeName =
  * forbidden by name.
  */
 const CONTEXT: Record<NotificationTypeName, string> = {
-  support_reply: "Academy · Поддержка",
+  support_reply: "Академия · Поддержка",
   task_report_approved: "Отчёт · Проверка",
   task_report_rejected: "Отчёт · Проверка",
-  reward_granted: "Academy · Начисление",
+  reward_granted: "Академия · Начисление",
   level_up: "Путь · Прогресс",
   checkpoint_frozen: "Контрольная точка",
   checkpoint_restored: "Контрольная точка",
-  postback_received: "Academy · Внешнее подтверждение",
-  exchange_connected: "Academy · Внешний счёт",
-  exchange_rejected: "Academy · Внешний счёт",
-  exchange_blocked: "Academy · Внешний счёт",
+  postback_received: "Академия · Внешнее подтверждение",
+  exchange_connected: "Академия · Внешний счёт",
+  exchange_rejected: "Академия · Внешний счёт",
+  exchange_blocked: "Академия · Внешний счёт",
   mentor_reply: "Наставник · Ответ",
-  daily_reward: "Academy · Начисление",
-  achievement_granted: "Academy · Достижение",
-  promocode_redeemed: "Academy · Промокод",
-  referral_bonus: "Academy · Реферальная программа",
-  system: "Academy · Система",
+  daily_reward: "Академия · Начисление",
+  achievement_granted: "Академия · Достижение",
+  promocode_redeemed: "Академия · Промокод",
+  referral_bonus: "Академия · Реферальная программа",
+  system: "Академия · Система",
   community_reply: "Сообщество · Обсуждение",
   community_moderation: "Сообщество · Модерация",
 };
@@ -132,7 +134,30 @@ export function contextIdentity(type: string): string | null {
 const HANDOFF_LABEL: Partial<Record<NotificationTypeName, string>> = {
   community_reply: "Открыть обсуждение",
   community_moderation: "Открыть обсуждение",
+  /* 2026-10-04, launch audit: the one notification learners actually get — a
+     reply from support — led nowhere; the answer is on the support desk. */
+  support_reply: "Открыть обращения",
+  /* …and a level completed without the learner (Pocket confirming level 3)
+     leads to the one next step. */
+  level_up: "Продолжить путь",
 };
+
+/** Destinations the product owns for a type, whatever the row carries. */
+const TYPE_DESTINATION: Partial<Record<NotificationTypeName, string>> = {
+  support_reply: "/profile/support",
+  level_up: "/home",
+};
+
+/**
+ * A support reply opens ITS case, when the row names one (2026-10-04): the
+ * Backend writes `metadata.learnerOpsCaseId` on every reply notification, and
+ * the desk now has an address per case.
+ */
+function caseDestination(type: string, metadata: unknown): string | null {
+  if (type !== "support_reply" || typeof metadata !== "object" || metadata === null) return null;
+  const id = (metadata as { learnerOpsCaseId?: unknown }).learnerOpsCaseId;
+  return typeof id === "string" && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(id) ? supportCaseHref(id) : null;
+}
 
 export function handoffLabel(type: string): string | null {
   return HANDOFF_LABEL[type as NotificationTypeName] ?? null;
@@ -156,6 +181,8 @@ export type NotificationRow = {
 
 export type NotificationRecord = {
   id: string;
+  /** The Backend's type, for the bell window's glyph (DD-349). */
+  type: NotificationTypeName;
   consumption: "UNREAD" | "READ";
   consequence: "ACTION-RELEVANT" | "AWARENESS-ONLY";
   /** Always ACTION_UNKNOWN — see the file header. */
@@ -189,17 +216,18 @@ export function toRecord(row: NotificationRow, now: Date): NotificationRecord | 
   const type = row.type ?? "";
 
   /**
-   * A WITHHELD SECTION'S EVENTS ARE NOT SHOWN.
+   * A WITHHELD SECTION'S EVENTS ARE NOT SHOWN, NOR THE BROKER'S OWN
+   * (`learner-facing.ts`).
    *
    * Same mechanism as the suppression below and the same discipline: the row is
    * dropped from THIS VIEW and nothing else happens to it. It is not deleted,
-   * not marked read, and no request is made about it — the Academy never writes
-   * to consumption, and this phase does not start.
+   * and nothing about it is written from here — the register's one write is
+   * «read» for everything, once the learner has seen the list.
    *
    * The shell's unread mark filters on the same predicate, so a hidden event
    * cannot light the bell while the list it would appear in shows nothing.
    */
-  if (!isVisibleNotificationType(type)) return null;
+  if (!isLearnerFacingNotificationType(type)) return null;
 
   const context = contextIdentity(type);
   if (!context) return null;
@@ -207,14 +235,16 @@ export function toRecord(row: NotificationRow, now: Date): NotificationRecord | 
   const created = row.createdAt ? new Date(row.createdAt) : null;
   if (!created || Number.isNaN(created.getTime())) return null;
 
-  const href = deriveNotificationHref(row as HrefSource);
-  const label = handoffLabel(type);
+  const caseHref = caseDestination(type, row.metadata);
+  const href = caseHref ?? TYPE_DESTINATION[type as NotificationTypeName] ?? deriveNotificationHref(row as HrefSource);
+  const label = caseHref ? "Открыть обращение" : handoffLabel(type);
 
   const statement = (row.title ?? "").trim();
   const support = (row.message ?? row.body ?? "").trim();
 
   return {
     id: String(row.id),
+    type: type as NotificationTypeName,
     consumption: row.readAt ? "READ" : "UNREAD",
     consequence: consequenceOf(type as NotificationTypeName),
     actionability: "ACTION_UNKNOWN",
@@ -272,14 +302,18 @@ export function presenceFor(request: "SUCCESS" | "LOADING" | "FAILURE", records:
   return records === 0 ? "NONE_SCOPED" : "WITHHELD";
 }
 
-/** The frozen copy, verbatim from the accepted page. */
+/** The frozen copy, verbatim from the accepted page — except the two empty-state
+    lines, made plain on 2026-10-04 (launch audit): the uppercase status line no
+    longer runs to two lines, and the lead says what will arrive here. */
 export const COPY = {
   title: "Уведомления",
   registerLabel: "Значимые изменения",
   loadingAnnouncement: "Загрузка изменений",
-  presenceNone: "Сейчас ничего не требует вашего действия в этом разделе.",
-  emptyLead: "Значимых изменений пока нет — здесь появляется то, что произошло в вашей работе без вас.",
+  presenceNone: "Сейчас ничего не требует вашего действия.",
+  emptyLead: "Изменений пока нет. Здесь появятся ответы поддержки и всё, что изменилось в вашей работе, пока вас не было.",
   failureLead: "Не удалось обновить список изменений.",
-  failureReasonCold: "Проверьте соединение и повторите попытку.",
+  /* Not the learner's connection by default (2026-10-04, launch audit): an
+     expired session has its own notice, and the rest is the server's. */
+  failureReasonCold: "Сервер не ответил. Повторите попытку через минуту.",
   failureRecovery: "Обновить",
 } as const;

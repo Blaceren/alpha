@@ -14,13 +14,21 @@
  * on the platform and it lives here.
  *
  * ================================ THE RULE ================================
- * A tool is unlocked when the LEVEL THAT RELEASES IT (a checkpoint, or since
- * TOOLS-V2 an ordinary lesson such as L5 for the Trade Card) is durably
- * completed for this enrollment. That is the accepted domain relationship, and
- * it comes from two Backend-owned sources that already have to agree:
- * `CURRICULUM_TOOLS[].unlockLevel` (product vocabulary) and `CHECKPOINT_ROWS`
- * (canonical structure) — `validateAtaUnlockVocabulary` fails the build if they
- * ever disagree.
+ * A tool is unlocked when the LEVEL THAT RELEASES IT is durably completed for
+ * this enrollment.
+ *
+ * WHICH LEVEL THAT IS BELONGS TO THE VERSION (2026-10-02). It used to be one
+ * global number per tool, `CURRICULUM_TOOLS[].unlockLevel`, which is true only
+ * while every published version has the same shape. The 30-level program opens
+ * the Trading Journal after level 9 and both the Risk Plan and the Entry
+ * Checklist after level 13; a learner still pinned to the 100-level version
+ * keeps levels 10, 15 and 20. So the answer is now read from `LevelToolUnlock`,
+ * the pinned version's own rows — written by the importer from the package, and
+ * by migration `20261002120000_program_structure` for every version that
+ * existed before it. `CURRICULUM_TOOLS` still says WHICH tools exist and in
+ * what order they are listed; its `unlockLevel` is the rule old packages were
+ * written under, and is read here only to keep a display number on a tool the
+ * pinned version never opens.
  *
  * WHAT DECIDES: `UserLevelProgress.status === "completed"` on that level.
  * WHAT DOES NOT DECIDE, and is never read here:
@@ -109,11 +117,44 @@ export type CurriculumToolAccessSummary = {
 
 /** The durable facts one level contributes. Nothing else about it is read. */
 type ToolAccessLevel = {
+  id: number;
   levelNumber: number;
   stableCode: string;
   title: string;
   completed: boolean;
 };
+
+/**
+ * One `LevelToolUnlock` row of the pinned version: this level opens this tool.
+ *
+ * Passed IN rather than read here, so the module stays a projection — it opens
+ * no query of its own, and whoever resolved the levels decides which snapshot
+ * the rows come from.
+ */
+export type CurriculumToolUnlockRow = {
+  readonly toolCode: string;
+  readonly levelDefinitionId: number;
+};
+
+type ToolUnlockDb = {
+  levelToolUnlock: {
+    findMany(args: {
+      where: { curriculumVersionId: number };
+      select: { toolCode: true; levelDefinitionId: true };
+    }): Promise<CurriculumToolUnlockRow[]>;
+  };
+};
+
+/** The pinned version's unlock rows. One bounded query: at most one row per tool. */
+export async function loadCurriculumToolUnlocks(
+  db: ToolUnlockDb,
+  curriculumVersionId: number,
+): Promise<CurriculumToolUnlockRow[]> {
+  return db.levelToolUnlock.findMany({
+    where: { curriculumVersionId },
+    select: { toolCode: true, levelDefinitionId: true },
+  });
+}
 
 function lockedEntry(
   tool: CurriculumTool,
@@ -129,17 +170,32 @@ function lockedEntry(
   };
 }
 
-function resolveFromLevels(levels: readonly ToolAccessLevel[]): CurriculumToolAccess {
-  const byNumber = new Map<number, ToolAccessLevel>();
-  for (const level of levels) byNumber.set(level.levelNumber, level);
+function resolveFromLevels(
+  levels: readonly ToolAccessLevel[],
+  unlocks: readonly CurriculumToolUnlockRow[],
+): CurriculumToolAccess {
+  const byId = new Map<number, ToolAccessLevel>();
+  for (const level of levels) byId.set(level.id, level);
+  // First row wins. The table is unique on (version, tool), so a second row for
+  // one tool cannot exist; if a caller ever hands one over, it is ignored rather
+  // than allowed to open a tool the first row keeps shut.
+  const unlockLevelIdByTool = new Map<string, number>();
+  for (const unlock of unlocks) {
+    if (!unlockLevelIdByTool.has(unlock.toolCode)) {
+      unlockLevelIdByTool.set(unlock.toolCode, unlock.levelDefinitionId);
+    }
+  }
 
   const tools = CURRICULUM_TOOLS.map((tool): CurriculumToolAccessEntry => {
-    const level = byNumber.get(tool.unlockLevel);
+    const levelId = unlockLevelIdByTool.get(tool.code);
+    // No row, or a row naming a level outside the resolved version: the pinned
+    // version does not open this tool. Locked, and it says so.
+    const level = levelId === undefined ? undefined : byId.get(levelId);
     if (!level) return lockedEntry(tool, "unlock_level_missing");
     return {
       code: tool.code,
       unlocked: level.completed,
-      unlockLevel: tool.unlockLevel,
+      unlockLevel: level.levelNumber,
       unlockLevelStableCode: level.stableCode,
       unlockLevelTitle: level.title,
       reason: level.completed ? "unlock_level_completed" : "unlock_level_incomplete",
@@ -162,12 +218,14 @@ function resolveFromLevels(levels: readonly ToolAccessLevel[]): CurriculumToolAc
  */
 export function resolveCurriculumToolAccess(
   levels: readonly {
-    levelDefinition: Pick<LevelDefinition, "levelNumber" | "stableCode" | "title">;
+    levelDefinition: Pick<LevelDefinition, "id" | "levelNumber" | "stableCode" | "title">;
     progress: Pick<UserLevelProgress, "status"> | null;
   }[],
+  unlocks: readonly CurriculumToolUnlockRow[],
 ): CurriculumToolAccess {
   return resolveFromLevels(
     levels.map((item) => ({
+      id: item.levelDefinition.id,
       levelNumber: item.levelDefinition.levelNumber,
       stableCode: item.levelDefinition.stableCode,
       title: item.levelDefinition.title,
@@ -175,30 +233,34 @@ export function resolveCurriculumToolAccess(
       // `completed` because of some future display rule would not open a tool.
       completed: item.progress?.status === "completed",
     })),
+    unlocks,
   );
 }
 
 /**
  * Tool access for a COMPLETED enrollment, which has no level-state resolution.
  *
- * Same rule, same fail-closed behaviour: a completed enrollment whose L45 row is
- * somehow not `completed` does not get the Strategy Builder, however finished
- * the enrollment claims to be.
+ * Same rule, same fail-closed behaviour: a completed enrollment whose unlocking
+ * row is somehow not `completed` does not get the tool, however finished the
+ * enrollment claims to be.
  */
 export function resolveCompletedCurriculumToolAccess(
   levels: readonly Pick<LevelDefinition, "id" | "levelNumber" | "stableCode" | "title">[],
   progress: readonly Pick<UserLevelProgress, "levelDefinitionId" | "status">[],
+  unlocks: readonly CurriculumToolUnlockRow[],
 ): CurriculumToolAccess {
   const completedLevelIds = new Set(
     progress.filter((row) => row.status === "completed").map((row) => row.levelDefinitionId),
   );
   return resolveFromLevels(
     levels.map((level) => ({
+      id: level.id,
       levelNumber: level.levelNumber,
       stableCode: level.stableCode,
       title: level.title,
       completed: completedLevelIds.has(level.id),
     })),
+    unlocks,
   );
 }
 

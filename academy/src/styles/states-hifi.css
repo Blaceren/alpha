@@ -1,0 +1,134 @@
+/*
+ * STATES, HI-FI — the product hi-fi for the screens that say something went
+ * wrong or is not there yet (DD-338, owner 2026-10-03: «хай фай всего»).
+ *
+ * The route's error boundary, «Такой страницы нет», and the bounded curriculum
+ * states every page falls back to («Уровень не найден», «Путь пока не начат»,
+ * a failed read with its reference) still rendered in the retired navy and teal
+ * of the first prototype. They now take the product's language: one rounded
+ * surface lit from its corner, the statement in the display face, the way out
+ * as a pill — Signal for the one way forward, a quiet outline for the retry.
+ *
+ * Loaded once for the signed-in group. Every rule is `.ax …` with one class or
+ * element over the legacy rule it replaces, so it wins by specificity and never
+ * by order.
+ */
+
+/* The legacy field's own tones, mapped onto the product's. `html .ax` so it
+   holds whatever order the two stylesheets load in. */
+html .ax {
+  --ax-ink: var(--text-primary);
+  --ax-ink-muted: var(--text-secondary);
+  --ax-ink-faint: var(--text-muted);
+  --ax-line: var(--hf-line);
+  --ax-line-strong: var(--hf-line-strong);
+  --ax-signal: var(--signal-active);
+}
+
+.ax :is(.ax-empty, .ax-error, .cur-state) {
+  max-width: 640px;
+  margin: 24px auto;
+  padding: 44px 40px 40px;
+  color: var(--text-primary);
+  text-align: center;
+  background: var(--hf-light), var(--hf-surface);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-surface);
+  box-shadow: var(--hf-shadow);
+}
+
+.ax :is(.ax-empty, .ax-error) :is(h1, h2),
+html .ax .cur-state :is(h1, h2, p).cur-state__title {
+  margin: 0 0 14px;
+  color: var(--text-primary);
+  font: 400 clamp(30px, 3vw, 40px) / 1.08 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+  text-wrap: balance;
+}
+
+.ax :is(.ax-empty, .ax-error) p,
+.ax .cur-state .cur-state__message {
+  margin: 0 auto;
+  max-width: 52ch;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.ax :is(.ax-empty, .ax-error) p:has(.ax-cta) {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 26px;
+}
+
+/* A state that is the whole document (the top-level 404): the product's ground
+   with its corner light, the surface a little way down the screen. */
+.ax-page {
+  min-height: 100dvh;
+  padding: 14vh 16px 48px;
+  background: var(--hf-light), var(--background-base);
+}
+
+.ax .cur-state .cur-state__ref {
+  margin-top: 16px;
+  color: var(--text-muted);
+  font: 500 11px / 1.5 var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+/* The way forward: Public Home's Signal pill. The retry: its quiet outline. */
+.ax .ax-cta {
+  min-height: 48px;
+  padding: 0 24px;
+  border: 1px solid transparent;
+  border-radius: var(--hf-radius-pill);
+  color: var(--background-base);
+  background: var(--signal-active);
+  font-size: 14.5px;
+  font-weight: 700;
+  transition:
+    background-color 180ms var(--hf-ease),
+    transform 180ms var(--hf-ease);
+}
+
+.ax .ax-cta:hover {
+  background: var(--ata-signal-300);
+  transform: translateY(-2px);
+}
+
+.ax .ax-cta:focus-visible {
+  outline: 2px solid var(--focus-ring);
+}
+
+.ax :is(.ax-cta--quiet, .cur-retry) {
+  min-height: 48px;
+  padding: 0 22px;
+  border: 1px solid rgba(243, 244, 239, 0.18);
+  border-radius: var(--hf-radius-pill);
+  color: var(--text-primary);
+  background: rgba(243, 244, 239, 0.035);
+  font-weight: 600;
+}
+
+.ax :is(.ax-cta--quiet, .cur-retry):hover {
+  border-color: rgba(243, 244, 239, 0.32);
+  background: rgba(243, 244, 239, 0.09);
+}
+
+@media (max-width: 599px) {
+  .ax :is(.ax-empty, .ax-error, .cur-state) {
+    padding: 32px 20px 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ax .ax-cta {
+    transition: none;
+  }
+
+  .ax .ax-cta:hover {
+    transform: none;
+  }
+}

@@ -1,0 +1,804 @@
+/*
+ * THE LESSON ON THE LEVEL PAGE (2026-10-02).
+ *
+ * The 30-level program made the level page a lesson page: a video, what the
+ * lesson is about, a test whose разбор points back into the video, a report
+ * that is five records and a refusal, and the tool the level opens. None of
+ * those had a shape here. This sheet gives them one, in the language the page
+ * already speaks — `level-detail-fidelity.css` — and nothing new is introduced:
+ *
+ *   - the same flat Ink field and 8px corner for the one place an action lives
+ *     (the test, the start control, the completion control, the report);
+ *   - hairlines, not cards, to separate things of the same kind (questions,
+ *     records, tools);
+ *   - Signal only for the available primary action, a chosen answer and focus;
+ *     a wrong answer is NOT a colour — it is a word and a разбор;
+ *   - mono small caps for the system's own labels, Manrope for everything the
+ *     author wrote.
+ *
+ * Every rule carries the `.ld` root, so it wins at 0-2-0 against the single
+ * class selectors of the component sheets whatever order they are emitted in,
+ * and applies nowhere but the level page. `report.css` sits in a cascade layer,
+ * so these unlayered rules win over it by construction.
+ */
+
+/* ------------------------------------------------------------ the measure -- */
+
+/* A lesson is watched: its section may be as wide as the task below it, so the
+   frame is not a thumbnail above a wider test. The text inside keeps the
+   reading measure. */
+.ld > article > .ax-lvlsec[data-section="lesson"] { max-width: var(--ld-task-measure); }
+.ld .ax-lvlsec[data-section="lesson"] .lesson-media { margin: 0; }
+.ld .ax-lvlsec[data-section="unlocks"] { max-width: var(--ld-task-measure); }
+
+/* ------------------------------------------------------------ state line -- */
+
+/* The line under the header is a dot and a sentence on one row. With a long
+   sentence the row used to wrap at the paragraph — the whole sentence dropped
+   below a dot left alone on its own line (measured at 390 on a level in
+   production). The sentence now takes the rest of the row and wraps inside it;
+   the dot stays beside its first line. */
+.ld .ax-statestrip { flex-wrap: nowrap; }
+.ld .ax-statestrip__text { flex: 1 1 0; min-width: 0; }
+/* On the first line's middle, not the paragraph's: 14px text at 1.55 is a
+   21.7px line, and the dot is 4px. */
+.ld .ax-statestrip__dot,
+.ld .ax-statestrip[data-posture] .ax-statestrip__dot { align-self: flex-start; margin-top: 9px; }
+
+/* ----------------------------------------------- a level not open yet ----- */
+
+/* The page of a level in production is its title, one line and the way back.
+   The state line is the last thing on it, so it closes nothing. */
+.ld article[data-production="true"] .ax-statestrip { border-bottom: 0; margin-bottom: 4px; }
+
+/* ---------------------------------------------------------------- header -- */
+
+/* «Результат урока» — the author's line for what the lesson leaves the learner
+   with. A system label over an author's sentence, so two faces. */
+.ld .ax-lvlhead__objlabel {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin: 0 0 5px;
+}
+
+/* ----------------------------------------------------------- lesson text -- */
+
+.ld .ld-text {
+  display: grid;
+  gap: 24px;
+  margin: 22px 0 0;
+  max-width: var(--ld-measure);
+}
+.ld .cur-content__media-pending + .ld-text { margin-top: 20px; }
+/* When the note about a video in production is the FIRST thing in the section
+   there is nothing above it to be ruled off from. */
+.ld .cur-content > .cur-content__media-pending:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.ld .ld-text__section { min-width: 0; }
+.ld .ld-text__title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.3;
+  font-weight: 650;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+}
+.ld .ld-text__p {
+  font-size: 15.5px;
+  line-height: 1.62;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+  max-width: 64ch;
+}
+.ld .ld-text__p:last-child { margin-bottom: 0; }
+.ld .ld-text__sub {
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 650;
+  color: var(--text-primary);
+  margin: 18px 0 8px;
+}
+.ld .ld-text__sub:first-child { margin-top: 0; }
+/* The product's reset strips list markers. An author's «порядок: 1…5» is a
+   numbered list, and its numbers are part of what was written. */
+.ld ol.ld-text__list { list-style: decimal; }
+.ld ul.ld-text__list { list-style: disc; }
+.ld .ld-text__list {
+  margin: 0 0 12px;
+  padding-left: 24px;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 64ch;
+}
+.ld .ld-text__list li { margin: 0 0 6px; padding-left: 4px; }
+.ld .ld-text__list li:last-child { margin-bottom: 0; }
+.ld .ld-text__list li::marker {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+/* The author's emphasis: a rule and a label, not a tinted box. */
+.ld .ld-text__callout {
+  margin: 4px 0 12px;
+  padding: 2px 0 2px 16px;
+  border-left: 2px solid var(--divider-strong);
+  max-width: 64ch;
+}
+.ld .ld-text__callout-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+}
+.ld .ld-text__callout-body {
+  font-size: 15.5px;
+  line-height: 1.55;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+.ld .ld-text__rule { border: 0; border-top: var(--ld-rule); margin: 6px 0; }
+
+/* ---------------------------------------------------- the completion moment -- */
+
+/* Which level the next sentence is about — a coordinate, in the system face. */
+.ld .ax-done__nextLevel {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
+/* ------------------------------------------------- lit links inside a task -- */
+
+/*
+ * `.ld .ax-task a` paints every link inside a task surface in the page's text
+ * colour (0-2-1). A link DRAWN AS THE LIT BUTTON — the test's «перейти к
+ * следующему уровню», the confirmed registration's — is a single class (0-2-0)
+ * and lost: light text on a Signal fill, measured unreadable on the page this
+ * sheet restyles. These are the lit links, named, so they keep Ink on Signal in
+ * every state.
+ */
+.ld .ax-task a.asmt__next,
+.ld .ax-task a.asmt__next:hover,
+.ld .ax-task a.pocket-reg__action,
+.ld .ax-task a.pocket-reg__action:hover { color: var(--background-base); }
+
+/* ------------------------------------------------------- what it unlocks -- */
+
+.ld .ld-unlocks { list-style: none; margin: 0; padding: 0; }
+.ld .ld-unlock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 0;
+  border-top: var(--ld-rule);
+}
+.ld .ld-unlock:first-child { border-top: 0; padding-top: 0; }
+.ld .ld-unlock:last-child { padding-bottom: 0; }
+.ld .ld-unlock__text { min-width: 0; }
+.ld .ld-unlock__title {
+  font-size: 15.5px;
+  line-height: 1.35;
+  font-weight: 650;
+  color: var(--text-primary);
+  margin: 0 0 3px;
+}
+.ld .ld-unlock__desc {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 0;
+  max-width: 60ch;
+}
+.ld .ld-unlock__when {
+  flex: 0 0 auto;
+  max-width: 24ch;
+  margin: 0;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+/* A tool that is open is a way out of the lesson, not its primary action: an
+   outline, never a second lit button on the page. */
+.ld .ld-unlock__open {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid var(--divider-strong);
+  border-radius: 8px;
+  font-size: 14.5px;
+  font-weight: 650;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: border-color 140ms var(--ease-standard), background-color 140ms var(--ease-standard);
+}
+.ld .ld-unlock__open:hover { border-color: var(--text-muted); background: var(--surface-subtle); }
+.ld .ld-unlock__open:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
+
+/* ------------------------------------------------- the test's разбор ------ */
+
+/* The verdict is a word in the system face beside the question. Not a colour:
+   the page keeps Signal for what can be acted on, and has no red. */
+.ld .asmt__verdict {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 3px 7px;
+  border: 1px solid var(--divider);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  vertical-align: 2px;
+}
+.ld .asmt__verdict[data-verdict="wrong"] {
+  color: var(--text-primary);
+  border-color: var(--divider-strong);
+}
+
+/* A graded attempt is read, not answered: its rows stop inviting a press, and
+   a rightly answered question steps back so the eye goes to the ones that are
+   explained. */
+.ld .asmt[data-phase="failed"] .asmt__option { cursor: default; }
+.ld .asmt[data-phase="failed"] .asmt__option:hover { background: transparent; }
+.ld .asmt[data-phase="failed"] .asmt__option:has(input:checked),
+.ld .asmt[data-phase="failed"] .asmt__option:has(input:checked):hover {
+  background: var(--surface-subtle);
+  border-left-color: var(--text-muted);
+}
+.ld .asmt[data-phase="failed"] .asmt__option label { cursor: default; }
+.ld .asmt__question[data-verdict="right"] .asmt__option:not(:has(input:checked)) { display: none; }
+.ld .asmt__question[data-verdict="right"] .asmt__legend { color: var(--text-secondary); }
+
+.ld .asmt__review {
+  margin: 14px 0 0;
+  padding: 14px 16px 16px;
+  border: var(--ld-rule);
+  border-left: 2px solid var(--text-secondary);
+  border-radius: 6px;
+  background: var(--surface-subtle);
+}
+.ld .asmt__review-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+.ld .asmt__review-text {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin: 0;
+  max-width: 68ch;
+}
+/* «Пересмотреть с 1:55». An outline: the lit control of a failed attempt is
+   «Попробовать ещё раз», and there is one of those. */
+.ld .asmt__rewatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: 12px 0 0;
+  padding: 10px 16px;
+  border: 1px solid var(--divider-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color 140ms var(--ease-standard), background-color 140ms var(--ease-standard);
+}
+/* A play mark drawn as a shape, so it needs no icon font and no glyph. */
+.ld .asmt__rewatch::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 5px 0 5px 8px;
+  border-color: transparent transparent transparent currentColor;
+}
+.ld .asmt__rewatch:hover { border-color: var(--text-muted); background: var(--background-field); }
+.ld .asmt__rewatch:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
+.ld .asmt__rewatch-note {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 10px 0 0;
+  max-width: 62ch;
+}
+
+/* --------------------------------- the learner's own completion, and Pocket -- */
+
+/* The same container as the start control and the test: the one place on the
+   page where an action lives. These two had kept the older card. */
+.ld .lvl-manual,
+.ld .pocket-reg {
+  margin-top: 0;
+  padding: 20px 22px 22px;
+  border: var(--ld-rule);
+  border-radius: 8px;
+  background: var(--background-field);
+}
+.ld .lvl-manual__title,
+.ld .pocket-reg__title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+.ld .lvl-manual__explain,
+.ld .pocket-reg__explain {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0 0 16px;
+  max-width: 62ch;
+}
+/* A settled registration says its sentence and offers nothing after it. */
+.ld .lvl-manual__explain:last-child,
+.ld .pocket-reg__explain:last-child { margin-bottom: 0; }
+/* The three steps and the way to a person (2026-10-04). */
+.ld .pocket-reg__steps {
+  margin: 0 0 18px;
+  padding-left: 22px;
+  /* The global reset strips list markers; these are steps in order, and the
+     numbers are the point (measured on the stand: list-style-type was none). */
+  list-style: decimal outside;
+  max-width: 62ch;
+  color: var(--text-secondary);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+.ld .pocket-reg__steps li + li { margin-top: 6px; }
+.ld .pocket-reg__steps li::marker { color: var(--text-muted); font-family: var(--font-mono, monospace); font-size: 13px; }
+.ld .pocket-reg__help {
+  margin: 14px 0 0;
+  max-width: 62ch;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.ld .pocket-reg__help a { color: var(--text-primary); text-decoration: underline; text-underline-offset: 3px; }
+/* The registration address as a real link, for the tab a blocker stopped. */
+.ld .pocket-reg__fallback {
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.ld .pocket-reg__fallback a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--signal-active);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ld .lvl-manual__confirm {
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  margin: 0 0 14px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+.ld .lvl-manual__confirm input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--signal-active);
+}
+.ld .lvl-manual__confirm input:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 2px; }
+/* The real action of an open level: the lit one. */
+.ld .lvl-manual__action,
+.ld .pocket-reg__action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 11px 20px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--signal-active);
+  color: var(--background-base);
+  font-size: 14.5px;
+  font-weight: 650;
+  transition: background-color 140ms var(--ease-standard);
+}
+.ld .lvl-manual__action:hover:not(:disabled),
+.ld .pocket-reg__action:hover:not(:disabled) { background: var(--ata-signal-300); border-color: transparent; }
+.ld .lvl-manual__action:disabled,
+.ld .pocket-reg__action:disabled { opacity: 0.5; }
+.ld .lvl-manual__action:focus-visible,
+.ld .pocket-reg__action:focus-visible,
+.ld .pocket-reg__recheck:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
+/* «Проверить регистрацию» is the second of two: an outline. */
+.ld .pocket-reg__recheck {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 11px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--divider-strong);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14.5px;
+  font-weight: 650;
+}
+.ld .pocket-reg__recheck:hover:not(:disabled) { border-color: var(--text-muted); }
+.ld .lvl-manual__status,
+.ld .pocket-reg__status { font-size: 13.5px; line-height: 1.55; color: var(--text-secondary); }
+.ld .lvl-manual__status:empty,
+.ld .pocket-reg__status:empty { margin: 0; }
+/* Finished: the surface settles to one quiet edge, like the completion moment. */
+.ld .pocket-reg--confirmed,
+.ld .lvl-manual[data-phase="completed"] {
+  border-color: var(--divider);
+  border-left: 2px solid var(--signal-active);
+}
+.ld .lvl-manual[data-phase="completed"] .lvl-manual__status { margin: 0; }
+.ld .pocket-reg--confirmed .pocket-reg__action--link { text-decoration: none; }
+
+/* ------------------------------------------------------------- the report -- */
+
+.ld .rpt {
+  margin-top: 0;
+  padding: 22px 22px 24px;
+  border: var(--ld-rule);
+  border-radius: 8px;
+  background: var(--background-field);
+}
+.ld .rpt__head { margin: 0 0 4px; }
+.ld .rpt__heading {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+.ld .rpt__instructions {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+  max-width: 68ch;
+}
+.ld .rpt__criteria {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 68ch;
+}
+.ld .rpt__criteria-label { color: var(--text-secondary); font-weight: 600; }
+.ld .rpt__status { font-size: 13.5px; color: var(--text-secondary); margin: 12px 0 0; min-height: 0; }
+.ld .rpt__status:empty { margin: 0; }
+/* A programmatic focus target for the outcome of a submission: it is read out,
+   not operated, so it draws no ring around a sentence. */
+.ld .rpt__status:focus,
+.ld .rpt__status:focus-visible { outline: none; }
+
+.ld .rpt__form { margin: 18px 0 0; }
+
+/* A record: separated by a hairline and its own heading, not a card in a card. */
+.ld .rpt-group {
+  min-width: 0;
+  margin: 0;
+  padding: 20px 0 22px;
+  border: 0;
+  border-top: var(--ld-rule);
+  border-radius: 0;
+  background: none;
+}
+/* A legend sits ON its fieldset's border by default. Floated to the full
+   width it becomes an ordinary first line inside the record. */
+.ld .rpt-group__legend {
+  float: left;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 0;
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+.ld .rpt-group__fill {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+.ld .rpt-group__fill[data-complete="true"] { color: var(--text-secondary); }
+
+/* The record's fields: short ones side by side, a choice across two columns,
+   prose across the whole record. Order is the definition's, never rearranged. */
+.ld .rpt-group__fields {
+  clear: both;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px 14px;
+  margin: 0;
+}
+.ld .rf { grid-column: span 1; min-width: 0; gap: 6px; position: relative; }
+.ld .rf[data-type="single_choice"],
+.ld .rf[data-type="boolean"],
+.ld .rf[data-type="multi_choice"] { grid-column: span 2; }
+.ld .rf[data-type="long_text"],
+.ld .rf[data-type="url"],
+.ld .rf--unknown { grid-column: 1 / -1; }
+
+.ld .rf__label {
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 0;
+}
+/* Required is said in words to assistive technology; the mark is a quiet hint,
+   not an accent. */
+.ld .rf__req { color: var(--text-muted); }
+.ld .rf > .rf__req { display: none; }
+.ld .rf__input,
+.ld .rf__textarea {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--divider-strong);
+  border-radius: 6px;
+  background: var(--background-base);
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.ld .rf__textarea { min-height: 92px; }
+.ld .rf__input:focus-visible,
+.ld .rf__textarea:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 1px; }
+.ld .rf__help { font-size: 12.5px; color: var(--text-muted); }
+/* An error is a sentence and a stronger edge. Readable on Ink, which the base
+   sheet's locked-route grey was not. */
+.ld .rf__error { font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
+.ld .rf[data-invalid="true"] .rf__input,
+.ld .rf[data-invalid="true"] .rf__textarea,
+.ld .rf[data-invalid="true"] .rf__option { border-color: var(--text-secondary); }
+
+/* A choice: the options in a row, each a whole pressable chip. */
+/* The legend is floated to the full width so it is an ordinary first row; the
+   row gap then matches the 6px a text field keeps under its label, so a choice
+   and an input in the same row start on the same line. */
+.ld .rf__group { display: flex; flex-flow: row wrap; gap: 6px 8px; }
+.ld .rf__group > .rf__label { float: left; width: 100%; margin: 0; }
+.ld .rf__option {
+  position: relative;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px 0 12px;
+  border: 1px solid var(--divider-strong);
+  border-radius: 6px;
+  background: var(--background-base);
+  transition: border-color 120ms var(--ease-standard), background-color 120ms var(--ease-standard);
+}
+.ld .rf__option:hover { border-color: var(--text-muted); }
+.ld .rf__option:has(input:checked) { border-color: var(--signal-active); background: var(--surface-subtle); }
+.ld .rf__option:has(input:focus-visible) { outline: 2px solid var(--signal-active); outline-offset: 2px; }
+.ld .rf__option input {
+  position: relative;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--signal-active);
+}
+.ld .rf__option input:focus-visible { outline: none; }
+.ld .rf__option label { font-size: 14.5px; line-height: 1.3; color: var(--text-primary); cursor: pointer; }
+/* The words are the target: the label's activation area is the whole chip. */
+.ld .rf__option label::before { content: ""; position: absolute; inset: 0; }
+
+/* An optional record the learner has not asked for: its name and one control. */
+.ld .rpt-group--off {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 0;
+}
+.ld .rpt-group__offlabel { margin: 0; font-size: 15.5px; font-weight: 650; color: var(--text-secondary); }
+.ld .rpt-group__toggle { flex: 0 0 auto; }
+.ld .rpt-group__toggle--remove { margin: 16px 0 0; }
+
+/* The rule runs the width of the form, like the records' own; the sentence
+   keeps a reading measure inside it. */
+.ld .rpt__formal {
+  margin: 0;
+  padding: 18px max(0px, calc(100% - 68ch)) 0 0;
+  border-top: var(--ld-rule);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.ld .rpt__actions { gap: 10px; margin: 18px 0 0; }
+.ld .rpt__btn {
+  min-height: 44px;
+  padding: 11px 20px;
+  border: 1px solid var(--divider-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14.5px;
+  font-weight: 650;
+}
+.ld .rpt__btn:hover:not([disabled]) { border-color: var(--text-muted); }
+.ld .rpt__btn:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
+.ld .rpt__btn--primary,
+.ld .rpt__btn--primary:hover:not([disabled]) {
+  background: var(--signal-active);
+  border-color: transparent;
+  color: var(--background-base);
+}
+.ld .rpt__btn--primary:hover:not([disabled]) { background: var(--ata-signal-300); }
+
+/* Notices, in the page's two-channel form: words first, an edge second. */
+.ld .rpt-summary,
+.ld .rpt__notice,
+.ld .rpt__done,
+.ld .rpt-feedback {
+  margin: 14px 0;
+  padding: 14px 16px;
+  border: var(--ld-rule);
+  border-left: 2px solid var(--divider-strong);
+  border-radius: 6px;
+  background: var(--surface-subtle);
+}
+.ld .rpt-summary { border-left-color: var(--text-secondary); }
+.ld .rpt-summary__title,
+.ld .rpt__done-title { font-size: 14.5px; font-weight: 700; color: var(--text-primary); margin: 0 0 8px; }
+.ld .rpt-summary__server { font-size: 14px; color: var(--text-secondary); }
+.ld .rpt-summary__list { font-size: 14px; line-height: 1.6; padding-left: 20px; }
+.ld .rpt-summary__list a { color: var(--text-primary); text-underline-offset: 3px; }
+.ld .rpt-summary__more { list-style: none; margin: 6px 0 0 -20px; color: var(--text-secondary); }
+.ld .rpt__done { border-left-color: var(--signal-active); }
+.ld .rpt__next {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 11px 20px;
+  border-radius: 8px;
+  background: var(--signal-active);
+  color: var(--background-base);
+  font-size: 14.5px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.ld .ax-task .rpt__next,
+.ld .ax-task .rpt__next:hover { color: var(--background-base); }
+.ld .rpt__next:hover { background: var(--ata-signal-300); }
+.ld .rpt__next:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; }
+.ld .rpt__next-pending { font-size: 13.5px; color: var(--text-secondary); margin: 0; }
+.ld .rpt-verdict { color: var(--text-primary); font-size: 14.5px; }
+.ld .rpt-status { margin: 12px 0 0; gap: 10px; }
+
+/* The accepted report, kept readable. */
+.ld .rpt-own { margin: 14px 0 0; border-top: var(--ld-rule); }
+.ld .rpt-own__summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  font-size: 14.5px;
+  font-weight: 650;
+  color: var(--text-secondary);
+}
+.ld .rpt-own__summary:focus-visible { outline: 2px solid var(--signal-active); outline-offset: 3px; border-radius: 4px; }
+/* `display: flex` drops the native disclosure marker; this is the same mark,
+   drawn as a shape and turned when the report is open. */
+.ld .rpt-own__summary { gap: 10px; list-style: none; }
+.ld .rpt-own__summary::-webkit-details-marker { display: none; }
+.ld .rpt-own__summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform 140ms var(--ease-standard);
+}
+.ld .rpt-own[open] > .rpt-own__summary::before { transform: rotate(90deg); }
+.ld .rpt-readonly { margin: 4px 0 0; }
+.ld .rpt-readonly__group { padding: 16px 0 18px; }
+.ld .rpt-readonly__legend { font-size: 15px; font-weight: 650; color: var(--text-primary); margin: 0 0 10px; }
+.ld .rpt-readonly .rpt-group__body {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 14px;
+  margin: 0;
+}
+.ld .rpt-readonly__row { grid-column: span 1; min-width: 0; }
+.ld .rpt-readonly__row dt {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+}
+.ld .rpt-readonly__row dd {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------ narrower --- */
+
+@media (max-width: 860px) {
+  .ld .lvl-manual,
+  .ld .pocket-reg,
+  .ld .rpt { padding: 18px 16px 20px; }
+  .ld .rpt-group__fields,
+  .ld .rpt-readonly .rpt-group__body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ld .rf[data-type="single_choice"],
+  .ld .rf[data-type="boolean"],
+  .ld .rf[data-type="multi_choice"] { grid-column: 1 / -1; }
+  .ld .ld-unlock { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .ld .ld-unlock__when { text-align: left; max-width: none; }
+}
+
+/* 420, the page's own phone step (`level-detail-fidelity.css`), not a new one. */
+@media (max-width: 420px) {
+  .ld .rpt-group__fields,
+  .ld .rpt-readonly .rpt-group__body { grid-template-columns: minmax(0, 1fr); }
+  .ld .rpt-group__legend { flex-wrap: wrap; gap: 4px 12px; }
+  .ld .rpt-group--off { align-items: flex-start; flex-direction: column; }
+  .ld .asmt__verdict { margin-left: 0; display: table; margin-top: 6px; }
+  .ld .ld-text__p,
+  .ld .ld-text__list { font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ld .ld-unlock__open,
+  .ld .rpt-own__summary::before,
+  .ld .asmt__rewatch,
+  .ld .lvl-manual__action,
+  .ld .pocket-reg__action,
+  .ld .rf__option { transition-duration: 1ms; }
+}

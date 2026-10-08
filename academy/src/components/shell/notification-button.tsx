@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { Suspense } from "react";
-import Link from "next/link";
-import { Icon } from "@/components/ui/icon";
+import { NotificationsBell } from "@/components/shell/notifications-bell";
 
 /**
  * Notification access, and the slot where the shell's one honest claim about
@@ -24,32 +23,28 @@ import { Icon } from "@/components/ui/icon";
 export function NotificationButton({
   presence,
   current = false,
+  placement = "desktop",
 }: {
   presence?: ReactNode;
   /**
-   * True on `/notifications`. It is a visible link to a route, so on that route
-   * it says so — the same thing every nav item has always done. It is decided by
-   * the shell from the same `activeId` the navigation reads, so the bell and the
-   * bar can never disagree about where the learner is.
-   *
-   * INDEPENDENT OF UNREAD. Being the current page and having unread
-   * notifications are two different facts about two different things; the mark
-   * below still says only what `hasUnreadNotifications` answered, and this says
-   * only where the learner is.
+   * True on `/notifications`, decided by the shell from the same `activeId` the
+   * navigation reads, so the bell and the bar can never disagree about where
+   * the learner is. INDEPENDENT OF UNREAD — being the current page and having
+   * unread notifications are two different facts.
    */
   current?: boolean;
+  /** Which bar this bell sits in (desktop band or phone top bar). */
+  placement?: "desktop" | "mobile";
 }) {
+  /* Since 2026-10-06 (DD-349) the bell opens a small window in place instead
+     of leading to `/notifications`; the page stays, one press away inside it.
+     The presence is streamed, so the bell is interactive whether or not the
+     answer has arrived, and the page never waits on it. */
   return (
-    <Link
-      href="/notifications"
-      className="iconbtn"
-      aria-label="Уведомления"
-      aria-current={current ? "page" : undefined}
-    >
-      <Icon name="bell" className="h-5 w-5" />
-      {/* Streamed, so the bell is interactive whether or not the answer has
-          arrived, and the page never waits on it. */}
-      {presence ? <Suspense fallback={null}>{presence}</Suspense> : null}
-    </Link>
+    <NotificationsBell
+      current={current}
+      placement={placement}
+      presence={presence ? <Suspense fallback={null}>{presence}</Suspense> : null}
+    />
   );
 }

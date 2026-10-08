@@ -1,0 +1,80 @@
+/*
+ * READER, HI-FI — the product hi-fi (DD-338, owner 2026-10-03: «хай фай
+ * всего»). The frozen reading surface keeps its strip, its contents, its
+ * sections and its reading rhythm; the material's title and its sections'
+ * titles speak in the display face, and the shell's ground (with its corner
+ * light) shows through the root instead of a ground of its own, so no seam
+ * marks where the column ends. Every rule is `.rdr.rdr--hifi …`.
+ */
+
+.rdr.rdr--hifi {
+  background: none;
+}
+
+.rdr.rdr--hifi h1 {
+  font: 400 clamp(36px, 3.6vw, 52px) / 1.04 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+  text-wrap: balance;
+}
+
+.rdr.rdr--hifi h2 {
+  font: 400 clamp(26px, 2.2vw, 32px) / 1.1 var(--hf-display);
+  letter-spacing: var(--hf-display-tracking);
+}
+
+/* The ways out and the contents are targets a thumb can hit (44px), and the
+   way back to the level is Public Home's quiet pill. */
+.rdr.rdr--hifi .return a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 18px 8px 14px;
+  border: 1px solid rgba(243, 244, 239, 0.18);
+  border-radius: var(--hf-radius-pill);
+  background: rgba(243, 244, 239, 0.035);
+  text-decoration: none;
+}
+
+.rdr.rdr--hifi .toc a,
+.rdr.rdr--hifi .panel__list a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.rdr.rdr--hifi .exits a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.rdr.rdr--hifi .boundary__act,
+.rdr.rdr--hifi .boundary__quiet,
+.rdr.rdr--hifi .acta__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--hf-radius-pill);
+}
+
+@media (max-width: 599px) {
+  .rdr.rdr--hifi h1 {
+    font-size: 32px;
+  }
+
+  .rdr.rdr--hifi h2 {
+    font-size: 26px;
+  }
+}
+
+/* The reading strip's «Структура» is a 44px target at every width (it was 30
+   on a phone held sideways and on a tablet). */
+.rdr.rdr--hifi .strip__btn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 44px;
+  white-space: nowrap;
+}

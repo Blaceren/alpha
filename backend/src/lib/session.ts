@@ -20,10 +20,15 @@
  * key to it. Nothing about identity or authority is encoded in the string, so
  * nothing can be asserted by holding it that the server does not agree with.
  *
- * ONE ACTIVE SESSION PER USER, by product decision. `issueSession` revokes every
- * live row for that user and inserts one, inside a single transaction, so two
- * concurrent logins cannot both survive — the one that commits last wins, and
- * the other's token is dead before it reaches the browser.
+ * TWO LIVE SESSIONS PER USER, by product decision (owner 2026-10-07: «можно
+ * было иметь 2 активных сеанса в 1 аккаунте»; H-7 held one). A sign-in takes a
+ * free one of the two slots; when both are taken it closes the session that
+ * went unused the longest and takes its slot — the learner is never locked out
+ * and never has a third (owner's answer: «закрывать самый давний»). A password
+ * change still rotates: every live row is revoked and one is issued. The
+ * database holds the limit (`UserSession_userId_slot_active_key`), so two
+ * concurrent sign-ins racing for one slot cannot both land — the loser re-reads
+ * and takes what is left.
  *
  * THE ROLE IS NOT IN THE SESSION. `resolveSession` reads it from the User row on
  * every request, together with the account status. That is what makes a role
@@ -67,11 +72,66 @@ export const LEGACY_SESSION_COOKIE_NAME = "trading_platform_session";
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
+/** How many sessions one account may have live at once (owner 2026-10-07). */
+export const MAX_LIVE_SESSIONS = 2;
+
+/** «Last used» is written at most this often, so a request is not a write. */
+const LAST_SEEN_STEP_MS = 5 * 60 * 1000;
+
+/** The browser's description is kept to this length, and only to name a device. */
+const USER_AGENT_MAX = 400;
+
 export type SessionPayload = {
   userId: number;
   role: UserRole;
   expiresAt: Date;
+  /** The row's id — which of the account's sessions this request is. Not a credential. */
+  sessionId: string;
 };
+
+/** What a sign-in may record about the browser it happens in. */
+export type SessionMeta = {
+  userAgent?: string | null;
+};
+
+/**
+ * What a sign-in knows about the request it answers (2026-10-07 audit).
+ *
+ * `replacing` is the raw token the browser still presents, if any. A browser
+ * that signs in again — a link from a messenger hides a SameSite=Strict cookie
+ * from the page, so the learner meets /login while still signed in — would
+ * otherwise leave its old session live, held by nobody, taking one of the
+ * account's two places, and the new session would close the account's OTHER
+ * device to make room. The old session is closed instead, whoever it belongs
+ * to: the browser is about to overwrite the cookie that held it.
+ *
+ * `expectedPasswordHash` is the hash the password was checked against. Read
+ * again inside the transaction, so a password changed (or an account blocked)
+ * between the check and the insert cannot leave behind a session issued on
+ * the old password: `issueSession` refuses with `SessionIssueRefusedError`.
+ */
+export type SignInContext = {
+  replacing?: string | null;
+  expectedPasswordHash?: string;
+};
+
+/** The account changed between the password check and the session — nothing was issued. */
+export class SessionIssueRefusedError extends Error {
+  constructor() {
+    super("SESSION_ISSUE_REFUSED");
+    this.name = "SessionIssueRefusedError";
+  }
+}
+
+function cleanUserAgent(value?: string | null): string | null {
+  if (!value) return null;
+  const printable = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+  return printable ? printable.slice(0, USER_AGENT_MAX) : null;
+}
+
+function lastUsedAt(row: { lastSeenAt: Date | null; createdAt: Date }): number {
+  return (row.lastSeenAt ?? row.createdAt).getTime();
+}
 
 /**
  * Cookie attributes, fixed rather than computed.
@@ -133,23 +193,25 @@ function hashToken(token: string): string {
 }
 
 /**
- * Issue a session, and revoke whatever that user had.
+ * ROTATE: revoke every live session the user has and issue one.
  *
- * Returns the RAW token, which the caller puts in the cookie and nowhere else.
- * The transaction is what makes "one active session" true under concurrency:
- * both logins revoke, both insert, and the second revoke covers the first
- * insert, so exactly one row is left live.
+ * Used where every other session must end — a password change. Returns the RAW
+ * token, which the caller puts in the cookie and nowhere else. Revoke and
+ * insert are one transaction, so two concurrent rotations leave exactly one
+ * row live.
  */
 export async function issueSessionWithin(
   userId: number,
   beforeRotation?: (tx: Prisma.TransactionClient) => Promise<void>,
+  meta: SessionMeta = {},
 ): Promise<string> {
   /* THE DATABASE IS THE INVARIANT, AND IT CAN SAY NO.
-     `UserSession_userId_active_key` is a unique index over (userId) WHERE
-     revokedAt IS NULL, so two logins racing for the same user cannot both
-     insert — one of them loses. That is the constraint working, not an error
-     worth showing anyone: the loser simply re-reads the world and tries again,
-     and its second attempt revokes the winner's row and inserts its own.
+     `UserSession_userId_slot_active_key` is a unique index over (userId, slot)
+     WHERE revokedAt IS NULL, so two rotations racing for the same user cannot
+     both insert into slot 0 — one of them loses. That is the constraint
+     working, not an error worth showing anyone: the loser simply re-reads the
+     world and tries again, and its second attempt revokes the winner's row and
+     inserts its own.
 
      Bounded deliberately. A retry loop that never gives up would turn a
      genuine database fault into a hang; three attempts covers contention and
@@ -159,7 +221,8 @@ export async function issueSessionWithin(
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const token = randomBytes(32).toString("base64url");
     const tokenHash = hashToken(token);
-    const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000);
 
     try {
       await prisma.$transaction(async (tx) => {
@@ -171,9 +234,11 @@ export async function issueSessionWithin(
         if (beforeRotation) await beforeRotation(tx);
         await tx.userSession.updateMany({
           where: { userId, revokedAt: null },
-          data: { revokedAt: new Date() },
+          data: { revokedAt: now },
         });
-        await tx.userSession.create({ data: { userId, tokenHash, expiresAt } });
+        await tx.userSession.create({
+          data: { userId, tokenHash, expiresAt, slot: 0, userAgent: cleanUserAgent(meta.userAgent), lastSeenAt: now },
+        });
       });
       return token;
     } catch (error) {
@@ -185,9 +250,88 @@ export async function issueSessionWithin(
   throw lastError;
 }
 
-/** The original entry point: rotation with nothing alongside it. */
-export async function issueSession(userId: number): Promise<string> {
-  return issueSessionWithin(userId);
+/**
+ * SIGN IN: issue a session alongside the one the user may already have.
+ *
+ * Two may be live (`MAX_LIVE_SESSIONS`). A free slot is taken; with both taken,
+ * the session unused the longest is revoked and its slot is taken — the owner's
+ * answer of 2026-10-07, «закрывать самый давний». An expired row that was never
+ * revoked frees its slot first. Returns the RAW token. `onEvicted` hears which
+ * session was closed to make room, after the commit, so the caller can record it.
+ */
+export async function issueSession(
+  userId: number,
+  meta: SessionMeta & SignInContext & { onEvicted?: (sessionId: string) => void } = {},
+): Promise<string> {
+  /* The same discipline as a rotation: two sign-ins racing for the last free
+     slot cannot both insert into it, the loser re-reads and takes what is left
+     (closing the session unused the longest if nothing is). Five attempts, not
+     three: a burst of sign-ins can lose more than one race in a row. */
+  let lastError: unknown = null;
+  const replacingHash =
+    meta.replacing && meta.replacing.length >= 16 && meta.replacing.length <= 512
+      ? hashToken(meta.replacing)
+      : null;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = hashToken(token);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000);
+
+    try {
+      const evicted = await prisma.$transaction(async (tx) => {
+        if (meta.expectedPasswordHash !== undefined) {
+          const account = await tx.user.findUnique({
+            where: { id: userId },
+            select: { passwordHash: true, status: true },
+          });
+          if (!account || account.passwordHash !== meta.expectedPasswordHash || account.status === "blocked") {
+            throw new SessionIssueRefusedError();
+          }
+        }
+        /* This browser's previous session ends here — it frees its own place
+           rather than closing the account's other device (see SignInContext). */
+        if (replacingHash) {
+          await tx.userSession.updateMany({
+            where: { tokenHash: replacingHash, revokedAt: null },
+            data: { revokedAt: now },
+          });
+        }
+        await tx.userSession.updateMany({
+          where: { userId, revokedAt: null, expiresAt: { lte: now } },
+          data: { revokedAt: now },
+        });
+        const live = await tx.userSession.findMany({
+          where: { userId, revokedAt: null },
+          select: { id: true, slot: true, createdAt: true, lastSeenAt: true },
+        });
+
+        let evictedId: string | null = null;
+        let slot = Array.from({ length: MAX_LIVE_SESSIONS }, (_, i) => i).find(
+          (candidate) => !live.some((row) => row.slot === candidate),
+        );
+        if (slot === undefined) {
+          const unusedLongest = [...live].sort((a, b) => lastUsedAt(a) - lastUsedAt(b))[0]!;
+          await tx.userSession.update({ where: { id: unusedLongest.id }, data: { revokedAt: now } });
+          evictedId = unusedLongest.id;
+          slot = unusedLongest.slot;
+        }
+
+        await tx.userSession.create({
+          data: { userId, tokenHash, expiresAt, slot, userAgent: cleanUserAgent(meta.userAgent), lastSeenAt: now },
+        });
+        return evictedId;
+      });
+      if (evicted) meta.onEvicted?.(evicted);
+      return token;
+    } catch (error) {
+      lastError = error;
+      if (!isUniqueViolation(error)) throw error;
+    }
+  }
+
+  throw lastError;
 }
 
 /** A unique-constraint failure, however this Prisma version reports it. */
@@ -206,8 +350,16 @@ function isUniqueViolation(error: unknown): boolean {
  * hash is compared again in constant time after the lookup — the unique index
  * already guarantees the match, and the second comparison costs nothing and
  * removes any doubt about how the row was selected.
+ *
+ * `touch` records that the session was used (at most every few minutes) — what
+ * a third sign-in reads to find the session unused the longest. Requests touch
+ * through `getSession`; a read that only labels something (the click
+ * classifier) does not.
  */
-export async function resolveSession(token?: string | null): Promise<SessionPayload | null> {
+export async function resolveSession(
+  token?: string | null,
+  options: { touch?: boolean } = {},
+): Promise<SessionPayload | null> {
   if (!token || token.length < 16 || token.length > 512) return null;
 
   const tokenHash = hashToken(token);
@@ -228,7 +380,23 @@ export async function resolveSession(token?: string | null): Promise<SessionPayl
   if (!record.user) return null;
   if (record.user.status === "blocked") return null;
 
-  return { userId: record.user.id, role: record.user.role, expiresAt: record.expiresAt };
+  if (options.touch && Date.now() - lastUsedAt(record) >= LAST_SEEN_STEP_MS) {
+    try {
+      await prisma.userSession.updateMany({
+        where: { id: record.id, revokedAt: null },
+        data: { lastSeenAt: new Date() },
+      });
+    } catch {
+      /* «Last used» is a convenience: missing one never fails a request. */
+    }
+  }
+
+  return {
+    userId: record.user.id,
+    role: record.user.role,
+    expiresAt: record.expiresAt,
+    sessionId: record.id,
+  };
 }
 
 /**
@@ -252,6 +420,39 @@ export async function revokeAllSessionsForUser(userId: number): Promise<void> {
   });
 }
 
+/** A live session as the account's own list shows it — no token, no hash. */
+export type LiveSession = {
+  id: string;
+  createdAt: Date;
+  lastSeenAt: Date;
+  userAgent: string | null;
+};
+
+/** The user's live sessions, the most recently used first. */
+export async function listLiveSessions(userId: number): Promise<LiveSession[]> {
+  const rows = await prisma.userSession.findMany({
+    where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+    select: { id: true, createdAt: true, lastSeenAt: true, userAgent: true },
+  });
+  return rows
+    .map((row) => ({ ...row, lastSeenAt: row.lastSeenAt ?? row.createdAt }))
+    .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime());
+}
+
+/**
+ * Close one of the user's sessions by its id — from the account's other
+ * session (owner 2026-10-07: «возможность закрыть сеанс с другого сеанса»).
+ * Scoped by the user, so an id that belongs to someone else, is already closed
+ * or never existed changes nothing and answers false.
+ */
+export async function revokeUserSession(userId: number, sessionId: string): Promise<boolean> {
+  const result = await prisma.userSession.updateMany({
+    where: { id: sessionId, userId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  return result.count > 0;
+}
+
 /** The raw token from the request cookie, or undefined. */
 export async function readSessionToken(): Promise<string | undefined> {
   const cookieStore = await cookies();
@@ -259,7 +460,7 @@ export async function readSessionToken(): Promise<string | undefined> {
 }
 
 export async function getSession(): Promise<SessionPayload | null> {
-  return resolveSession(await readSessionToken());
+  return resolveSession(await readSessionToken(), { touch: true });
 }
 
 export async function getSessionUserId(): Promise<number | null> {

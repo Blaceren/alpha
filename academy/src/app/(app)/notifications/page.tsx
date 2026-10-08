@@ -5,7 +5,7 @@ import { getServerViewer } from "@/server/auth/server-session";
 import { NotificationsFidelity } from "@/features/notifications-fidelity/notifications-fidelity";
 
 export const metadata: Metadata = {
-  title: "Уведомления — Alfa Trade Academy",
+  title: "Уведомления — Alpha Trade Academy",
   description: "События вашего обучения: проверки, подтверждения и ответы поддержки.",
 };
 

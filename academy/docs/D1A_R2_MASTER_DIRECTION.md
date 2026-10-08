@@ -1,6 +1,6 @@
 # D1A_R2_MASTER_DIRECTION
 
-Утверждённое консолидированное визуальное направление Главной Alfa Trade Academy (design-only,
+Утверждённое консолидированное визуальное направление Главной Alpha Trade Academy (design-only,
 high-fidelity prototype). Одна система, два состояния. References — provisional. React ещё **не** утверждён.
 
 ## Master visual thesis

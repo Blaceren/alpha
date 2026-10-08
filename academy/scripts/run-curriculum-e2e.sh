@@ -54,7 +54,7 @@ const PAST = new Date("2026-06-01T00:00:00.000Z");
   // assertions vacuous.
   const spec = [
     { n: 1, c: "v2.l001.otkrytie-scheta", t: "external_event", cm: "external", xp: 10, prev: null, cp: null, ti: "Открытие счёта", lo: "Пройти внешний шаг" },
-    { n: 2, c: "v2.l002.kak-ustroen-put", t: "lesson", cm: "video_test", xp: 20, prev: 1, cp: null, ti: "Как устроен Alfa Trade Academy", lo: "Понять структуру пути" },
+    { n: 2, c: "v2.l002.kak-ustroen-put", t: "lesson", cm: "video_test", xp: 20, prev: 1, cp: null, ti: "Как устроен Alpha Trade Academy", lo: "Понять структуру пути" },
     { n: 3, c: "v2.l003.pervyy-otchet", t: "report", cm: "report", xp: 30, prev: 2, cp: null, ti: "Первый отчёт", lo: "Оформить отчёт" },
     { n: 4, c: "v2.l004.kontrolnaya-tochka", t: "financial_checkpoint", cm: "checkpoint", xp: 0, prev: 3, cp: 4, ti: "Контрольная точка модуля", lo: "Подтвердить готовность" },
   ];

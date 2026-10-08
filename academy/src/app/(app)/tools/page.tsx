@@ -2,16 +2,17 @@ import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
 import { UnreadPresence } from "@/components/shell/unread-presence";
 import { ToolsHub } from "@/features/tool-windows/components/tools-hub";
-import { fixtureToolAccess, resolveToolWindows, toolAccessOf } from "@/features/tool-windows/model/access";
+import { fixtureToolAccess, resolveToolWindows, toolAccessOf, toolReadFailed } from "@/features/tool-windows/model/access";
 import { resolvePathScenario } from "@/features/path/model/path-state";
 import { getAcademyConfig } from "@/config/academy-config";
 import { getServerViewer, shellViewerName } from "@/server/auth/server-session";
 import { getCurriculumView } from "@/lib/curriculum/provider";
 import "@/features/tool-windows/tool-windows.css";
+import "@/features/tool-windows/tools-hifi.css";
 
 export const metadata: Metadata = {
-  title: "Инструменты — Alfa Trade Academy",
-  description: "Рабочие инструменты ATA: план сделки, журнал, расчёт риска, чек-лист входа, статистика и новости.",
+  title: "Инструменты — Alpha Trade Academy",
+  description: "Рабочие инструменты Академии: план сделки, журнал, расчёт риска, чек-лист входа, статистика и новости.",
 };
 
 /**
@@ -38,7 +39,7 @@ export default async function ToolsPage({
     const [viewer, result] = await Promise.all([getServerViewer(), getCurriculumView()]);
     return (
       <AppShell userName={viewer?.name ?? "Ученик"} activeId="tools" frozenSurface notificationPresence={<UnreadPresence />}>
-        <ToolsHub tools={resolveToolWindows(toolAccessOf(result))} />
+        <ToolsHub tools={resolveToolWindows(toolAccessOf(result))} readFailed={toolReadFailed(result)} />
       </AppShell>
     );
   }

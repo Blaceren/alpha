@@ -63,13 +63,21 @@
  */
 import type { Prisma } from "@prisma/client";
 
+import { REPORT_COMPLETION_METHODS } from "@/lib/curriculum/completion-pairs";
 import type { CurriculumValidationIssue } from "@/lib/curriculum/types";
 
 /** Completion methods whose level must carry a runtime-valid assessment. */
 const ASSESSMENT_BACKED = new Set(["assessment_pass"]);
 
-/** Completion methods whose level must carry a runtime-valid report owner. */
-const REPORT_BACKED = new Set(["report_approval"]);
+/**
+ * Completion methods whose level must carry a runtime-valid report owner.
+ *
+ * `formal_check` is here for the same reason `report_approval` is: the learner
+ * fills the same form through the same binding, and `LevelReportBinding`
+ * requires a rubric row either way. For a formally accepted report the rubric
+ * is the written statement of what the check looks at, not a scoring sheet.
+ */
+const REPORT_BACKED = new Set<string>(REPORT_COMPLETION_METHODS);
 
 /** Completion methods whose level must carry a checkpoint requirement. */
 const CHECKPOINT_BACKED = new Set(["balance_check"]);
@@ -97,7 +105,7 @@ export async function validateCurriculumResourceCompleteness(
           code: "LEVEL_REPORT_BINDING_MISSING",
           entity: "level",
           reference: ref,
-          message: `level ${level.levelNumber} (${level.stableCode}) completes by report_approval but has no report binding`,
+          message: `level ${level.levelNumber} (${level.stableCode}) completes by ${level.completionMethod} but has no report binding`,
         });
         continue;
       }

@@ -6,6 +6,7 @@ import {
 } from "@/features/reader-fidelity/reader-state";
 import Link from "next/link";
 import "@/features/reader-fidelity/reader-fidelity.css";
+import "@/features/reader-fidelity/reader-hifi.css";
 
 /**
  * THE FIVE REASONS A MATERIAL IS NOT READABLE, kept apart on purpose.
@@ -53,7 +54,7 @@ export function ReaderUnavailable({
     exit === "lessons" ? "/lessons" : exit === "path" ? "/path" : (levelHref ?? "/lessons");
 
   return (
-    <div className="rdr">
+    <div className="rdr rdr--hifi">
       <div className="avail">
         {kicker ? <p className="kicker">{kicker}</p> : null}
         {identity?.title ? <p className="subtitle">{identity.title}</p> : null}

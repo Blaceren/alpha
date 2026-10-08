@@ -26,7 +26,7 @@ import { z } from "zod";
 import type { ToolTradeCard } from "@prisma/client";
 import { ToolError } from "./errors";
 import { isAcceptableTradeDate } from "./dates";
-import { expiryByCode, tradingAssetByCode } from "./reference";
+import { PAYOUT_PERCENT, expiryByCode, tradingAssetByCode } from "./reference";
 
 export const TRADE_CARD_TOOL_CODE = "tool.trade_card" as const;
 
@@ -92,7 +92,7 @@ const planSchema = z.strictObject({
   asset: z.string().max(40),
   direction: z.enum(TRADE_CARD_DIRECTIONS),
   amount: z.string().max(20),
-  payoutPercent: z.number().int().min(1).max(100),
+  payoutPercent: z.number().int().min(PAYOUT_PERCENT.min).max(PAYOUT_PERCENT.max),
   expiry: z.string().max(10),
   entryTime: z.string().regex(HHMM_RE),
   reason: z.string().max(TRADE_CARD_LIMITS.maxReasonLength * 2),

@@ -5,7 +5,8 @@
  * It reads the incoming httpOnly session cookie via `next/headers` and confirms
  * it against the Backend `/api/auth/me` endpoint (server-to-server, same trust
  * boundary as the proxy). It never fabricates a viewer: no cookie, an invalid
- * cookie, or an unreachable Backend all resolve to `null` (fail-closed).
+ * cookie, or an unreachable Backend all resolve to no viewer (fail-closed) —
+ * and `readServerSession` says which of those it was.
  */
 import { cookies } from "next/headers";
 import { getAcademyConfig } from "@/config/academy-config";
@@ -13,16 +14,38 @@ import { sessionCookieHeader } from "@/lib/auth/constants";
 import { isBackendSessionResponse } from "@/lib/api/types";
 import { toAcademyViewer, type AcademyViewer } from "@/lib/api/viewer";
 
-export async function getServerViewer(): Promise<AcademyViewer | null> {
+/**
+ * What the session read can answer (2026-10-04, launch audit).
+ *
+ * `signed-out` is an answer from the Backend: no cookie, no session behind it,
+ * or an account that may no longer sign in. `unavailable` is NOT an answer — the
+ * Backend did not respond in time, failed, or said something unreadable. The
+ * guard used to fold the second into the first, so a ten-second hiccup on the
+ * Backend sent every learner on every page to /login, where signing in then
+ * failed too («Сервис временно недоступен»). The layout now tells the two apart:
+ * signed-out goes to /login, unavailable stays and offers a retry.
+ */
+export type ServerSessionRead =
+  | { kind: "viewer"; viewer: AcademyViewer }
+  | { kind: "signed-out" }
+  | { kind: "unavailable" };
+
+export async function readServerSession(): Promise<ServerSessionRead> {
   const config = getAcademyConfig();
   if (config.mode !== "api" || !config.backendOrigin) {
-    return null;
+    return { kind: "signed-out" };
   }
 
-  const cookieStore = await cookies();
-  const sessionCookie = sessionCookieHeader((name) => cookieStore.get(name));
+  let sessionCookie: string | null;
+  try {
+    const cookieStore = await cookies();
+    sessionCookie = sessionCookieHeader((name) => cookieStore.get(name));
+  } catch {
+    // Outside a request there is nothing to read — and nothing to claim.
+    return { kind: "unavailable" };
+  }
   if (!sessionCookie) {
-    return null;
+    return { kind: "signed-out" };
   }
 
   const controller = new AbortController();
@@ -37,23 +60,37 @@ export async function getServerViewer(): Promise<AcademyViewer | null> {
       signal: controller.signal,
     });
 
+    // 401: no session; 403: an account that may not sign in (blocked) — the
+    // login page says which. Anything else that is not OK is the Backend's
+    // trouble, not the learner's session.
+    if (response.status === 401 || response.status === 403) {
+      return { kind: "signed-out" };
+    }
     if (!response.ok) {
-      return null;
+      return { kind: "unavailable" };
     }
 
     const body: unknown = await response.json();
-    if (!isBackendSessionResponse(body) || !body.user) {
-      return null;
+    if (!isBackendSessionResponse(body)) {
+      return { kind: "unavailable" };
+    }
+    if (!body.user) {
+      return { kind: "signed-out" };
     }
 
-    return toAcademyViewer(body.user);
+    return { kind: "viewer", viewer: toAcademyViewer(body.user) };
   } catch {
-    // Network/timeout: do not fabricate a session. The guard redirects to a
-    // login page that surfaces a retryable, non-authenticated state.
-    return null;
+    // Network/timeout: no session is fabricated — and none is declared gone.
+    return { kind: "unavailable" };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/** The viewer, or null for anything that is not one (signed out or unknown). */
+export async function getServerViewer(): Promise<AcademyViewer | null> {
+  const read = await readServerSession();
+  return read.kind === "viewer" ? read.viewer : null;
 }
 
 /**

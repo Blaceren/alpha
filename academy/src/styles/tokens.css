@@ -1,5 +1,5 @@
 /*
- * Alfa Trade Academy — semantic design tokens (UNIFIED-DESIGN-V1).
+ * Alpha Trade Academy — semantic design tokens (UNIFIED-DESIGN-V1).
  *
  * Values now derive from the ACCEPTED unified design brand foundation
  * (ATA-Integration 560a0f3011c153422575701e846da9c125cd3c79):
@@ -91,9 +91,39 @@
     sans-serif;
   --font-mono: "ATA IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo,
     Consolas, monospace;
-  /* Public Home display face ONLY. The authenticated product never uses it. */
+  /* The display face. Public Home's voice first; since 2026-10-03 (DD-338,
+     owner: «хай фай всего») also the authenticated product's statements and
+     page titles — one voice from the public page to the last tool. Never body
+     text, never a control, never a number. */
   --font-public-display: "ATA Source Serif 4", Georgia, "Times New Roman",
     serif;
+
+  /* ---- PRODUCT HI-FI (DD-338) ------------------------------------------------
+     The public home's language on the product's ink: statements in the display
+     face, rounded surfaces lit from one corner, pill controls, a route that
+     glows where it has been walked. One set of values for every signed-in
+     page, so the platform reads as one product at one level. */
+  --hf-display: var(--font-public-display);
+  --hf-display-tracking: -0.035em;
+  --hf-title-xl: clamp(42px, 4.4vw, 64px);
+  --hf-title-lg: clamp(36px, 3.4vw, 52px);
+  --hf-title-md: clamp(26px, 2.2vw, 32px);
+  --hf-eyebrow-tracking: 0.17em;
+  --hf-radius-surface: 24px;
+  --hf-radius-window: 16px;
+  --hf-radius-control: 12px;
+  --hf-radius-pill: 999px;
+  --hf-surface: #11140f;
+  --hf-surface-raised: #161b14;
+  --hf-line: rgba(243, 244, 239, 0.09);
+  --hf-line-strong: rgba(243, 244, 239, 0.16);
+  /* The light a surface takes from its corner — Public Home's ink surface. */
+  --hf-light: radial-gradient(circle at 88% 6%, rgba(48, 66, 30, 0.3), transparent 36%);
+  --hf-shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+  --hf-halo: 0 0 0 7px rgba(199, 247, 109, 0.14);
+  /* Public Home's «go» arrow, as a mask: drawn in the control's own colour. */
+  --hf-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M13 6l6 6-6 6'/%3E%3C/svg%3E");
+  --hf-ease: cubic-bezier(0.22, 0.8, 0.24, 1);
 
   /* motion */
   --motion-fast: 140ms;

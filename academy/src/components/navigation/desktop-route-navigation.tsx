@@ -23,6 +23,11 @@ import { isVisibleSection } from "@/config/feature-visibility";
  * secondary is primary, so a section added to the canonical list appears without
  * this file being edited — the failure mode is "it shows up in the main group",
  * never "it disappears".
+ *
+ * SUPPORT LEFT THE BAR ON 2026-10-03 (owner: «что бы написать в поддержку можно
+ * было только из профиля, не по ссылке из хеда»): it is a part of the profile
+ * now, reached from the avatar. With Community withheld the secondary group is
+ * empty, so the bar draws no hairline and no second group at all.
  */
 
 /**
@@ -30,7 +35,7 @@ import { isVisibleSection } from "@/config/feature-visibility";
  * against `PRIMARY_NAV` for their label, href and order, and against
  * `built-routes.ts` for whether they answer at all.
  */
-const SECONDARY_IDS = new Set(["community", "support"]);
+const SECONDARY_IDS = new Set(["community"]);
 
 export function DesktopRouteNavigation({ activeId = "home" }: { activeId?: string }) {
   /* Built AND shown. A section can exist, answer and still be out of the

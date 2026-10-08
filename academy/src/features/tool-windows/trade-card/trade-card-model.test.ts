@@ -99,11 +99,19 @@ describe("the two outcomes", () => {
     expect(draftOutcomes({ amount: "8", payoutPercent: "0" })).toBeNull();
     expect(draftOutcomes({ amount: "8", payoutPercent: "101" })).toBeNull();
   });
+
+  it("take a payout from 20 to 99 and no other", () => {
+    expect(draftOutcomes({ amount: "8", payoutPercent: "20" })).toEqual({ ifRight: "1.60", ifWrong: "8.00" });
+    expect(draftOutcomes({ amount: "8", payoutPercent: "99" })).toEqual({ ifRight: "7.92", ifWrong: "8.00" });
+    for (const payoutPercent of ["19", "100", "9", "90%", "9.5"]) {
+      expect(draftOutcomes({ amount: "8", payoutPercent }), payoutPercent).toBeNull();
+    }
+  });
 });
 
 describe("validateDraft", () => {
   it("turns a good draft into the Backend's plan", () => {
-    expect(validateDraft({ ...DRAFT, amount: "8,5", payoutPercent: "90 %" }, REFERENCE)).toEqual({
+    expect(validateDraft({ ...DRAFT, amount: "8,5", payoutPercent: "90" }, REFERENCE)).toEqual({
       ok: true,
       plan: {
         asset: "EURUSD_OTC",

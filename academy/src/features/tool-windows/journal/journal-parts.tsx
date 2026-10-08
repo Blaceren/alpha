@@ -9,7 +9,12 @@
  * their own change handlers, and a server component may not hand an element an
  * event handler.
  */
+import type { ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { DateField } from "../components/date-field";
+import { PayoutField } from "../components/payout-field";
+import { TimeField } from "../components/time-field";
+import { moneyOnly } from "../model/numeric-input";
 import { AssetOptions, DirectionToggle, ExpiryOptions, FieldError } from "../trade-card/trade-card-parts";
 import { directionLabel } from "../trade-card/trade-card-model";
 import {
@@ -155,14 +160,15 @@ export function JournalRow({
 
 /* ------------------------------------------------------------ entry notes */
 
-/** ПЛАН · ИСПОЛНЕНИЕ · ВЫВОД, and the rules broken, as the presentation lays them out. */
+/** ОСНОВАНИЕ · ИСПОЛНЕНИЕ · ВЫВОД, and the rules broken, as the presentation lays them out.
+    (The first was «План» until 2026-10-06 — owner: «план нужно заменить на основание».) */
 export function JournalNotes({ entry, reference }: { entry: JournalEntry; reference: JournalReference }) {
   const rules = entry.violations.map(
     (code) => reference.violations.find((violation) => violation.code === code)?.label ?? code,
   );
   return (
     <dl className="jr-notes">
-      <JournalNote term="План" text={entry.plan} empty="Причина входа не записана" />
+      <JournalNote term="Основание" text={entry.plan} empty="Основание не записано" />
       <JournalNote term="Исполнение" text={entry.execution} empty="Не записано" />
       <JournalNote term="Вывод" text={entry.conclusion} empty="Вывода пока нет" />
       {rules.length > 0 ? (
@@ -190,10 +196,90 @@ export function JournalNote({ term, text, empty }: { term: string; text: string 
   );
 }
 
-/** «Payout 90% · Экспирация 3 мин · Из Trade Card» — what the line above leaves out. */
+/**
+ * «Payout 90% · Экспирация 3 мин · Из Trade Card» — what the line above leaves
+ * out. An entry from a card that was corrected here says so: the card itself
+ * still holds the trade as it was saved, and the two must not be read as one.
+ */
 export function entryFacts(entry: JournalEntry): string {
-  const source = entry.source === "trade_card" ? "Из Trade Card" : "Записано вручную";
+  const source =
+    entry.source !== "trade_card"
+      ? "Записано вручную"
+      : entry.editedAfterCard
+        ? "Из Trade Card · изменена в журнале"
+        : "Из Trade Card";
   return `Payout ${entry.payoutPercent}% · Экспирация ${entry.expiry.label} · ${source}`;
+}
+
+/* ----------------------------------------------------------------- delete */
+
+const NBSP = "\u00a0";
+
+/**
+ * «Удалить эту запись?» — asked in place, where the entry is, before anything
+ * is sent. It says what goes with the entry (its place in Personal Stats, which
+ * is counted from the journal), that it cannot be brought back, and — for an
+ * entry made from a card — what stays.
+ *
+ * The workspace puts the focus on «Отмена» when this opens, so a second press
+ * of the same key never deletes; Escape leaves it as «Отмена» does.
+ */
+export function JournalDeleteConfirm({
+  idPrefix,
+  fromCard,
+  busy,
+  error,
+  onConfirm,
+  onCancel,
+}: {
+  idPrefix: string;
+  fromCard: boolean;
+  busy: boolean;
+  error: ReactNode;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const titleId = `${idPrefix}-delete-title`;
+  const noteId = `${idPrefix}-delete-note`;
+  return (
+    <div
+      className="tc-confirm jr-delete"
+      role="group"
+      aria-labelledby={titleId}
+      aria-describedby={noteId}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !busy) {
+          event.stopPropagation();
+          onCancel();
+        }
+      }}
+    >
+      <p className="jr-delete__title" id={titleId}>
+        Удалить эту запись?
+      </p>
+      {/* The tools' names never break across lines: the spaces inside them do not wrap. */}
+      <p className="tc-caption" id={noteId}>
+        Она исчезнет из журнала и из Personal{NBSP}Stats. Вернуть её будет нельзя.
+        {fromCard ? ` Карточка в Trade${NBSP}Card останется.` : ""}
+      </p>
+      <div className="tc-actions__row jr-delete__actions">
+        <button type="button" className="tw-button" data-variant="danger" data-solid onClick={onConfirm} disabled={busy}>
+          {busy ? "Удаляю…" : "Удалить запись"}
+        </button>
+        <button
+          id={`${idPrefix}-delete-keep`}
+          type="button"
+          className="tw-button"
+          data-variant="outline"
+          onClick={onCancel}
+          disabled={busy}
+        >
+          Отмена
+        </button>
+      </div>
+      {error}
+    </div>
+  );
 }
 
 /* ----------------------------------------------------------------- review */
@@ -350,20 +436,19 @@ export function ManualTradeFields({
   return (
     <div className="tc-fields">
       <div className="tc-field">
-        <label className="tc-label" htmlFor={id("tradeDate")}>
+        <span className="tc-label" id={`${id("tradeDate")}-label`}>
           Дата
-        </label>
-        <input
+        </span>
+        <DateField
           id={id("tradeDate")}
-          className="tc-input"
-          type="date"
+          labelId={`${id("tradeDate")}-label`}
+          value={draft.tradeDate}
           min={JOURNAL_LIMITS.minTradeDate}
           max={maxDate}
-          value={draft.tradeDate}
-          onChange={change("tradeDate")}
+          onChange={(value) => onChange("tradeDate", value)}
           disabled={disabled}
-          aria-invalid={invalid("tradeDate")}
-          aria-describedby={described("tradeDate")}
+          invalid={Boolean(errors.tradeDate)}
+          describedBy={described("tradeDate")}
         />
         <FieldError id={errorId("tradeDate")} message={errors.tradeDate} />
       </div>
@@ -372,15 +457,14 @@ export function ManualTradeFields({
         <label className="tc-label" htmlFor={id("entryTime")}>
           Время входа
         </label>
-        <input
+        <TimeField
           id={id("entryTime")}
-          className="tc-input"
-          type="time"
           value={draft.entryTime}
-          onChange={change("entryTime")}
+          onChange={(value) => onChange("entryTime", value)}
           disabled={disabled}
-          aria-invalid={invalid("entryTime")}
-          aria-describedby={described("entryTime")}
+          invalid={Boolean(errors.entryTime)}
+          describedBy={described("entryTime")}
+          align="end"
         />
         <FieldError id={errorId("entryTime")} message={errors.entryTime} />
       </div>
@@ -432,7 +516,7 @@ export function ManualTradeFields({
             inputMode="decimal"
             autoComplete="off"
             value={draft.amount}
-            onChange={change("amount")}
+            onChange={(event) => onChange("amount", moneyOnly(event.target.value))}
             disabled={disabled}
             aria-invalid={invalid("amount")}
             aria-describedby={described("amount")}
@@ -441,29 +525,14 @@ export function ManualTradeFields({
         <FieldError id={errorId("amount")} message={errors.amount} />
       </div>
 
-      <div className="tc-field">
-        <label className="tc-label" htmlFor={id("payoutPercent")}>
-          Payout
-        </label>
-        <span className="tc-affix" data-side="end">
-          <input
-            id={id("payoutPercent")}
-            className="tc-input"
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            value={draft.payoutPercent}
-            onChange={change("payoutPercent")}
-            disabled={disabled}
-            aria-invalid={invalid("payoutPercent")}
-            aria-describedby={described("payoutPercent")}
-          />
-          <span className="tc-affix__mark" aria-hidden="true">
-            %
-          </span>
-        </span>
-        <FieldError id={errorId("payoutPercent")} message={errors.payoutPercent} />
-      </div>
+      <PayoutField
+        id={id("payoutPercent")}
+        errorId={errorId("payoutPercent")}
+        value={draft.payoutPercent}
+        onChange={(value) => onChange("payoutPercent", value)}
+        disabled={disabled}
+        error={errors.payoutPercent}
+      />
 
       <div className="tc-field">
         <label className="tc-label" htmlFor={id("expiry")}>
@@ -530,14 +599,14 @@ export function ManualPlanField({
   return (
     <div className="tc-field">
       <label className="tc-label" htmlFor="jr-new-plan">
-        План до входа
+        Основание входа в сделку
       </label>
       <textarea
         id="jr-new-plan"
         className="tc-input tc-textarea"
         rows={3}
         maxLength={JOURNAL_LIMITS.maxPlanLength}
-        placeholder="Если причина входа была записана до сделки — перенесите её сюда"
+        placeholder="Если основание входа было записано до сделки — перенесите его сюда"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}

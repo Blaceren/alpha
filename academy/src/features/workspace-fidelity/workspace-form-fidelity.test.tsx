@@ -30,12 +30,31 @@ const PRE_SEAM = "b75f1537de5bf2abe9bf99e171f4779785a547de";
    that away would turn a genuine change into a silent one. What it renders is
    asserted directly in `features/report/evidence-arc.test.tsx`, including that
    it invents no stage. The seam's own concern, that the workspace form did not
-   change, is untouched: the other three files are still held here. */
+   change, is untouched: the other three files are still held here.
+
+   `level-report.tsx` AND `validation-summary.tsx` LEFT THE BYTE-HELD LIST in the
+   30-level program (2026-10-02), for the same reason. The form gained real
+   behaviour: a report is now a list of records, a record can be optional
+   («добавить запись отказа») and is cleared when it is taken out again, a
+   report the platform accepts by itself reports `APPROVED` at submission and
+   never says «наставник», an accepted report stays readable, and the summary
+   names its fields by record and stops listing after eight. Each of those is
+   asserted where it lives — `features/report/report-records.test.tsx`,
+   `report-definition.test.ts`, `report-machine.test.ts` — and normalising them
+   away here would be exactly the silent change this file exists to prevent.
+
+   What this file still holds for all three: every class is additive (2), every
+   selector the logic stands on is still there (3), and the stylesheet layer is
+   untouched (4). And `report-field.tsx`, which did not change, is still held
+   to the byte. */
 const COMPONENTS = [
   "src/features/report/level-report.tsx",
   "src/features/report/components/report-field.tsx",
   "src/features/report/components/validation-summary.tsx",
 ];
+
+/** Components in which nothing but class attributes may differ from the pre-seam commit. */
+const BYTE_HELD = ["src/features/report/components/report-field.tsx"];
 
 const git = (...args: string[]) =>
   execFileSync("git", args, { cwd: ROOT, encoding: "utf8", env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
@@ -71,8 +90,8 @@ function withoutClasses(source: string): string {
 }
 
 describe("Workspace form — the seam is presentation only", () => {
-  it("changes nothing in the components except class attributes", () => {
-    for (const file of COMPONENTS) {
+  it("changes nothing in the byte-held components except class attributes", () => {
+    for (const file of BYTE_HELD) {
       const before = git("show", `${PRE_SEAM}:${file}`);
       const after = readFileSync(join(ROOT, file), "utf8");
       expect(withoutClasses(after), file).toBe(withoutClasses(before));

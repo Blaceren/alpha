@@ -132,7 +132,7 @@ describe("LevelStart", () => {
 
     await user.click(button());
     expect(
-      await screen.findByText("Не удалось связаться с сервером. Попробуй ещё раз."),
+      await screen.findByText("Не удалось связаться с сервером. Попробуйте ещё раз."),
     ).toBeInTheDocument();
     // The control comes back, and the second attempt goes through.
     expect(button()).toBeEnabled();
@@ -148,7 +148,7 @@ describe("LevelStart", () => {
     render(<LevelStart stableCode={STABLE_CODE} />);
 
     await user.click(button());
-    await screen.findByText("Сервер сейчас недоступен. Попробуй ещё раз позже.");
+    await screen.findByText("Сервер сейчас недоступен. Попробуйте ещё раз позже.");
     expect(startMock).toHaveBeenCalledTimes(1);
   });
 
@@ -174,3 +174,31 @@ describe("LevelStart", () => {
     expect(container.textContent).not.toMatch(/XP|заверш|пройден/i);
   });
 });
+
+/**
+ * 2026-10-02 — the words around the control are the level's, the control is
+ * the same.
+ */
+describe("LevelStart — copy by what the level is", () => {
+  it("keeps its original words when the page gives none", () => {
+    render(<LevelStart stableCode="v2.l002.x" />);
+    expect(screen.getByRole("heading", { name: "Начать уровень" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Начать" })).toBeEnabled();
+  });
+
+  it("prints the page's title, sentence and label, and starts the same level", async () => {
+    startMock.mockResolvedValue({ ok: true as const, data: {} as never, requestId: null });
+    render(
+      <LevelStart
+        stableCode="v2.l001.x"
+        copy={{ title: "Начните урок", explain: "В этом уроке нет проверки знаний.", action: "Начать урок" }}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Начните урок" })).toBeInTheDocument();
+    expect(screen.getByText("В этом уроке нет проверки знаний.")).toBeInTheDocument();
+    expect(screen.queryByText(/станут доступны материал и проверка/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Начать урок" }));
+    await waitFor(() => expect(startMock).toHaveBeenCalledWith("v2.l001.x"));
+  });
+});
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as api from "@/lib/api/client";
 import {
@@ -53,9 +53,16 @@ export type LoginFormProps = {
    * refuse with a configuration error anyway.
    */
   turnstileSiteKey: string | null;
+  /**
+   * Whether this deployment can send a password-reset message (ACCOUNT
+   * RECOVERY). Decided by the Backend and read on the server; absent or false
+   * means the link is not rendered — a recovery that produces no email is not
+   * offered.
+   */
+  passwordRecovery?: boolean;
 };
 
-export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
+export function LoginForm({ turnstileSiteKey, passwordRecovery = false }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = sanitizeReturnTo(searchParams.get("next"));
@@ -89,6 +96,22 @@ export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
     setCaptchaToken(null);
     setCaptchaResetSignal((value) => value + 1);
   }, []);
+
+  /* SIGNED IN ALREADY, SEEN FROM THIS PAGE (2026-10-07 audit). The server
+     sends a signed-in learner on before this form renders — when it can see
+     the session. A link opened from a messenger or a mail arrives without the
+     session cookie (it is SameSite=Strict), so the form was shown to someone
+     who was signed in, and signing in again cost them a session. This page's
+     own request does carry the cookie: a learner it finds goes on to where they
+     were heading. Nothing is shown or said if it finds nobody. */
+  useEffect(() => {
+    const controller = new AbortController();
+    void api.fetchSession(controller.signal).then((result) => {
+      if (controller.signal.aborted || inFlight.current) return;
+      if (result.ok && result.data.user) router.replace(returnTo);
+    });
+    return () => controller.abort();
+  }, [router, returnTo]);
 
   function fail(failure: LoginFailure, requestId: string | null) {
     if (shouldClearPassword(failure)) setPassword("");
@@ -130,10 +153,14 @@ export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
       return;
     }
 
-    // Confirm the session was established before navigating.
+    // Confirm the session was established before navigating. A confirmation
+    // that could not be READ (the network, the Backend) does not undo a sign-in
+    // that succeeded (2026-10-07 audit): the learner goes on, and a retry here
+    // would only have issued another session. Only an answer that says «nobody
+    // is signed in» — the cookie was not kept — stops here.
     const session = await api.fetchSession();
-    if (!session.ok || !session.data.user) {
-      fail(session.ok ? "UNKNOWN" : mapLoginFailure(session.error), session.ok ? null : session.error.requestId);
+    if (session.ok && !session.data.user) {
+      fail("UNKNOWN", null);
       return;
     }
 
@@ -176,6 +203,14 @@ export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
         />
       </div>
 
+      {passwordRecovery ? (
+        <p className="login-forgot">
+          <Link href="/forgot-password" className="login-alt__link">
+            Забыли пароль?
+          </Link>
+        </p>
+      ) : null}
+
       {hasCaptchaWidget(captcha) && captcha.mode === "provider" ? (
         <TurnstileWidget
           siteKey={captcha.siteKey}
@@ -189,7 +224,7 @@ export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
           describedById={captchaStatusId}
         />
       ) : (
-        <div className="auth-captcha auth-captcha--failed" data-testid="captcha-unavailable" role="alert">
+        <div id={captchaStatusId} className="auth-captcha auth-captcha--failed" data-testid="captcha-unavailable" role="alert">
           Вход временно недоступен: проверка безопасности не настроена. Обратитесь к поддержке.
         </div>
       )}
@@ -213,10 +248,13 @@ export function LoginForm({ turnstileSiteKey }: LoginFormProps) {
         {submitting ? "Вход…" : "Войти"}
       </button>
 
-      <p id={captchaStatusId} className="auth-status" role="status" aria-live="polite">
-        {captcha.mode === "provider" && !captchaToken && !submitting
-          ? "Пройдите проверку безопасности, чтобы продолжить."
-          : ""}
+      {/* Why the button is not available yet is said by the check's own line,
+          above it: the button is described by that line (`captchaStatusId`).
+          There used to be a second line here — «Пройдите проверку
+          безопасности…» — which asked the visitor to do something while the
+          check was running by itself. */}
+      <p className="auth-status" role="status" aria-live="polite">
+        {submitting ? "Выполняем вход, подождите." : ""}
       </p>
 
       {/* The way to registration. `/register` has carried the reciprocal link
