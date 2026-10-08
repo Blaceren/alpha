@@ -818,7 +818,7 @@ describe("Public Home — stylesheet holds its contract", () => {
   it("plays each motion sequence once and settles inside a second", () => {
     // The three sequences ride `is-visible`, run with `both`, and nothing loops.
     for (const trigger of [
-      ".ph .reframe.is-visible .source-cloud > li",
+      ".ph .section-intro.is-visible .ladder > li",
       ".ph .learning-loop.is-visible::before",
       '.ph .evidence-track > li.is-visible[data-frame-stage="v2"] .evidence__object--corrected',
     ]) {
@@ -1212,20 +1212,17 @@ describe("Public Home — the phone composition (DD-342)", () => {
     expect(narrow).toMatch(/\.ph \.trail__button \{[^}]*min-height:\s*44px/);
   });
 
-  it("says the two words of «многое → одно» on every width, to the eye only (DD-366)", () => {
+  it("says the card's one word on every width, to the eye only (DD-367)", () => {
     const { container } = render(<PublicHomeScreen authenticated={false} />);
     const captions = Array.from(container.querySelectorAll(".reframe__caption"));
-    expect(captions.map((c) => text(c as HTMLElement).trim())).toEqual([
-      "Чужие ответы",
-      "Ваше основание — в инструменте ATA",
-    ]);
+    expect(captions.map((c) => text(c as HTMLElement).trim())).toEqual(["Ваше основание — в инструменте ATA"]);
     for (const caption of captions) expect(caption).toHaveAttribute("aria-hidden", "true");
-    // Shown everywhere: a row of its own above the device beside the film-wide
-    // layout, in source order in the column.
     expect(rules).toMatch(/\n\.ph \.reframe__caption \{\s*display:\s*block;/);
-    expect(rules).toMatch(/\n\.ph \.reframe > \.reframe__caption \{\s*grid-column:\s*1;\s*grid-row:\s*1;/);
-    expect(rules).toMatch(/\n\.ph \.reframe > \.reframe__caption--own \{\s*grid-column:\s*3;/);
-    expect(media("max-width: 920px")).toMatch(/\.ph \.reframe > \.decision \{[^}]*grid-column:\s*auto;\s*grid-row:\s*auto;/);
+    // The six replies that stood before the card are gone (owner, 2026-10-08: «это давай уберем»).
+    expect(container.querySelector("#decide .source-cloud")).toBeNull();
+    expect(container.querySelector("#decide .reframe__axis")).toBeNull();
+    expect(text(container)).not.toContain("Чужие ответы");
+    expect(rules).not.toContain("source-cloud");
   });
 
   it("makes the cycle a spine on a phone: the objects go, the line runs behind the nodes", () => {
@@ -1519,10 +1516,35 @@ describe("Public Home — #decide says its chain in words and ends in the tool (
     expect(text(action).trim()).toBe("Перейти в Академию");
   });
 
-  it("draws the ladder on the device's own line and keeps its motion inside the page's budget", () => {
+  it("stands the rungs on the page's spine: numbered Ink discs on one line, the tool's chip on the last (DD-367)", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const ladder = container.querySelector("#decide .ladder") as HTMLElement;
+    expect(ladder.tagName).toBe("OL");
+    // The node is the cycle's: an Ink disc, the number in Signal mono, drawn by CSS from the order.
+    expect(css).toMatch(/\n\.ph \.ladder > li::before \{[^}]*border: 1\.5px solid var\(--signal-400\);[^}]*background: var\(--ink-950\);\s*color: var\(--signal-400\);\s*font-family: var\(--font-data\);[^}]*content: "0" counter\(rung\);/);
     expect(css).toMatch(/\n\.ph \.ladder > li::after \{[^}]*width: 1px;\s*background: rgba\(11, 13, 10, 0\.32\);/);
-    expect(css).toMatch(/\n\.ph \.ladder > li:last-child::before \{[^}]*box-shadow: 0 0 0 3px rgba\(11, 13, 10, 0\.14\);/);
     expect(css).toMatch(/\n\.ph \.section-intro\.is-visible \.ladder > li \{\s*animation: ph-reply-in-down 420ms var\(--ease\) both;/);
-    expect(css).toMatch(/\n\.ph \.decision__action \{[^}]*min-height: 44px;/);
+    // The last rung carries the tool's chip, which leads to the deck where Trade Card is L5.
+    const chips = Array.from(ladder.querySelectorAll(".ladder__chip")) as HTMLAnchorElement[];
+    expect(chips).toHaveLength(1);
+    expect(chips[0]!.closest("li")).toBe(ladder.lastElementChild);
+    expect(text(chips[0]!).trim()).toBe("Trade Card · уровень 5");
+    expect(chips[0]!.getAttribute("href")).toBe("#tools");
+    expect(css).toMatch(/\n\.ph \.ladder__chip \{[^}]*background: var\(--ink-950\);\s*color: var\(--signal-400\);\s*font-family: var\(--font-data\);/);
+  });
+
+  it("keeps the window's demonstration badge legible on the lime section", () => {
+    // The Signal-surface badge colours are Ink; in a product window the bar is dark.
+    expect(css).toMatch(/\n\.ph \.surface--signal \.pw \.demo-badge,\s*\.ph \.surface--signal-deep \.pw \.demo-badge \{\s*border-color: var\(--line-dark\);\s*color: var\(--text-on-dark-muted\);/);
+  });
+
+  it("offers the action as the page's own dark pill, not a bare line", () => {
+    const { container } = render(<PublicHomeScreen authenticated={false} />);
+    const action = container.querySelector("#decide .decision__action") as HTMLAnchorElement;
+    expect(action.classList.contains("button")).toBe(true);
+    expect(action.classList.contains("button--dark")).toBe(true);
+    expect(action.querySelector("svg")).not.toBeNull();
+    // Its own rule places it and moves the arrow; the pill's text and shape come from `.button`.
+    expect(css).not.toMatch(/\n\.ph \.decision__action \{[^}]*(color|font-size|text-decoration):/);
   });
 });

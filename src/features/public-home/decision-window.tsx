@@ -65,7 +65,7 @@ export function DecisionWindow({ action }: { action: { readonly href: string; re
         Этот инструмент вы получаете в ATA и учитесь им пользоваться на своих сделках: сначала
         основание — потом сделка. Так собственное решение становится привычкой.
       </p>
-      <Link className="decision__action" href={action.href}>
+      <Link className="button button--dark decision__action" href={action.href}>
         {action.label}
         <svg viewBox="0 0 20 20" aria-hidden="true">
           <path d="M4 10h11M11 6l4 4-4 4" />

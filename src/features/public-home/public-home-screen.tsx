@@ -62,17 +62,6 @@ import type { PublicFilm } from "@/server/media/public-film";
  * about the visitor is whether a session exists.
  */
 
-/** What others hand you — the kind, and a line of it. Authored examples, no
-    instrument, no amount, no person. */
-const OTHERS_ANSWERS = [
-  { kind: "Разбор", said: "«У сильного уровня — жду отскок»" },
-  { kind: "Стратегия", said: "«Три свечи подряд — входи по тренду»" },
-  { kind: "Сигнал", said: "«Вверх, пять минут»" },
-  { kind: "Прогноз", said: "«К пятнице будет ниже»" },
-  { kind: "Мнение", said: "«Рынок перегрет»" },
-  { kind: "Чужой вывод", said: "«Все уже в покупках»" },
-] as const;
-
 export function PublicHomeScreen({
   authenticated,
   film = null,
@@ -182,7 +171,11 @@ export function PublicHomeScreen({
               <h2 className="display display--section">
                 Чтобы зарабатывать, нужно самому понимать, как торговать.
               </h2>
-              <ul className="ladder" aria-label="Почему решение должно быть вашим и что для этого даёт ATA">
+              {/* DD-367 (owner, 2026-10-08: «в нашем стиле, добавить брендинга»):
+                  the rungs stand on the page's spine — numbered Ink discs on
+                  one line, like the cycle's nodes — and the last one carries
+                  the tool's chip, which leads to the deck where it is L5. */}
+              <ol className="ladder" aria-label="Почему решение должно быть вашим и что для этого даёт ATA">
                 <li>
                   <h3>Чужой ответ — не ваше понимание.</h3>
                   <p>Разборы, сигналы и прогнозы можно изучать, но действуете и отвечаете за результат вы.</p>
@@ -200,31 +193,18 @@ export function PublicHomeScreen({
                     Trade Card открывается на уровне 5: основание называется до входа, а после
                     открытия сделки карточка уже не меняется.
                   </p>
+                  <a className="ladder__chip" href="#tools">
+                    Trade Card · уровень 5
+                  </a>
                 </li>
-              </ul>
+              </ol>
             </div>
 
             <div className="reframe" data-reveal>
-              {/* The device's two words, on every width since DD-366 (until
-                  then phones only, DD-342): what recedes, and where the
+              {/* The card's one word (DD-367: the six replies that used to stand
+                  before it are gone — owner: «это давай уберем»): where the
                   learner's own basis lives — in the tool ATA gives. */}
-              <p className="reframe__caption" aria-hidden="true">Чужие ответы</p>
-              {/* OTHERS' ANSWERS, SAID (2026-10-04, owner: «тут нужен хай фай»).
-                  Six pale pills only named the kinds of answer. Each is now a
-                  line someone else said — what a review, a signal, a forecast
-                  actually hands you — in the page's ink, fading as it recedes.
-                  None of them is the learner's reason: that is written in the
-                  card the line leads to. */}
-              <ul className="source-cloud" aria-label="Чужие ответы">
-                {OTHERS_ANSWERS.map((item) => (
-                  <li className="src" key={item.kind}>
-                    <span className="src__kind">{item.kind}</span>
-                    <span className="src__said">{item.said}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="reframe__axis" aria-hidden="true" />
-              <p className="reframe__caption reframe__caption--own" aria-hidden="true">
+              <p className="reframe__caption" aria-hidden="true">
                 Ваше основание — в инструменте ATA
               </p>
 
