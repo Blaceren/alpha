@@ -5,7 +5,7 @@
  *   tsx scripts/ops/activateProgramVersion.ts \
  *     --package curriculum/packages/ata-v2-funnel-30.v5.draft.json \
  *     --expect-fingerprint <64 hex> \
- *     --expect-published-version 4 \
+ *     --expect-published-version 4 \      (or `none` — see 2. below)
  *     --actor-user-id <an active admin> \
  *     [--backup /abs/path/to/backup.sqlite --apply]
  *
@@ -26,7 +26,12 @@
  *      that changed since it was reviewed is refused;
  *   2. the currently published version of the package's curriculum is the one
  *      named (`--expect-published-version`), so a publication never replaces a
- *      version the operator was not looking at;
+ *      version the operator was not looking at. On a database where the
+ *      curriculum has NEVER been published (a new PROD — the importer refuses a
+ *      runtime database, so this is the only reviewed way to its first
+ *      version), the operator says so in words: `--expect-published-version
+ *      none`. It is refused if any version is in fact published, exactly as a
+ *      wrong number is; there is no default that means "whatever is there";
  *   3. the package's version does not exist yet — or exists as a DRAFT imported
  *      from this same package (a run that was interrupted between import and
  *      publication resumes; anything else is refused);
@@ -89,6 +94,15 @@ function positive(raw: string | null, name: string): number {
   return Number(raw);
 }
 
+/** A version number, or `null` for the literal word `none`: "this curriculum has never been published". */
+function expectedVersion(raw: string | null, name: string): number | null {
+  if (raw === "none") return null;
+  if (raw === null || !/^[1-9]\d{0,8}$/.test(raw)) {
+    throw new UsageError(`${name} must be a positive integer written in digits, or the word none`);
+  }
+  return Number(raw);
+}
+
 async function learnerCounts(prisma: PrismaClient): Promise<Record<string, number>> {
   const counts: Record<string, number> = {};
   for (const table of LEARNER_TABLES) {
@@ -121,7 +135,7 @@ async function main(): Promise<void> {
   if (!expectFingerprint || !/^[0-9a-f]{64}$/.test(expectFingerprint)) {
     throw new UsageError("--expect-fingerprint must be the package's 64-hex fingerprint");
   }
-  const expectPublished = positive(flag(argv, "--expect-published-version"), "--expect-published-version");
+  const expectPublished = expectedVersion(flag(argv, "--expect-published-version"), "--expect-published-version");
   const actorUserId = positive(flag(argv, "--actor-user-id"), "--actor-user-id");
   if (apply && !backupPath) throw new UsageError("--apply requires --backup");
 
@@ -154,9 +168,9 @@ async function main(): Promise<void> {
       where: { code: pkg.curriculumCode, status: "published" },
       select: { id: true, versionNumber: true },
     });
-    if (!published || published.versionNumber !== expectPublished) {
+    if ((published?.versionNumber ?? null) !== expectPublished) {
       throw new Refusal(
-        `the published version of ${pkg.curriculumCode} is ${published?.versionNumber ?? "none"}, not ${expectPublished}`,
+        `the published version of ${pkg.curriculumCode} is ${published?.versionNumber ?? "none"}, not ${expectPublished ?? "none"}`,
       );
     }
     const existing = await prisma.curriculumVersion.findUnique({
@@ -192,7 +206,7 @@ async function main(): Promise<void> {
       },
       database: {
         migrations,
-        publishedVersion: published.versionNumber,
+        publishedVersion: published?.versionNumber ?? null,
         draftAlreadyImported: Boolean(existing),
         enrollments: enrollments.map((row) => ({
           curriculumVersionId: row.curriculumVersionId,
@@ -202,7 +216,9 @@ async function main(): Promise<void> {
       },
       willDo: [
         ...(existing ? [] : [`import ${pkg.curriculumCode}@${pkg.curriculumVersionNumber} as a draft`]),
-        `publish it and archive version ${published.versionNumber}`,
+        published
+          ? `publish it and archive version ${published.versionNumber}`
+          : `publish it as the first published version of ${pkg.curriculumCode} (nothing to archive)`,
         "leave every learner on the version they are on",
       ],
     };
@@ -229,7 +245,8 @@ async function main(): Promise<void> {
     );
     const backupUsers = Number(backupScalar(backup, 'SELECT COUNT(*) FROM "User";'));
     const before = await learnerCounts(prisma);
-    if (backupMigrations !== migrations || Number(backupPublished) !== published.versionNumber || backupUsers !== before.User) {
+    const backupPublishedMatches = published ? Number(backupPublished) === published.versionNumber : backupPublished === "";
+    if (backupMigrations !== migrations || !backupPublishedMatches || backupUsers !== before.User) {
       throw new Refusal(`${backup} is not a current backup of this database`);
     }
 
@@ -255,7 +272,8 @@ async function main(): Promise<void> {
     const publication = await publishCurriculumVersion({
       curriculumVersionId: versionId,
       actorId: actorUserId,
-      expectedPublishedVersionId: published.id,
+      /* null = "nothing is published"; the service refuses it if that stopped being true. */
+      expectedPublishedVersionId: published?.id ?? null,
     });
     assertUnchanged(before, await learnerCounts(prisma), "the publication");
 
